@@ -8,39 +8,58 @@ this page records the current candidate and its limits.
 
 ## Publication and review
 
-PR40 remains draft. Publication `3b61ac1fb` passes its
-[complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40599685643)
-on attempt 1: **325/325 Go checks**, **88.1%** main-package statement coverage
-and the Codecov patch check. Its named inventory exactly matches the preceding
-325-job round. The aggregate retains 299 root and seven child skips; these are
-not runtime passes. All 78 failed source jobs from `9fede619c` were
-independently audited and mapped to the five repaired classes; that round's
-236 successful and 89 failed checks retain their original outcomes.
-Host-specific skips remain recorded; native AVX512 acceptance and external
-approval remain outstanding. Resolved inline threads are not external approval.
-The preceding `4c8f9300f`, `01955e42e` and `1c54c530e` rounds also pass; their receipts and
-original infrastructure failures remain retained.
+PR40 remains draft. Published `cd2413c1b` is running its
+[current CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40666003559).
+It includes complete duplicate, immediate-shuffle and reciprocal14 row joins,
+explicit reciprocal14 native qualification owners, and exhaustive SDK frontend
+race partitioning. Its unique inventory is **2,073 rows / 7,758 witnesses**:
+1,960 of 3,568 AVX-table rows (54.9%) and 113 legacy rows. This measures
+initialized original-Go bytes and LLVM objects, not native execution or every
+amd64 opcode. Wait for exact-head CI and coverage before readiness.
 
-That publication adds complete bit-count/conflict, uniform/byte-shift and
-rotate row ownership, and removes 39 integer min/max lowering lines by reusing
-the existing E4 pipeline. Its unique inventory is 1,980 rows / 7,459 witnesses:
-1,874 of 3,568 AVX-table rows (52.5%) and 106 legacy rows. Rotate's variable
-forms overlap an earlier owner and are counted once. These initialized byte,
-translation and object checks are separate from native runtime acceptance.
+Preceding `52c40967a` attempt 1 finished with 321 successful checks, three
+failures and one cancellation. A targeted Windows rerun passed the original failed
+root partition and its complete aggregate; the earlier failure remains recorded.
+Attempt 2 has 323 successes and retains the original race failure and dependent
+cancellation. The race-other job reached its 75-minute job limit, leaving no
+complete race-module receipt. The SDK frontend now uses the existing profile-owner shards,
+with no larger budgets or omitted roots. Local SDK race qualification passes
+34 roots / 35 children on current Go and 18 / 27 on minimum Go; sixteen
+current-only roots are not compiled by the minimum SDK. Cloud acceptance is
+still pending. Do not call the preceding round wholly successful.
 
-The next locally qualified batches add complete duplicate moves, immediate
-word/dword shuffles and RCP14/RSQRT14: 93 unique rows / 299 witnesses. Duplicate
-and shuffle change no translator or initializer. Reciprocal14 reuses the
-existing typed native floating helper, initially removing 176 implementation
-lines including format changes. A further 45 lines close numerical instruction
-boundaries and certified private-frame reads, for a net reduction of 131.
-Both endpoint SDKs pass original-Go bytes and all three API object checks.
-Final combined integration gates remain required after merging the changes.
-The local union is 2,073 rows / 7,758 witnesses: 1,960 AVX rows (54.9%) and
-113 legacy rows. This is AVX-table ownership, not all amd64 opcode or runtime
-coverage. RCP14 has no independent native execution owner yet; its AVX512
-numerical and fault acceptance still need implementation and hardware.
-Preserve every failed attempt and finish current compiler CI before publishing.
+The last entirely green publication remains `3b61ac1fb`:
+[325/325 Go checks](https://github.com/xgo-dev/plan9asm/actions/runs/40599685643),
+88.1% main-package statement coverage and a successful Codecov patch check.
+Its 299 root and seven child skips remain skips. Its counts do not certify a
+later revision. Earlier source failures and infrastructure retries retain their
+original receipts; resolved inline threads are not external approval.
+
+Locally integrated `790fcb4b1` adds complete signed/zero widening: 24 source
+names, 108 rows and 288 witnesses. Both endpoint SDKs pass actual Go encodings,
+initialized three-API objects, the full rule reader and five-architecture gate.
+All prior rows, bytes and generated sources remain identical. The translator
+and initializer are unchanged. The local union is **2,181 rows / 8,046
+witnesses**: 2,056 AVX rows (57.6%) and 125 legacy rows. Combined publication
+checks are still required; these local counts are not the published CI scope.
+
+RCP14/RSQRT14 native F and F+VL owners are implemented under the explicit
+`plan9asm_native_avx512` tag. Default checks compile original Go, three-API
+objects and the C oracle fixtures; none establishes native AVX512 execution.
+Use the required command in [validation](validation.md) on suitable hardware.
+Numerical, MXCSR and fault acceptance remains pending; retain the two
+repeated-R15 address-contract Context cases. The older packed reciprocal
+owner has actual Linux CI execution, separately from reciprocal14.
+
+The locally qualified SDK digest change retains only direct, immutable struct
+field metadata within one complete digest call. It adds 32 production lines;
+values, payloads and mutable source verification are never cached. Both SDKs
+retain byte-for-byte serialization, fixed golden streams and existing mutation
+controls. Paired complete-encoder measurements on the same real CPU, CRC32 and
+maps captures improve normal time by approximately 15–38% and race time by
+19–25%, with substantially fewer allocations. Capture and live Verify are
+outside those timers; this is not a whole-SDK or CI acceleration claim.
+Combined primary integration checks remain pending.
 
 The declaration-demand batch was qualified at `fe97b6d53`, then published as
 `9fede619c`. It adds 186 official
@@ -56,38 +75,26 @@ The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.
 
-[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), publication `8c3555126`,
-is rebased onto `748cf1811` and pins the downloaded public
+[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), publication `df6f5eeb2`,
+is rebased onto `748cf1811` and still pins the qualified public
 `v0.0.0-20261027230043-3b61ac1fb97c`. All 117 contribution patches survive the
-rebase unchanged; the final tree equals an independent three-way merge.
-Fresh adapter tests pass 41 roots / 131 children, assembly-build checks 21 / 23,
-rebase-affected Go owners 53 / 118 and the preceding complete CI policies pass,
-with zero failures/skips. The public ZIP's 5,049 files match exact Git blobs and
-the bundled license. The previous compiler round retains a Windows native demo
-job cancelled at its one-hour deadline: 32 of 33 cases finished, while
-`createtemp-1654` had no terminal result. Its old redirected log cannot establish
-whether build or execution stalled. A separate macOS artifact DNS failure passed
-an authorized rerun, without erasing its original outcome.
+rebase unchanged. The public ZIP's 5,049 files match exact Git blobs and its
+license. Adapter, assembly-build and affected Go checks retain their separate
+receipts; neither those tests nor this temporary dependency resolves every
+runtime/ABI issue.
 
-The new publication adds live stage logs, independent build/run deadlines and
-owned-process cleanup while preserving the original demo selection and stress
-workload. The preceding round naturally finished with 124 successful jobs,
-six Windows failures in a Darwin mock's missing host `SIGKILL`, and two
-conditional release skips. Test-only repair `8c3555126` passes 15 focused owners
-and complete **179/179** local policies, without skips or production changes.
-The first full policy attempt's installer fixture failure and three diagnostic
-passes remain recorded; the unchanged complete retry passes at the same budgets.
+All ten WASM suites pass on the current publication after splitting original
+stdlib targets and caller profiles into independent jobs. Original cases,
+flags, cache settings and 20/15/60-minute budgets remain intact. Whole-round CI
+is still pending and has one known policy fixture failure: metadata was read
+after file creation but before its complete write. Local `8f68e5878` fixes
+fixture publication atomically and requires the Go/Git/Node/Bash tools used by
+the policy tests. All 191 local policies pass without skips. Let the current
+round finish before publishing that repair; require fresh cloud acceptance.
 
-The repaired [Windows MinGW amd64 native job](https://github.com/xgo-dev/llgo/actions/runs/40632461755/job/122631913188)
-passes: original logs confirm 15 ownership tests, 33/33 host demos and 11/11
-embedded cases. Digest-verified stage metadata independently confirms successful
-build/run under Windows Jobs. Unchanged `createtemp-1654` completed all 4 x 5,000
-operations: build 49.391s, execution 13.391s and output `ok`. Cloud Python is
-native Python3.12.10 x64; local policies use Python3.13. This does not establish the old opaque
-cancellation's root cause. The whole new round remains pending, including a
-cancelled Ubuntu dependency-install job requiring investigation. Earlier pins
-retain their own outcomes. Let the current round finish before another code push.
-The P1 dependency-provenance requirement remains
+The native Windows demo repair at `8c3555126` has actual six-profile CI coverage,
+including the unchanged 4 x 5,000-operation temporary-file stress cases. Preserve earlier
+timeouts and fixture failures. The P1 dependency-provenance requirement remains
 open until an official upstream version replaces the temporary fork pin.
 Never push or merge upstream directly.
 
@@ -233,6 +240,9 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Immediate word/dword shuffle at `a0238ebc3` | Each SDK new **1 / 12**; full rules **61 / 491 PASS** | Seven source spellings, 34 rows / 95 witnesses; old 21 groups and 251 generated batches unchanged; separate PSHUFL/PSHUFD rows retained |
 | Complete reciprocal14 at `fb1fdb122` | Each SDK **12 / 333 PASS**; full rules **56 / 463** | 32 rows / 132 witnesses and original 304 shapes; affected host scope 27 / 495 PASS plus one old scalar execution owner N/A; native RCP14 execution owner still missing |
 | Original reciprocal14 addresses at `a6a85d927` | Each SDK **16 / 783**; affected old owners **57 / 1,412 PASS** | 66 original statements have objects, two require address context; final isolated unit **1 / 52** supplements byte-identical inherited evidence; private boundary checks confer no raw capability |
+| Reciprocal14 native-owner preparation at `59abb07f8` | Each SDK **15 / 504 PASS** | Actual source/trace/object and C compile/link evidence only; tagged Linux execution remains pending hardware |
+| SDK race partition at `cd2413c1b` | Current SDK **34 / 35**; minimum **18 / 27 PASS** | Complete SDK frontend race roots, existing exhaustive partition runner, unchanged timeouts; current-head cloud still pending |
+| Complete signed/zero widening at `8e9910c0a` | Each SDK new object owner **1 / 36**; full rules **65 / 511 PASS** | 108 rows / 288 witnesses; all old 23 views identical; no translator or initializer changes |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -276,11 +286,12 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Duplicate-element moves | 27 | 72 |
 | Immediate word/dword shuffle | 34 | 95 |
 | Packed/scalar reciprocal14 | 32 | 132 |
-| Local candidate unique union | **2,073** | **7,758** |
+| Signed/zero widening | 108 | 288 |
+| Local candidate unique union | **2,181** | **8,046** |
 
-The union contains 1,960 AVX rows of 3,568 (54.9%) and 113 legacy rows. The
+The local union contains 2,056 AVX rows of 3,568 (57.6%) and 125 legacy rows. The
 complete rotate view overlaps 24 existing rows / 108 witnesses and is deduplicated.
-The 7,758 witnesses include the existing 30 terminal trap controls, not 7,758
+The 8,046 witnesses include the existing 30 terminal trap controls, not 8,046
 normal executions. These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
 separate. High banks force narrow EVEX; MMX has separate region/EMMS owners.
@@ -347,22 +358,22 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 
 ## Remaining work, in order
 
-1. Finish LLGo's repaired-head cloud round and investigate/retry its cancelled
-   Ubuntu dependency job as appropriate. Windows MinGW's original workload is
-   verified; other profiles retain their own outcomes. Keep external review
-   and official dependency provenance open, and retain draft status. Publish
-   the combined duplicate/shuffle and reciprocal14 batch after final integration
-   checks, then require its exact-head CI/coverage.
-   RCP14's 32 rows / 132 witnesses and optimized-object regressions now pass
-   both SDKs. Complete its native execution owner, raw semantic coverage and
-   hardware acceptance; preserve the two repeated-R15 address-contract gaps.
-   Next investigate the four older packed reciprocal estimates as a whole
-   class: their fixed denormal rules differ from14, so legal register CSE may
-   remain; native reads and legacy alignment faults need their own real TDD.
-   Widening's complete 24-member / 108-row proposal is prepared but untested.
+1. Finish current Plan9asm and LLGo cloud rounds and repair actual failures.
+   Publish the locally qualified LLGo fixture/tool repair after its current
+   round ends. Finish combined Plan9asm publication gates, publish complete
+   family batches, then require exact-head CI/coverage. Requalify the LLGo pin
+   against that public source. Keep external review, the official dependency
+   requirement and native AVX512 hardware acceptance open.
+   Retain the digest optimization's full byte identity and mutable-source
+   checks during combined integration; keep its encoder measurements separate
+   from complete SDK translation and cloud job timing.
 2. Complete amd64 official-row ownership, 386 applicability and independent
    semantics. Extend existing family/object/native owners instead of creating
    another opcode registry or enumerating unrelated source/target products.
+   The remaining AVX source inventory has 1,512 rows / 442 names across 23
+   encoding transport cases. Broadcast's complete 20-name / 111-row test-first
+   batch is in preparation; narrowing's 18-name / 108-row proposal is untested.
+   Static inventories are not successful object or execution receipts.
 3. Keep the 14 implicit-entry, GC-scan and system/runtime/test-hook failures
    individually diagnosed in [issue47](https://github.com/xgo-dev/plan9asm/issues/47).
    They remain failed integration work, not automatic exclusions. Object
