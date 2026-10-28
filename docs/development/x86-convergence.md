@@ -167,7 +167,15 @@ It cannot inherit the shift/rotate opcode-extension operand role or their
 mandatory prefix. PSHUFL and PSHUFD retain distinct original Go table rows;
 neither spelling is silently deduplicated. Only the dword shuffle admits its
 official broadcast forms. These two additions change no numerical lowerer or
-input initializer. The unique local union reaches 2,041 rows / 7,626 witnesses,
+input initializer. Reciprocal14 then reuses the existing typed native floating
+helper: packed/scalar shape, precision, mask, copied upper bytes and old low
+bytes remain separate fields. The original opcode preserves approximation,
+ambient MXCSR and native fault semantics. Its actual O2 objects retain both
+ordered estimates and dead-result native memory operations; a pure numeric
+intrinsic with an ordinary load did not. This removes 176 implementation lines
+including format changes, without a new interpreter. Native numerical/fault
+execution still lacks an independent RCP14 owner and hardware acceptance.
+The unique local union reaches 2,073 rows / 7,758 witnesses,
 with overlapping rotate views
 deduplicated. This is initialized-source/object ownership, not complete amd64
 implementation or native execution coverage.

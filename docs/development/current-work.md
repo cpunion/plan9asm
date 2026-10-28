@@ -28,14 +28,18 @@ the existing E4 pipeline. Its unique inventory is 1,980 rows / 7,459 witnesses:
 forms overlap an earlier owner and are counted once. These initialized byte,
 translation and object checks are separate from native runtime acceptance.
 
-The next locally qualified batch adds complete duplicate moves and immediate
-word/dword shuffles: 61 unique rows / 167 witnesses, with no translator or
-initializer change. Both endpoint SDKs pass original-Go encoding comparisons,
-all three API object checks, complete rule tests, old-row identity and policies.
-The local union is 2,041 rows / 7,626 witnesses: 1,928 AVX rows (54.0%) and
+The next locally qualified batches add complete duplicate moves, immediate
+word/dword shuffles and RCP14/RSQRT14: 93 unique rows / 299 witnesses. Duplicate
+and shuffle change no translator or initializer. Reciprocal14 reuses the
+existing typed native floating helper, removing 183 translator/form/prelude
+lines while adding seven official-format lines. Both endpoint SDKs pass the
+original-Go bytes and all three API object checks. Final combined integration
+gates remain required after merging the shared format changes.
+The local union is 2,073 rows / 7,758 witnesses: 1,960 AVX rows (54.9%) and
 113 legacy rows. This is AVX-table ownership, not all amd64 opcode or runtime
-coverage. Native EVEX hardware execution remains outstanding. Preserve every
-failed attempt and finish current compiler CI before publishing another batch.
+coverage. RCP14 has no independent native execution owner yet; its AVX512
+numerical and fault acceptance still need implementation and hardware.
+Preserve every failed attempt and finish current compiler CI before publishing.
 
 The declaration-demand batch was qualified at `fe97b6d53`, then published as
 `9fede619c`. It adds 186 official
@@ -136,6 +140,15 @@ Never push or merge upstream directly.
   evidence of an emitted memory operation. Real consumer module fixtures query
   the selected LLVM binding and replacement instead of pinning another version
   while copying the repository checksum file.
+- Reciprocal14 uses the existing typed native floating helper for all eight
+  members. Independent actual O0/O2 objects retain two operations around two
+  ordered MXCSR changes and preserve masked native memory operations when
+  results are unused. The old pure intrinsics allowed CSE across MXCSR and
+  removal of ordinary source loads. Scalar upper-copy and merging low bytes
+  have separate input roles; feature projection requires F, plus VL only for
+  packed X/Y. Original 304 source shapes remain as Go encoding observations,
+  with initialized three-API objects and explicit mode32 high-bank context.
+  Dead spec state and sixteen unused intrinsic declarations are removed.
 
 The final GP descriptor reuse avoids the rejected eager-query overhead.
 Measured replay ABBA differences against the same partition implementation
@@ -201,6 +214,7 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Complete rotate family at `41ac31285` | Each SDK new **1 / 28**; full rules **55 / 463 PASS** | All eight members, 48 rows / 216 witnesses; unique addition 24 / 108; old 19 groups and 241 generated batches unchanged |
 | Complete duplicate moves at `fe12b2865` | Each SDK new **1 / 12**; full rules **58 / 477 PASS** | All six members, 27 rows / 72 witnesses; old 20 groups unchanged; translator and initializer unchanged |
 | Immediate word/dword shuffle at `a0238ebc3` | Each SDK new **1 / 12**; full rules **61 / 491 PASS** | Seven source spellings, 34 rows / 95 witnesses; old 21 groups and 251 generated batches unchanged; separate PSHUFL/PSHUFD rows retained |
+| Complete reciprocal14 at `fb1fdb122` | Each SDK **12 / 333 PASS**; full rules **56 / 463** | 32 rows / 132 witnesses and original 304 shapes; affected host scope 27 / 495 PASS plus one old scalar execution owner N/A; native RCP14 execution owner still missing |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -243,11 +257,12 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Complete rotate view (24 rows already in EVEX binary group) | 48 | 216 |
 | Duplicate-element moves | 27 | 72 |
 | Immediate word/dword shuffle | 34 | 95 |
-| Local candidate unique union | **2,041** | **7,626** |
+| Packed/scalar reciprocal14 | 32 | 132 |
+| Local candidate unique union | **2,073** | **7,758** |
 
-The union contains 1,928 AVX rows of 3,568 (54.0%) and 113 legacy rows. The
+The union contains 1,960 AVX rows of 3,568 (54.9%) and 113 legacy rows. The
 complete rotate view overlaps 24 existing rows / 108 witnesses and is deduplicated.
-The 7,626 witnesses include the existing 30 terminal trap controls, not 7,626
+The 7,758 witnesses include the existing 30 terminal trap controls, not 7,758
 normal executions. These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
 separate. High banks force narrow EVEX; MMX has separate region/EMMS owners.
@@ -319,10 +334,12 @@ showed regression; no acceleration is claimed for the accepted cleanup.
    that exact head. Keep external review and official dependency provenance
    open, and retain draft status. Batch the qualified duplicate/shuffle joins
    with the next instruction-class repair before another translator CI push.
-   The next class is all eight RCP14/RSQRT14 members: reuse existing operand
-   grammar, typed byte/result owners and observable masked memory loads.
-   Its 32 official rows have been statically inventoried; the proposed 132
-   witnesses and dynamic-MXCSR/optimized fault controls are not passing tests.
+   RCP14's 32 rows / 132 witnesses and optimized-object regressions now pass
+   both SDKs. Complete its native execution owner and hardware acceptance.
+   Next investigate the four older packed reciprocal estimates as a whole
+   class: their fixed denormal rules differ from14, so legal register CSE may
+   remain; native reads and legacy alignment faults need their own real TDD.
+   Widening's complete 24-member / 108-row proposal is prepared but untested.
 2. Complete amd64 official-row ownership, 386 applicability and independent
    semantics. Extend existing family/object/native owners instead of creating
    another opcode registry or enumerating unrelated source/target products.
