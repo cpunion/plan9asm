@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -66,15 +67,56 @@ func TestTranslateX86SingleSourceIntegerNarrowCompleteGoAssemblerForms(t *testin
 					"singlesourcenarrowforms": {Name: "singlesourcenarrowforms", Ret: Void},
 				},
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ll != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("bare Go formats invented initialized entry registers or memory", err)
 			}
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
 			}
-			compileLLVMToObject(t, llc, target.triple, "single-source-integer-narrow.ll", "single-source-integer-narrow.o", ll)
+			// Preserve every original operand and all 324 Go-encoded shapes as
+			// isolated emitter units. Initialized public objects and executable
+			// numerical/fault owners are independent of these format objects.
+			units, signatures := x86SingleSourceNarrowingFormatUnits(file)
+			if len(units.Funcs) != 324 {
+				t.Fatal("an original Go format disappeared", len(units.Funcs))
+			}
+			x86SingleSourceNarrowingFormatObjects(t, llc, units, signatures, target.goarch, target.triple)
 		})
+	}
+}
+
+func x86SingleSourceNarrowingFormatUnits(file *File) (*File, map[string]FuncSig) {
+	units := *file
+	units.Funcs = nil
+	signatures := make(map[string]FuncSig)
+	for _, fn := range file.Funcs {
+		for _, ins := range fn.Instrs {
+			if ins.Op == OpTEXT || ins.Op == OpRET {
+				continue
+			}
+			name := fmt.Sprint("NarrowFormat", len(units.Funcs))
+			units.Funcs = append(units.Funcs, Func{Sym: name, Instrs: []Instr{{Op: OpTEXT}, ins, {Op: OpRET}}})
+			signatures[name] = FuncSig{Name: name, Ret: Void}
+		}
+	}
+	return &units, signatures
+}
+
+func x86SingleSourceNarrowingFormatObjects(t *testing.T, llc string, units *File, signatures map[string]FuncSig, arch, triple string) {
+	t.Helper()
+	for start := 0; start < len(units.Funcs); start += 64 {
+		end := start + 64
+		if end > len(units.Funcs) {
+			end = len(units.Funcs)
+		}
+		batch := *units
+		batch.Funcs = units.Funcs[start:end]
+		ir := x86SingleInstructionFormatObjectUnits(t, &batch, signatures, arch, triple,
+			func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerSingleSourceIntegerNarrow(ins.Op, ins) })
+		for _, level := range []string{"-O0", "-O2"} {
+			x86PackedStringCompileObject(t, llc, triple, ir, level)
+		}
 	}
 }
 

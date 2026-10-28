@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -43,11 +44,22 @@ func TestTranslateRawNarrowSingleSourceGorseRegression(t *testing.T) {
 		TargetTriple: "x86_64-unknown-linux-gnu",
 		Sigs:         map[string]FuncSig{"rawNarrowSingleSource": {Name: "rawNarrowSingleSource", Ret: Void}},
 	})
+	if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("original raw regression invented native input registers/address", err)
+	}
+	decoded, err := decodeX86RawDirectives(file.Funcs[0], "amd64")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(ir, "icmp") {
-		t.Fatalf("raw VPMOVUSDB omitted saturating conversion:\n%s", ir)
+	file.Funcs[0] = decoded
+	units, signatures := x86SingleSourceNarrowingFormatUnits(file)
+	if len(units.Funcs) != 1 {
+		t.Fatal("original physical regression lost its single conversion", len(units.Funcs))
+	}
+	ir = x86SingleInstructionFormatObjectUnits(t, units, signatures, "amd64", "x86_64-unknown-linux-gnu",
+		func(c *amd64Ctx, ins Instr) (bool, bool, error) { return c.lowerSingleSourceIntegerNarrow(ins.Op, ins) })
+	if !strings.Contains(ir, "icmp ugt") {
+		t.Fatal("raw VPMOVUSDB format omitted unsigned input saturation")
 	}
 }
 
@@ -61,7 +73,8 @@ func TestDecodedX86RawSingleSourceNarrowCompleteGoRows(t *testing.T) {
 	for group, row := range x86RawSingleSourceNarrowOps {
 		for width, op := range row {
 			spec, ok := amd64SingleSourceNarrowSpecs[string(op)]
-			if !ok || seen[op] || spec.inputBits != inputBits[width] || spec.outputBits != outputBits[width] || spec.saturating != (group != 2) {
+			if !ok || seen[op] || spec.inputBits != inputBits[width] || spec.outputBits != outputBits[width] ||
+				spec.domain != [...]x86SingleSourceNarrowDomain{x86NarrowUnsigned, x86NarrowSigned, x86NarrowTruncate}[group] {
 				t.Fatalf("raw opcode row %d/%d = %s, spec %+v", group, width, op, spec)
 			}
 			seen[op] = true
@@ -183,10 +196,19 @@ func TestTranslateRawSingleSourceNarrowLLVM22Targets(t *testing.T) {
 				TargetTriple: target.triple,
 				Sigs:         map[string]FuncSig{"rawNarrowFamily": {Name: "rawNarrowFamily", Ret: Void}},
 			})
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("bare raw formats invented initialized native entry values", err)
+			}
+			decoded, err := decodeX86RawDirectives(file.Funcs[0], target.goarch)
 			if err != nil {
 				t.Fatal(err)
 			}
-			compileLLVMToObject(t, llc, target.triple, "raw-single-source-narrow.ll", "raw-single-source-narrow.o", ir)
+			file.Funcs[0] = decoded
+			units, signatures := x86SingleSourceNarrowingFormatUnits(file)
+			if len(units.Funcs) != 24 {
+				t.Fatal("original physical family format disappeared", len(units.Funcs))
+			}
+			x86SingleSourceNarrowingFormatObjects(t, llc, units, signatures, target.goarch, target.triple)
 		})
 	}
 }

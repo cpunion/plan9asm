@@ -24,6 +24,9 @@ func x86UndefinedTrapProperties(op Op, ins Instr, arch string) (x86UndefinedTrap
 	}
 	spec, known := x86UndefinedTrapSpecs[Op(canonical)]
 	if !known {
+		if form, narrow, err := x86SingleSourceNarrowProperties(op, ins, arch); narrow && err == nil && form.undefinedOpcode() {
+			return x86UndefinedTrapSpec{native: "ud2"}, true, nil
+		}
 		if form, half, err := x86NamedHalfProperties(op, ins, arch); half && err == nil && form.undefinedOpcode() {
 			return x86UndefinedTrapSpec{native: "ud2"}, true, nil
 		}

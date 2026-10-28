@@ -365,6 +365,9 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 }
 
 func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, write, valid bool) {
+	if f, known, err := x86SingleSourceNarrowProperties(ins.Op, ins, arch); known {
+		return int64(f.outputBytes), true, err == nil && !f.undefinedOpcode() && f.memory >= 0 && f.memory == index
+	}
 	if form, known, err := x86PackedPrecisionProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}

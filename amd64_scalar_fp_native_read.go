@@ -714,6 +714,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultPackedNarrowStep(ins, state, owned, arch, true); known {
 			return accepted // The same emitter retains the complete E4NF tuple or original legacy opcode.
 		}
+		if accepted, known := x86ResultSingleSourceNarrowStep(ins, state, owned, resultOffset, arch, true); known {
+			return accepted
+		}
 		if accepted, known := x86LoweredRawPackedShiftStep(ins, state, owned, arch); known {
 			return accepted // Only the exact sealed shift projects onto the existing typed byte effect.
 		}

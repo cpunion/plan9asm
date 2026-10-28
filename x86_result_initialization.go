@@ -1147,6 +1147,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultPackedNarrowStep(ins, state, owned, arch, false); known {
 		return accepted
 	}
+	if accepted, known := x86ResultSingleSourceNarrowStep(ins, state, owned, resultOffset, arch, false); known {
+		return accepted
+	}
 	if accepted, known := x86ResultSignedPackedFloatStep(ins, state, owned, arch, false); known {
 		return accepted
 	}

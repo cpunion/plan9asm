@@ -72,6 +72,15 @@ func X86PackedNarrowRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86Packed
 		PACKSSLW PACKSSWB PACKUSDW PACKUSWB VPACKSSDW VPACKSSWB VPACKUSDW VPACKUSWB`)
 }
 
+// X86SingleSourceNarrowingRows retains every truncating and saturating store
+// row, including Go-encoded memory.Z forms whose architectural result is #UD.
+func X86SingleSourceNarrowingRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		VPMOVDB VPMOVDW VPMOVQB VPMOVQD VPMOVQW VPMOVWB
+		VPMOVSDB VPMOVSDW VPMOVSQB VPMOVSQD VPMOVSQW VPMOVSWB
+		VPMOVUSDB VPMOVUSDW VPMOVUSQB VPMOVUSQD VPMOVUSQW VPMOVUSWB`)
+}
+
 // X86PackedPerLaneShiftRows retains the complete W/D/Q logical-left,
 // logical-right and arithmetic-right per-lane shift families.
 func X86PackedPerLaneShiftRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -287,6 +296,9 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if rule.Ytab == "_yvpmovdb" || rule.Ytab == "_yvpmovdw" {
+		return x86PackedSingleSourceNarrowRowWitnesses(rule)
+	}
 	if strings.HasPrefix(rule.Opcode, "VBROADCAST") || strings.HasPrefix(rule.Opcode, "VPBROADCAST") {
 		return x86PackedBroadcastRowWitnesses(rule)
 	}

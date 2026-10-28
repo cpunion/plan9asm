@@ -208,6 +208,9 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, known, err := x86TypedFloatingHelperByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
+	if effect, known, err := x86TypedSingleSourceNarrowByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, known, err := x86TypedConflictFunnelByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
