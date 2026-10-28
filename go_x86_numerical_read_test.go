@@ -19,7 +19,7 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
 )
 
-func numericalSBFixture(t *testing.T, arch string) (GoPackage, GoAMD64FrameCaptureRequest, *File, Options) {
+func numericalSBFixture(t testing.TB, arch string) (GoPackage, GoAMD64FrameCaptureRequest, *File, Options) {
 	t.Helper()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {

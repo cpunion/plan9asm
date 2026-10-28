@@ -67,9 +67,13 @@ func runtimeOracleStageDeadline(now, testDeadline time.Time, hasTestDeadline boo
 // independent object capture, binding and final API/runtime verification.
 // That lease spans multiple stages; it must not expire after the first stage's
 // budget. Individual subprocess/stage limits and cancellation remain intact.
-func runtimeOracleProofContext(t *testing.T) (context.Context, context.CancelFunc) {
+func runtimeOracleProofContext(t testing.TB) (context.Context, context.CancelFunc) {
 	t.Helper()
-	deadline, hasDeadline := t.Deadline()
+	var deadline time.Time
+	var hasDeadline bool
+	if bounded, ok := t.(interface{ Deadline() (time.Time, bool) }); ok {
+		deadline, hasDeadline = bounded.Deadline()
+	}
 	return context.WithDeadline(context.Background(),
 		runtimeOracleBoundedDeadline(time.Now(), deadline, hasDeadline, runtimeOracleProofTimeout))
 }

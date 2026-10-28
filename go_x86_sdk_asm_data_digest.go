@@ -32,6 +32,42 @@ type sdkASMDataDigestEncoder struct {
 	hash    hash.Hash
 	scratch [4096]byte
 	used    int
+	structs map[reflect.Type]sdkASMDataDigestStruct
+}
+
+type sdkASMDataDigestStruct struct {
+	name   string
+	fields []sdkASMDataDigestField
+}
+
+type sdkASMDataDigestField struct {
+	index int
+	name  string
+}
+
+// Plans contain immutable, direct type metadata and live for one digest only.
+// Every value, payload and validity check still reads the current state; plans
+// do not retain reflect.Values or recursively build plans for field types.
+func (encoder *sdkASMDataDigestEncoder) structPlan(typ reflect.Type) sdkASMDataDigestStruct {
+	if plan, ok := encoder.structs[typ]; ok {
+		return plan
+	}
+	plan := sdkASMDataDigestStruct{name: typ.String()}
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		if field.PkgPath != "" {
+			continue
+		}
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if name != "-" {
+			plan.fields = append(plan.fields, sdkASMDataDigestField{index: i, name: field.Name})
+		}
+	}
+	if encoder.structs == nil {
+		encoder.structs = make(map[reflect.Type]sdkASMDataDigestStruct)
+	}
+	encoder.structs[typ] = plan
+	return plan
 }
 
 func (encoder *sdkASMDataDigestEncoder) flush() {
@@ -142,15 +178,11 @@ func (encoder *sdkASMDataDigestEncoder) value(value reflect.Value, depth int) er
 		encoder.number(uint64(value.Len()))
 		return encoder.elements(value, depth)
 	case reflect.Struct:
-		typ := value.Type()
-		encoder.text(typ.String())
-		for i := 0; i < value.NumField(); i++ {
-			field := typ.Field(i)
-			if field.PkgPath != "" || strings.Split(field.Tag.Get("json"), ",")[0] == "-" {
-				continue // Exactly the retained JSON-visible state, not private owner tokens.
-			}
-			encoder.text(field.Name)
-			if err := encoder.value(value.Field(i), depth+1); err != nil {
+		plan := encoder.structPlan(value.Type())
+		encoder.text(plan.name)
+		for _, field := range plan.fields {
+			encoder.text(field.name)
+			if err := encoder.value(value.Field(field.index), depth+1); err != nil {
 				return err
 			}
 		}

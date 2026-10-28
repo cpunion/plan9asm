@@ -41,7 +41,7 @@ func TestGoX86SDKASMDataLiveOriginalCRC32Red(t *testing.T) {
 	sdkASMDataRetain(t, live)
 }
 
-func sdkASMDataRequest(t *testing.T, arch, pkg string) (context.Context, GoX86SDKASMDataCaptureRequest) {
+func sdkASMDataRequest(t testing.TB, arch, pkg string) (context.Context, GoX86SDKASMDataCaptureRequest) {
 	t.Helper()
 	_, profile, _, _ := numericalSBFixture(t, arch)
 	ctx, cancel := runtimeOracleProofContext(t)
