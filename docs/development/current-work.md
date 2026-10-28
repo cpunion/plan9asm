@@ -19,8 +19,8 @@ Those skips are not execution passes or new hardware acceptance.
 Its published inventory is **34 views, 2,927 rows / 11,010 witnesses**:
 2,793 of 3,568 AVX-table rows (78.3%) and 134 legacy rows. This measures
 initialized original-Go bytes and LLVM objects, not native execution or every
-amd64 opcode. Three locally qualified legacy groups extend the mixed-mode
-inventory to **37 views, 3,298 source records / 12,078 canonical witnesses**.
+amd64 opcode. Four locally qualified legacy groups extend the mixed-mode
+inventory to **38 views, 3,322 source records / 12,126 canonical witnesses**.
 They require combined primary-snapshot qualification before another publication.
 Their 386-only rows and double-shift fallback records are not an amd64 percentage.
 
@@ -307,12 +307,22 @@ three-API O0/O2 objects, five-architecture and complete policy gates. All previo
 source batches remain identical. No translator, runtime permission or native
 execution claim changes.
 
-The three legacy follow-ups share existing typed producers and original-byte
-observers rather than introducing mnemonic-specific translators. Their mixed-mode
-union is 37 views / 3,298 source records / 12,078 canonical witnesses. Next join
-all 24 legacy ADD/SUB/MUL/DIV/MIN/MAX PS/PD/SS/SD members through the existing FP
-format and producer. Keep original prefixes, first-match selection, 386 pointer
-widths and independent IEEE/MXCSR/fault execution boundaries.
+The four legacy follow-ups share existing typed producers and original-byte
+observers rather than introducing mnemonic-specific translators. Integrated
+`c19c49fd6` joins all 24 legacy ADD/SUB/MUL/DIV/MIN/MAX PS/PD/SS/SD members through
+the existing FP format and producer. Each SDK verifies 48 witnesses per mode,
+three-API O0/O2 objects, full rules, five architectures and complete policies.
+The two SDKs' original ADDSD prefix failures remain recorded. This fixes the
+format harness, not the translator: only shared prefix handling, explicit driver
+target parameters and independent tests change, for 245 net lines. All previous
+36 groups and runtime-source bytes remain identical on the author's base;
+the primary must additionally qualify its later condition group in the combined
+snapshot. Original IEEE/MXCSR/fault execution boundaries remain separate.
+
+The local mixed-mode union is now 38 views / 3,322 source records / 12,126
+canonical witnesses. Next join the remaining permutation/block-shuffle group:
+twelve names / 84 original rows across five operand tables. These remain a
+static plan until actual Go-byte, initialized-object and semantic qualification.
 
 The preceding shift/rotate cross-mode inventory had 3,234 records and 11,646 deduplicated
 row/instruction/encoding witnesses plus two aliases. These totals combine
@@ -478,6 +488,7 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Legacy scalar RMW at `05b87b318` | Each SDK family **6 / 139**, full rules **92 / 1,029 PASS** | 169 source rows; actual selected/shadow/mode mapping; amd64 167 / 278 and 386 124 / 202 through three-API O0/O2 objects; old 34 groups unchanged |
 | Scalar shift/rotate at `dfad1a73b` | Each SDK family **6 / 138**, full rules **94 / 1,046 PASS** | 120 optab + eighteen double-shift records; amd64 138 / 356 and 386 100 / 264; original runtime source and prior groups unchanged |
 | Jcc/SETcc at `e44dad97b` | Each SDK family **5 / 108**, full rules **97 / 1,083 PASS** | 32 names / 64 records, 432 unique cross-mode canonical witnesses; actual branch endpoints and 386 synthetic sequences kept separate |
+| Legacy floating binary at `cb0217c39` | Each SDK family **1 / 18**, full rules **96 / 1,085 PASS** | 24 names / 24 source records, 48 witnesses per mode; old producer and runtime bytes unchanged; author base precedes condition group |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -536,7 +547,8 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Local scalar RMW, both modes | 169 | 280 |
 | Local shift/rotate and double-shift, both modes | 138 | 356 |
 | Local Jcc/SETcc, both modes | 64 | 432 |
-| Local mixed-mode unique union (37 views) | **3,298** | **12,078** |
+| Local legacy floating binary, both modes | 24 | 48 |
+| Local mixed-mode unique union (38 views) | **3,322** | **12,126** |
 
 The published union contains 2,793 AVX rows of 3,568 (78.3%) and 134 legacy rows. The
 complete rotate view overlaps 24 existing rows / 108 witnesses and is deduplicated.
@@ -630,9 +642,10 @@ showed regression; no acceleration is claimed for the accepted cleanup.
    records. The 301 locally joined amd64 legacy rows are a separate denominator. Preserve
    mode refusals, exact duplicates and first-match/shadow mappings; static
    inventory is not missing implementation or initialized-object proof.
-   GP RMW, shift/rotate and Jcc/SETcc are locally qualified, including original
-   FLAGS, aliases, mode selection and first-match mappings. Next join the complete
-   legacy floating binary family using the existing format and producer.
+   GP RMW, shift/rotate, Jcc/SETcc and legacy floating binary are locally qualified,
+   including original FLAGS, aliases, mode selection and first-match mappings.
+   Next join the complete remaining permutation/block-shuffle group using shared
+   formats and producers; retain defined-old-value and masked `.Z` boundaries.
    Six MMX rows retain their separate unresolved machine-state contract.
    Static inventories are not successful object or execution receipts.
 3. Keep the 14 implicit-entry, GC-scan and system/runtime/test-hook failures
