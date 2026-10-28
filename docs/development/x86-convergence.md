@@ -159,8 +159,16 @@ transport axes: immediate opcode-extension literals use vvvv for destination,
 while uniform counts keep X/m128 independent of data width. The immediate
 rotate family reuses that transport without gaining uniform-count forms. All
 bytes still derive from original SDK payloads; numerical lowerers and memory
-permissions do not follow from these test-format capabilities. The unique local
-union reaches 1,980 rows / 7,459 witnesses, with overlapping rotate views
+permissions do not follow from these test-format capabilities. Duplicate moves
+reuse the unary transport, preserving DDUP.X's m64 tuple separately from the
+full-width SHDUP/SLDUP tuples. Immediate word/dword shuffle uses the distinct
+`i_rm_r` role format: destination in ModRM.reg, reserved vvvv, and an imm8 tail.
+It cannot inherit the shift/rotate opcode-extension operand role or their
+mandatory prefix. PSHUFL and PSHUFD retain distinct original Go table rows;
+neither spelling is silently deduplicated. Only the dword shuffle admits its
+official broadcast forms. These two additions change no numerical lowerer or
+input initializer. The unique local union reaches 2,041 rows / 7,626 witnesses,
+with overlapping rotate views
 deduplicated. This is initialized-source/object ownership, not complete amd64
 implementation or native execution coverage.
 
