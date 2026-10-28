@@ -22,8 +22,9 @@ initialized original-Go bytes and LLVM objects, not native execution or every
 amd64 opcode. Four locally qualified legacy groups and the permutation/shuffle
 follow-up extend the mixed-mode inventory to **39 views, 3,406 source records /
 12,454 canonical witnesses**. The local AVX join is **2,877 / 3,568 rows
-(80.63%)**. These batches require combined primary-snapshot qualification before
-another publication. Their 386-only rows and double-shift fallback records are
+(80.63%)**. Combined local qualification is complete, including the corrected
+O2 scope below; another publication requires its own CI round. Their 386-only
+rows and double-shift fallback records are
 not an amd64 percentage.
 
 The preceding `4aeffe806` round also completed 325/325 with 88.1% coverage;
@@ -154,8 +155,15 @@ The original failure does not retain the child exit status. Its regression,
 pass locally; this does not certify a new cloud revision. The other macOS
 failure exhausts both 45-minute `internal/build` test-binary budgets: only 748
 of 938 listed roots finish, with two active and 188 unstarted. No individual
-45-minute hang is established. Split scheduling and complete cross-job inventory
-and coverage validation are in progress before publishing either repair.
+45-minute hang is established. Published LLGo `625f3c0f7` combines both repairs:
+two independent macOS build jobs, eight logical shards and two workers per job,
+plus a collector that verifies the independent full inventory, original Go JSON,
+native ARM64 execution and exact coverage block/statement identity. Budgets and
+Linux/Windows defaults are unchanged. All 5,095 candidate files match the frozen
+197/197 local policy run, with no failures/errors/skips and all 192 prior
+methods retained. The first 196/197 policy failure remains recorded; its workflow
+condition was fixed without weakening the existing cancellation rule. The new
+head's expected 142 jobs / thirteen workflows remain pending cloud acceptance.
 
 A fresh compiler built from all 5,093 archived LLGo source files with Go1.27.0
 and LLVM22.1.8 passes CRC32 v1.3.0 and libc v1.75.7 ABI0 probes using Go1.27.3
@@ -371,13 +379,20 @@ source/declaration batches and two separate aliases. Author component
 qualification retains its original receipts. Independent review found that its
 all-format object owner compiled O0 only; the narrower executed value/fault
 owners also used O2, but did not establish O2 for all 328 forms. A test-only
-extension now requires both object levels through the same three APIs. Its new
-O2 execution remains pending. The primary's twelve completed gates pass on
-frozen `94ba90f3d`, including both SDKs' 85-root / 5,378-child joint scopes,
+extension now requires both object levels through the same three APIs. Both
+endpoint SDKs pass its complete O0/O2 object scope. The primary's twelve gates
+pass on frozen `94ba90f3d`, including both SDKs' 85-root / 5,378-child joint scopes,
 24 / 1,482 affected regressions, full rules, five architectures, race, policies
 and current CLI namespace. The initial selector missed the six legacy shift
-roots and one FP root; these and the strengthened O2 root need explicit endpoint
-qualification. Do not call that initial scope the complete five-batch acceptance.
+roots and one FP root. Supplemental frozen `406ae083e` explicitly passes all
+eight roots / 200 children on each endpoint, plus formatting, all 573 Node
+policies and the Go policy's 26 roots / 301 children, with no skips or failures.
+Only the upgraded test function and documentation differ: all other 5,332 files,
+test functions, rules, baselines and original tools retain exact identity. The
+unaffected twelve-gate evidence is inherited with those limits, not reported as
+another execution. Original incomplete scope and the erroneous O2 claim remain
+recorded. The five-batch local acceptance is now complete; new-head CI and native
+AVX512 acceptance remain separate.
 
 The preceding shift/rotate cross-mode inventory had 3,234 records and 11,646 deduplicated
 row/instruction/encoding witnesses plus two aliases. These totals combine
@@ -680,10 +695,10 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 1. Plan9asm's public round passes all 325 jobs. LLGo's preceding `9422371af`
    round passed after its targeted retry, but current `b6871f8f0` has the two
    macOS failures and two runner-capacity cancellations described above.
-   Complete and independently validate both repairs, then require passing
-   repaired-head CI. The current public translator pin already has fresh LLGo
-   execution qualification. Finish combined Plan9asm qualification before
-   publishing the next complete family batch.
+   Both repairs are independently validated and published at `625f3c0f7`;
+   require its complete repaired-head CI. The current public translator pin
+   already has fresh LLGo execution qualification. Publish the locally qualified
+   39-view Plan9asm batch, then require its own complete CI round.
    Keep external review, the official dependency
    requirement and native AVX512 hardware acceptance open.
    Retain the digest optimization's full byte identity and mutable-source
@@ -702,8 +717,8 @@ showed regression; no acceleration is claimed for the accepted cleanup.
    inventory is not missing implementation or initialized-object proof.
    GP RMW, shift/rotate, Jcc/SETcc and legacy floating binary are locally qualified,
    including original FLAGS, aliases, mode selection and first-match mappings.
-   The permutation/block-shuffle follow-up is integrated and requires combined
-   primary qualification. Next join the complete K-data groups through shared
+   The permutation/block-shuffle follow-up has complete local qualification.
+   Next join the complete K-data groups through shared
    formats, keeping encoded L/W/PP, semantic width and GP/memory widths separate.
    The 386 KMOVQ GP alias needs an actual typed rule-class fix and independent
    value checks; the static inventory alone grants no translation permission.
