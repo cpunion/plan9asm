@@ -26,6 +26,12 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86GFNIRows retains all named Go multiply and affine/inverse GFNI rows.
+// Matrix qword broadcast is independent from byte-granular result masking.
+func X86GFNIRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VGF2P8MULB VGF2P8AFFINEQB VGF2P8AFFINEINVQB`)
+}
+
 // X86ImmediateIntegerCompareRows retains all signed/unsigned B/W/D/Q
 // immediate comparisons, with K results independent from the input width.
 func X86ImmediateIntegerCompareRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -326,6 +332,15 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if rule.Ytab == "_yvgf2p8affineinvqb" {
+		return x86GFNIRowWitnesses(rule)
+	}
+	if rule.Opcode == "VGF2P8MULB" {
+		if _, err := x86GFNIFormatForRule(rule); err != nil {
+			return nil, err
+		}
+		// Retain the original no-immediate binary witness transport below.
+	}
 	if rule.Ytab == "_yvpcmpb" || rule.Ytab == "_yvpshufbitqmb" {
 		return x86IntegerMaskResultRowWitnesses(rule)
 	}
