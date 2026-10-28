@@ -31,10 +31,11 @@ translation and object checks are separate from native runtime acceptance.
 The next locally qualified batches add complete duplicate moves, immediate
 word/dword shuffles and RCP14/RSQRT14: 93 unique rows / 299 witnesses. Duplicate
 and shuffle change no translator or initializer. Reciprocal14 reuses the
-existing typed native floating helper, removing 183 translator/form/prelude
-lines while adding seven official-format lines. Both endpoint SDKs pass the
-original-Go bytes and all three API object checks. Final combined integration
-gates remain required after merging the shared format changes.
+existing typed native floating helper, initially removing 176 implementation
+lines including format changes. A further 45 lines close numerical instruction
+boundaries and certified private-frame reads, for a net reduction of 131.
+Both endpoint SDKs pass original-Go bytes and all three API object checks.
+Final combined integration gates remain required after merging the changes.
 The local union is 2,073 rows / 7,758 witnesses: 1,960 AVX rows (54.9%) and
 113 legacy rows. This is AVX-table ownership, not all amd64 opcode or runtime
 coverage. RCP14 has no independent native execution owner yet; its AVX512
@@ -55,7 +56,7 @@ The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.
 
-[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), publication `7e7bc4ccc`,
+[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), publication `8c3555126`,
 is rebased onto `748cf1811` and pins the downloaded public
 `v0.0.0-20261027230043-3b61ac1fb97c`. All 117 contribution patches survive the
 rebase unchanged; the final tree equals an independent three-way merge.
@@ -70,15 +71,22 @@ an authorized rerun, without erasing its original outcome.
 
 The new publication adds live stage logs, independent build/run deadlines and
 owned-process cleanup while preserving the original demo selection and stress
-workload. Current CI is still running; Windows ownership tests fail in a Darwin
-mock that accessed the host's absent `SIGKILL`, before demo execution. Local
-test-only repair `8c3555126` passes 15 focused owners and complete **179/179**
-policies, without skips or production changes. The first full policy attempt's
-unrelated installer fixture failure and three diagnostic passes are retained;
-the unchanged complete retry passes at the same budgets. Wait for the whole
-cloud round to finish before pushing. The original Windows demo must still
-execute on the repaired head; local POSIX tests do not resolve its pending result.
-Earlier pins retain their own outcomes.
+workload. The preceding round naturally finished with 124 successful jobs,
+six Windows failures in a Darwin mock's missing host `SIGKILL`, and two
+conditional release skips. Test-only repair `8c3555126` passes 15 focused owners
+and complete **179/179** local policies, without skips or production changes.
+The first full policy attempt's installer fixture failure and three diagnostic
+passes remain recorded; the unchanged complete retry passes at the same budgets.
+
+The repaired [Windows MinGW amd64 native job](https://github.com/xgo-dev/llgo/actions/runs/40632461755/job/122631913188)
+passes: original logs confirm 15 ownership tests, 33/33 host demos and 11/11
+embedded cases. Digest-verified stage metadata independently confirms successful
+build/run under Windows Jobs. Unchanged `createtemp-1654` completed all 4 x 5,000
+operations: build 49.391s, execution 13.391s and output `ok`. Cloud Python is
+native Python3.12.10 x64; local policies use Python3.13. This does not establish the old opaque
+cancellation's root cause. The whole new round remains pending, including a
+cancelled Ubuntu dependency-install job requiring investigation. Earlier pins
+retain their own outcomes. Let the current round finish before another code push.
 The P1 dependency-provenance requirement remains
 open until an official upstream version replaces the temporary fork pin.
 Never push or merge upstream directly.
@@ -149,6 +157,15 @@ Never push or merge upstream directly.
   packed X/Y. Original 304 source shapes remain as Go encoding observations,
   with initialized three-API objects and explicit mode32 high-bank context.
   Dead spec state and sixteen unused intrinsic declarations are removed.
+- All 68 original reciprocal14 statements retain their operands. Sixty ordinary
+  inputs and six freshly captured SP/BP frames compile through three APIs;
+  two repeated-R15 pointer-index forms remain explicit address-contract Context
+  cases. They are neither positive objects nor instruction-form exclusions.
+  The private boundary adapter validates 132 original Go encodings without
+  registering raw semantic translation. Shared frame transfer checks typed
+  reads, including K, before writes and retains the original storage envelope.
+  Baseline changes are limited to 43 bare forms becoming Context on each of
+  three verified source profiles; encoder data and other architectures remain.
 
 The final GP descriptor reuse avoids the rejected eager-query overhead.
 Measured replay ABBA differences against the same partition implementation
@@ -215,6 +232,7 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Complete duplicate moves at `fe12b2865` | Each SDK new **1 / 12**; full rules **58 / 477 PASS** | All six members, 27 rows / 72 witnesses; old 20 groups unchanged; translator and initializer unchanged |
 | Immediate word/dword shuffle at `a0238ebc3` | Each SDK new **1 / 12**; full rules **61 / 491 PASS** | Seven source spellings, 34 rows / 95 witnesses; old 21 groups and 251 generated batches unchanged; separate PSHUFL/PSHUFD rows retained |
 | Complete reciprocal14 at `fb1fdb122` | Each SDK **12 / 333 PASS**; full rules **56 / 463** | 32 rows / 132 witnesses and original 304 shapes; affected host scope 27 / 495 PASS plus one old scalar execution owner N/A; native RCP14 execution owner still missing |
+| Original reciprocal14 addresses at `a6a85d927` | Each SDK **16 / 783**; affected old owners **57 / 1,412 PASS** | 66 original statements have objects, two require address context; final isolated unit **1 / 52** supplements byte-identical inherited evidence; private boundary checks confer no raw capability |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -329,13 +347,15 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 
 ## Remaining work, in order
 
-1. Finish LLGo's current cloud round, publish the locally qualified Windows
-   fixture repair through the allowed fork, and verify the original demo on
-   that exact head. Keep external review and official dependency provenance
-   open, and retain draft status. Batch the qualified duplicate/shuffle joins
-   with the next instruction-class repair before another translator CI push.
+1. Finish LLGo's repaired-head cloud round and investigate/retry its cancelled
+   Ubuntu dependency job as appropriate. Windows MinGW's original workload is
+   verified; other profiles retain their own outcomes. Keep external review
+   and official dependency provenance open, and retain draft status. Publish
+   the combined duplicate/shuffle and reciprocal14 batch after final integration
+   checks, then require its exact-head CI/coverage.
    RCP14's 32 rows / 132 witnesses and optimized-object regressions now pass
-   both SDKs. Complete its native execution owner and hardware acceptance.
+   both SDKs. Complete its native execution owner, raw semantic coverage and
+   hardware acceptance; preserve the two repeated-R15 address-contract gaps.
    Next investigate the four older packed reciprocal estimates as a whole
    class: their fixed denormal rules differ from14, so legal register CSE may
    remain; native reads and legacy alignment faults need their own real TDD.

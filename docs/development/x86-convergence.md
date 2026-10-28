@@ -172,8 +172,14 @@ helper: packed/scalar shape, precision, mask, copied upper bytes and old low
 bytes remain separate fields. The original opcode preserves approximation,
 ambient MXCSR and native fault semantics. Its actual O2 objects retain both
 ordered estimates and dead-result native memory operations; a pure numeric
-intrinsic with an ordinary load did not. This removes 176 implementation lines
-including format changes, without a new interpreter. Native numerical/fault
+intrinsic with an ordinary load did not. The core removes 176 implementation
+lines including format changes; 45 further lines add private boundary and frame
+transfer support, leaving a net reduction of 131 without a new interpreter.
+The boundary-only adapter validates lengths and reserved fields but returns no
+semantic instruction. Frame permissions still require the original envelope,
+byte initialization and owner. Sixty ordinary and six original SP/BP statements
+have actual three-API objects; two pointer-as-index forms retain explicit Context.
+Native numerical/fault
 execution still lacks an independent RCP14 owner and hardware acceptance.
 The unique local union reaches 2,073 rows / 7,758 witnesses,
 with overlapping rotate views
