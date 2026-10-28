@@ -43,6 +43,14 @@ and initializer are unchanged. The local union is **2,181 rows / 8,046
 witnesses**: 2,056 AVX rows (57.6%) and 125 legacy rows. Combined publication
 checks are still required; these local counts are not the published CI scope.
 
+Locally integrated `111e549f9` adds the complete 20-name broadcast family:
+111 rows / 234 witnesses, with separate vector, GP, K-data and memory sources.
+Both endpoint SDKs pass original-Go bytes, all three API objects, full rule
+tests and five-architecture gates. All old 24 views and 269 generated source
+batches remain identical. Translator semantics are unchanged. The local union
+is now **2,292 rows / 8,280 witnesses**, including 2,167 AVX rows (60.7%) and
+125 legacy rows. Combined primary publication checks remain pending.
+
 RCP14/RSQRT14 native F and F+VL owners are implemented under the explicit
 `plan9asm_native_avx512` tag. Default checks compile original Go, three-API
 objects and the C oracle fixtures; none establishes native AVX512 execution.
@@ -243,6 +251,7 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Reciprocal14 native-owner preparation at `59abb07f8` | Each SDK **15 / 504 PASS** | Actual source/trace/object and C compile/link evidence only; tagged Linux execution remains pending hardware |
 | SDK race partition at `cd2413c1b` | Current SDK **34 / 35**; minimum **18 / 27 PASS** | Complete SDK frontend race roots, existing exhaustive partition runner, unchanged timeouts; current-head cloud still pending |
 | Complete signed/zero widening at `8e9910c0a` | Each SDK new object owner **1 / 36**; full rules **65 / 511 PASS** | 108 rows / 288 witnesses; all old 23 views identical; no translator or initializer changes |
+| Complete broadcasts at `99408cca8` | Each SDK new object owner **1 / 32**; full rules **68 / 545 PASS** | 111 rows / 234 witnesses; all old 24 views identical; generic GP/K source initialization and fixed-prefix encoding shared |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -287,11 +296,12 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Immediate word/dword shuffle | 34 | 95 |
 | Packed/scalar reciprocal14 | 32 | 132 |
 | Signed/zero widening | 108 | 288 |
-| Local candidate unique union | **2,181** | **8,046** |
+| Scalar/block/GP/K-data broadcasts | 111 | 234 |
+| Local candidate unique union | **2,292** | **8,280** |
 
-The local union contains 2,056 AVX rows of 3,568 (57.6%) and 125 legacy rows. The
+The local union contains 2,167 AVX rows of 3,568 (60.7%) and 125 legacy rows. The
 complete rotate view overlaps 24 existing rows / 108 witnesses and is deduplicated.
-The 8,046 witnesses include the existing 30 terminal trap controls, not 8,046
+The 8,280 witnesses include the existing 30 terminal trap controls, not 8,280
 normal executions. These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
 separate. High banks force narrow EVEX; MMX has separate region/EMMS owners.
@@ -370,9 +380,9 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 2. Complete amd64 official-row ownership, 386 applicability and independent
    semantics. Extend existing family/object/native owners instead of creating
    another opcode registry or enumerating unrelated source/target products.
-   The remaining AVX source inventory has 1,512 rows / 442 names across 23
-   encoding transport cases. Broadcast's complete 20-name / 111-row test-first
-   batch is in preparation; narrowing's 18-name / 108-row proposal is untested.
+   The remaining AVX source inventory has 1,401 rows / 422 names across 23
+   encoding transport cases. Narrowing's 18-name / 108-row proposal is entering
+   real TDD, including unsigned-source saturation and masked memory effects.
    Static inventories are not successful object or execution receipts.
 3. Keep the 14 implicit-entry, GC-scan and system/runtime/test-hook failures
    individually diagnosed in [issue47](https://github.com/xgo-dev/plan9asm/issues/47).
