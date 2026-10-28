@@ -143,6 +143,15 @@ func X86PackedWideningRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86Pack
 		VPMOVZXBW VPMOVZXBD VPMOVZXBQ VPMOVZXWD VPMOVZXWQ VPMOVZXDQ`)
 }
 
+// X86PackedBroadcastRows retains scalar, block, GP and K-data broadcast rows.
+func X86PackedBroadcastRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		VPBROADCASTB VPBROADCASTW VPBROADCASTD VPBROADCASTQ VBROADCASTSS VBROADCASTSD
+		VBROADCASTI32X2 VBROADCASTF32X2 VBROADCASTF32X4 VBROADCASTF64X2 VBROADCASTI32X4 VBROADCASTI64X2
+		VBROADCASTF32X8 VBROADCASTF64X4 VBROADCASTI32X8 VBROADCASTI64X4
+		VPBROADCASTMB2Q VPBROADCASTMW2D VBROADCASTF128 VBROADCASTI128`)
+}
+
 // X86PackedMoveRows retains the twelve AVX whole-vector move names. Legacy
 // moves are separate; register alternatives belong to the first store rows.
 func X86PackedMoveRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -278,6 +287,9 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if strings.HasPrefix(rule.Opcode, "VBROADCAST") || strings.HasPrefix(rule.Opcode, "VPBROADCAST") {
+		return x86PackedBroadcastRowWitnesses(rule)
+	}
 	move, store := x86PackedMoveTable(rule.Ytab), x86PackedMoveStoreRow(rule)
 	shift, extensionRow := x86PackedUniformShiftTable(rule.Ytab), x86PackedImmediateExtensionRow(rule)
 	registerImmediate := x86PackedImmediateRegisterRow(rule)
@@ -506,10 +518,11 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 				modrm = byte(extension) << 3
 			}
 		}
+		p0, p2 := byte(0), byte(0)
 		if kind == "evex" {
-			p0, p2 := byte(0xa0)|mapByte, length<<5|vprime
+			p0, p2 = byte(0xa0), length<<5|vprime
 			if memory {
-				p0 = 0xe0 | mapByte
+				p0 = 0xe0
 			}
 			if extensionRow {
 				p0 |= 0x10 // ModRM.reg is /digit, not destination register 18.
@@ -534,12 +547,9 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 					p2 = p2&^0x60 | byte(control)<<5 | 0x10
 				}
 			}
-			witness.Encoding = []byte{0x62, p0, wBit | vvvv | 0x04 | pp, p2, byte(opcode), modrm}
-		} else if mapByte == 1 && wBit == 0 {
-			witness.Encoding = []byte{0xc5, 0x80 | vvvv | pp | length<<2, byte(opcode), modrm}
-		} else {
-			witness.Encoding = []byte{0xc4, 0xe0 | mapByte, wBit | vvvv | pp | length<<2, byte(opcode), modrm}
 		}
+		transport := x86PackedAVXOpcode{kind, mapByte, wBit, pp, length, byte(opcode)}
+		witness.Encoding = transport.bytes(vvvv, p0, p2, modrm)
 		if immediate {
 			value, err := strconv.ParseInt(strings.TrimPrefix(operands[0], "$"), 0, 16)
 			if err != nil || value < -128 || value > 255 {

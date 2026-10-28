@@ -215,8 +215,15 @@ func x86OfficialPackedAssembly(cases []x86OfficialPackedCase) (string, string) {
 		if w.Generation == "legacy" {
 			move = "MOVOU"
 		}
+		seed := ""
 		if !w.Memory && w.First != "" {
-			prefix += fmt.Sprintf("%s (AX),%s\n", move, w.First)
+			if _, valid := amd64ParseKReg(Reg(w.First)); valid {
+				seed = fmt.Sprintf("MOVQ (AX),CX\nKMOVQ CX,%s\n", w.First)
+			} else if isX86YrlRegisterForArch(Reg(w.First), "amd64") {
+				seed = fmt.Sprintf("MOVQ (AX),%s\n", w.First)
+			} else {
+				prefix += fmt.Sprintf("%s (AX),%s\n", move, w.First)
+			}
 		}
 		if w.Second != "" {
 			prefix += fmt.Sprintf("%s (BX),%s\n", move, w.Second)
@@ -229,6 +236,9 @@ func x86OfficialPackedAssembly(cases []x86OfficialPackedCase) (string, string) {
 				prefix += fmt.Sprintf("%s (BX),%s\n", move, w.Destination)
 			}
 		}
+		// Finish pointer-dependent vector/old/mask seeds before a GP input
+		// replaces AX. K data comes from a, independently of the mask argument.
+		prefix += seed
 		fixture.line = line + strings.Count(prefix, "\n")
 		store := move
 		if w.MaskResult {
