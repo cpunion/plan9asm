@@ -24,45 +24,56 @@ func x86ShiftMemoryRuntimeRows(arch string) []x86ShiftMemoryRuntimeRow {
 		if row.valueChoice {
 			continue
 		}
-		op, operands, _ := strings.Cut(row.text, " ")
-		stem := op[:len(op)-1]
-		kind := -1
-		for i, name := range []string{"RCL", "RCR", "ROL", "ROR", "SAL", "SAR", "SHL", "SHR", "SHL", "SHR", "SARX", "SHLX", "SHRX", "RORX"} {
-			if name == stem && (i < 8) == (strings.Count(operands, ",") == 1) {
-				kind = i
-			}
-		}
-		count := -1
-		if first, _, _ := strings.Cut(operands, ","); strings.HasPrefix(first, "$") {
-			var err error
-			count, err = strconv.Atoi(first[1:])
-			if err != nil {
-				panic(err)
-			}
-			count &= 31
-			if row.bits == 64 {
-				original, _ := strconv.Atoi(first[1:])
-				count = original & 63
-			}
-		}
-		if kind < 0 {
-			panic("unregistered independent scalar-shift reference")
-		}
-		flags := uint64(0x8d5)
-		if kind < 10 && count != 0 {
-			if count != 1 {
-				flags &^= 0x800 // OF is undefined, not a value to compare.
-			}
-			if kind >= 4 {
-				flags &^= 0x10 // AF is undefined after nonzero shifts.
-				if row.bits < 32 && kind != 5 && count < 0 {
-					flags &^= 1 // B/W logical counts can make CF undefined.
-				}
-			}
-		}
-		rows = append(rows, x86ShiftMemoryRuntimeRow{row, kind, count, flags})
+		rows = append(rows, x86ShiftMemoryRuntimeMetadata(row))
 	}
 	return rows
+}
+
+// The independent runtime directory and official-row object producer share
+// observation metadata, never a production permission for undefined FLAGS.
+func x86ShiftMemoryRuntimeMetadata(row x86ShiftMemoryOracle) x86ShiftMemoryRuntimeRow {
+	op, operands, _ := strings.Cut(row.text, " ")
+	stem := op[:len(op)-1]
+	kind := -1
+	for i, name := range []string{"RCL", "RCR", "ROL", "ROR", "SAL", "SAR", "SHL", "SHR", "SHL", "SHR", "SARX", "SHLX", "SHRX", "RORX"} {
+		if name == stem && (i < 8) == (strings.Count(operands, ",") == 1) {
+			kind = i
+		}
+	}
+	count := -1
+	if first, _, _ := strings.Cut(operands, ","); strings.HasPrefix(first, "$") {
+		var err error
+		count, err = strconv.Atoi(first[1:])
+		if err != nil {
+			panic(err)
+		}
+		count &= 31
+		if row.bits == 64 {
+			original, _ := strconv.Atoi(first[1:])
+			count = original & 63
+		}
+	}
+	if kind < 0 {
+		panic("unregistered independent scalar-shift reference")
+	}
+	flags := uint64(0x8d5)
+	if kind < 10 && count != 0 {
+		if count != 1 {
+			flags &^= 0x800 // OF is undefined, not a value to compare.
+		}
+		if kind >= 4 {
+			flags &^= 0x10 // AF is undefined after nonzero shifts.
+			if row.bits < 32 && kind != 5 && count < 0 {
+				flags &^= 1 // B/W logical counts can make CF undefined.
+			}
+		}
+	}
+	if row.valueChoice {
+		// Some W double counts have no defined data/status expectation. Their
+		// existing paired lowering can choose a finite value, not known FLAGS.
+		flags = 0
+	}
+	return x86ShiftMemoryRuntimeRow{row, kind, count, flags}
 }
 
 func x86ShiftMemoryRuntimeFixture(arch string, rows []x86ShiftMemoryRuntimeRow) (string, string, string) {
