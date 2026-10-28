@@ -26,6 +26,35 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86LegacyFloatingBinaryRows retains all six legacy PS/PD/SS/SD binary
+// families. Shared media encoding does not merge their numerical contracts.
+func X86LegacyFloatingBinaryRows(legacy X86LegacyCatalog, _ []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	var names []string
+	for _, entry := range legacy.Optab {
+		if x86LegacyFloatingBinaryMember(entry.Opcode) {
+			names = append(names, entry.Opcode)
+		}
+	}
+	if len(names) != 24 {
+		return nil, fmt.Errorf("incomplete legacy floating binary source family: %d", len(names))
+	}
+	return x86PackedBinaryRows(legacy, nil, strings.Join(names, " "))
+}
+
+func x86LegacyFloatingBinaryMember(opcode string) bool {
+	if len(opcode) < 5 {
+		return false
+	}
+	switch opcode[:len(opcode)-2] {
+	case "ADD", "SUB", "MUL", "DIV", "MIN", "MAX":
+		switch opcode[len(opcode)-2:] {
+		case "PS", "PD", "SS", "SD":
+			return true
+		}
+	}
+	return false
+}
+
 // X86FloatingImmediateControlRows retains the five complete PS/PD/SS/SD
 // immediate-control families. Numerical/environment contracts stay typed.
 func X86FloatingImmediateControlRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -764,6 +793,26 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 			return nil, fmt.Errorf("unmodeled Py1 XMM opcode payload")
 		}
 		offset = 2 // Py1 consumes the Pe at offset 1 before the opcode.
+	case x86LegacyFloatingBinaryMember(entry.Opcode):
+		if entry.Ytab != "yxm" || len(entry.Rows) != 1 || row.RowIndex != 0 || row.ZCase != "Zm_r_xm" ||
+			row.ZOffset != 1 || row.UnmatchedOffset != 0 || len(entry.OpBytes) != 1 {
+			return nil, fmt.Errorf("unmodeled complete legacy floating media row")
+		}
+		// Zm_r_xm calls mediaop after the source prefix switch. In particular
+		// Ym emits no prefix there, so mediaop supplies the missing 0F escape.
+		// Keep the source literal; neither this path nor the scalar suffix
+		// alone grants another family's mandatory-prefix capability.
+		switch suffix := entry.Opcode[len(entry.Opcode)-2:]; {
+		case suffix == "PS" && (entry.Prefix == "Pm" || entry.Prefix == "Ym"):
+			prefix = []byte{0x0f}
+		case suffix == "PD" && (entry.Prefix == "Pe" || entry.Prefix == "Pq"):
+		case suffix == "SS" && entry.Prefix == "Pf3":
+			prefix = []byte{0xf3, 0x0f}
+		case suffix == "SD" && entry.Prefix == "Pf2":
+			prefix = []byte{0xf2, 0x0f}
+		default:
+			return nil, fmt.Errorf("legacy floating media prefix conflicts with its source class")
+		}
 	case entry.Ytab == "yxm" && (entry.Prefix == "Pe" || entry.Prefix == "Pq" || entry.Prefix == "Pm") &&
 		row.RowIndex == 0 && row.ZCase == "Zm_r_xm" && row.ZOffset == 1 && row.UnmatchedOffset == 0:
 		if entry.Prefix == "Pm" {

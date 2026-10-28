@@ -107,6 +107,16 @@ func x86OfficialPackedRowsObjectsInspect(t *testing.T,
 	assembly func([]x86OfficialPackedCase) (string, string),
 	inspect func(*testing.T, string, []x86OfficialPackedCase)) []x86OfficialPackedCase {
 	t.Helper()
+	return x86OfficialPackedRowsObjectsForTarget(t, "amd64", "x86_64-unknown-linux-gnu",
+		buildRows, wantRows, wantFormats, wantAliases, assembly, inspect)
+}
+
+func x86OfficialPackedRowsObjectsForTarget(t *testing.T, arch, triple string,
+	buildRows func(goasmrules.X86LegacyCatalog, []goasmrules.X86AVXRule) ([]goasmrules.X86PackedBinaryRow, error),
+	wantRows, wantFormats, wantAliases int,
+	assembly func([]x86OfficialPackedCase) (string, string),
+	inspect func(*testing.T, string, []x86OfficialPackedCase)) []x86OfficialPackedCase {
+	t.Helper()
 	legacy, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +148,7 @@ func x86OfficialPackedRowsObjectsInspect(t *testing.T,
 		t.Fatal("LLVM 22 llc is required")
 	}
 	_, driverHash := x86LEAActualSDKDriver(t)
-	t.Logf("row-owned oracle SDK=%s driverSHA=%x; amd64 only, MMX excluded", runtime.Version(), driverHash)
+	t.Logf("row-owned oracle SDK=%s driverSHA=%x; %s only, MMX excluded", runtime.Version(), driverHash, arch)
 	passed := 0
 	for start := 0; start < len(cases); start += 32 {
 		end := start + 32
@@ -148,7 +158,7 @@ func x86OfficialPackedRowsObjectsInspect(t *testing.T,
 		batch := cases[start:end]
 		if t.Run(fmt.Sprintf("batch%02d", start/32), func(t *testing.T) {
 			source, declaration := assembly(batch)
-			listing, err := x86ScalarLiteralGoListing(t, "amd64", source)
+			listing, err := x86ScalarLiteralGoListing(t, arch, source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -157,12 +167,12 @@ func x86OfficialPackedRowsObjectsInspect(t *testing.T,
 			}
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(api, func(t *testing.T) {
-					ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+					ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api)
 					if err != nil {
 						t.Fatal(err)
 					}
 					inspect(t, ir, batch)
-					x86ResultInitializationObject(t, llc, "x86_64-unknown-linux-gnu", ir, api)
+					x86ResultInitializationObject(t, llc, triple, ir, api)
 				})
 			}
 		}) {
