@@ -11,9 +11,13 @@ type x86FloatingHelperSpec struct {
 	bits, bytes                            int
 	scalar, immediate, second              bool
 	readDestination, maskResult, round, dq bool
+	estimate14                             bool
 }
 
 func x86FloatingHelperSpecFor(op Op) (x86FloatingHelperSpec, bool) {
+	if spec, known := amd64Reciprocal14Specs[op]; known {
+		return x86FloatingHelperSpec{bits: spec.laneBits, scalar: spec.scalar, estimate14: true}, true
+	}
 	if spec, known := amd64GetExpSpecs[op]; known {
 		return x86FloatingHelperSpec{bits: spec.laneBits, scalar: spec.scalar}, true
 	}
@@ -59,7 +63,7 @@ func x86FloatingHelperProperties(ins Instr, arch string) (x86FloatingHelperForm,
 	properties, valid := parseAMD64BinaryFloatingSuffix(suffix)
 	if !valid || dotted && suffix == "" || arch != "386" && arch != "amd64" ||
 		spec.scalar && properties.broadcast || spec.round && properties.sae ||
-		!spec.round && properties.rounding != "" || spec.maskResult && (properties.sae || properties.zeroing) {
+		!spec.round && properties.rounding != "" || spec.estimate14 && properties.sae || spec.maskResult && (properties.sae || properties.zeroing) {
 		return fail()
 	}
 	form.properties = properties
@@ -181,17 +185,26 @@ func x86TypedFloatingHelperByteEffect(op Op, ins Instr, arch string) (x86TypedBy
 	effect := x86TypedByteEffect{requiresResultProof: true, operands: []x86TypedByteOperand{
 		{index: form.first, operand: ins.Args[form.first], width: firstWidth, read: true},
 	}}
+	if form.spec.estimate14 {
+		effect.vector.upperWrite = x86TypedVectorUpperZero
+	}
 	if form.second >= 0 {
 		// A scalar upper source is copied as bits. Sparse numerical knowledge
 		// is retained separately by the precise result-byte transfer.
 		effect.operands = append(effect.operands, x86TypedByteOperand{
 			index: form.second, operand: ins.Args[form.second], width: int64(form.byteWidth), read: true,
 		})
+		if form.spec.estimate14 && form.spec.scalar {
+			effect.operands[len(effect.operands)-1].requiredBytes = 0xffff &^ x86CallerVectorByteMask(int64(form.activeBytes()))
+		}
 	}
 	effect.operands = append(effect.operands, x86TypedByteOperand{
 		index: form.destination, operand: ins.Args[form.destination], width: outputWidth,
 		read: !form.spec.maskResult && (form.spec.readDestination || form.mask >= 0 && !form.properties.zeroing), write: true,
 	})
+	if form.spec.estimate14 && form.spec.scalar && form.mask >= 0 && !form.properties.zeroing {
+		effect.operands[len(effect.operands)-1].requiredBytes = x86CallerVectorByteMask(int64(form.activeBytes()))
+	}
 	if form.mask >= 0 {
 		effect.operands = append(effect.operands, x86TypedByteOperand{
 			index: form.mask, operand: ins.Args[form.mask], width: 8, read: true,

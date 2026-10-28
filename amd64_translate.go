@@ -84,36 +84,6 @@ func emitAMD64Prelude(b *strings.Builder, goarch string, file *File) {
 			}
 		}
 	}
-	for _, family := range []string{"rcp14", "rsqrt14"} {
-		for _, vector := range []struct {
-			kind     string
-			bits     int
-			lanes    int
-			laneType string
-			maskType string
-		}{
-			{kind: "ps", bits: 128, lanes: 4, laneType: "float", maskType: "i8"},
-			{kind: "ps", bits: 256, lanes: 8, laneType: "float", maskType: "i8"},
-			{kind: "ps", bits: 512, lanes: 16, laneType: "float", maskType: "i16"},
-			{kind: "pd", bits: 128, lanes: 2, laneType: "double", maskType: "i8"},
-			{kind: "pd", bits: 256, lanes: 4, laneType: "double", maskType: "i8"},
-			{kind: "pd", bits: 512, lanes: 8, laneType: "double", maskType: "i8"},
-		} {
-			typ := fmt.Sprintf("<%d x %s>", vector.lanes, vector.laneType)
-			fmt.Fprintf(b, "declare %s @llvm.x86.avx512.%s.%s.%d(%s, %s, %s)\n", typ, family, vector.kind, vector.bits, typ, typ, vector.maskType)
-		}
-		for _, scalar := range []struct {
-			kind     string
-			lanes    int
-			laneType string
-		}{
-			{kind: "ss", lanes: 4, laneType: "float"},
-			{kind: "sd", lanes: 2, laneType: "double"},
-		} {
-			typ := fmt.Sprintf("<%d x %s>", scalar.lanes, scalar.laneType)
-			fmt.Fprintf(b, "declare %s @llvm.x86.avx512.%s.%s(%s, %s, %s, i8)\n", typ, family, scalar.kind, typ, typ, typ)
-		}
-	}
 	for _, declaration := range []string{
 		"float @llvm.fma.f32(float, float, float)",
 		"double @llvm.fma.f64(double, double, double)",

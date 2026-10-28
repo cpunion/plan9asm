@@ -52,8 +52,8 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	shift, extension := x86PackedUniformShiftTable(rule.Ytab), x86PackedImmediateExtensionRow(rule)
 	registerImmediate := x86PackedImmediateRegisterRow(rule)
 	immediate := extension || registerImmediate
-	floating := rule.Ytab == "_yvaddpd" || rule.Ytab == "_yvaddsd"
-	scalar := rule.Ytab == "_yvaddsd"
+	scalar := rule.Ytab == "_yvaddsd" || rule.Ytab == "_yvgetexpsd"
+	floating := rule.Ytab == "_yvaddpd" || scalar
 	binaryTable := rule.Ytab == "_yvandnpd" || rule.Ytab == "_yvblendmpd" ||
 		rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvpcmpeqb" || rule.Ytab == "_yvprold" || floating || shift
 	unaryTable := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move || registerImmediate
@@ -84,7 +84,7 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	}
 	maskResult := rule.Ytab == "_yvpcmpeqb" && evex
 	if (rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvmovdqa") && evex ||
-		(rule.Ytab == "_yvexpandpd" || rule.Ytab == "_yvmovdqa32" || rule.Ytab == "_yvpsraq") && !evex {
+		(rule.Ytab == "_yvexpandpd" || rule.Ytab == "_yvmovdqa32" || rule.Ytab == "_yvpsraq" || rule.Ytab == "_yvgetexpsd") && !evex {
 		return nil, fmt.Errorf("%s encoding generation differs from its packed table", rule.Opcode)
 	}
 	if !evex && rule.ZCase != "Zvex_rm_v_r" && !(store && rule.ZCase == "Zvex_r_v_rm") &&

@@ -192,6 +192,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if !form.spec.scalar && form.byteWidth < 64 {
 					add("+avx512vl")
 				}
+				if form.spec.estimate14 {
+					continue // This complete shape already supplies the precise F/VL requirement.
+				}
 			}
 			if form, known, err := x86SqrtProperties(ins, moveArch); known && err == nil {
 				switch {

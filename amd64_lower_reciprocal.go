@@ -8,7 +8,6 @@ import (
 type amd64Reciprocal14Spec struct {
 	laneBits int
 	scalar   bool
-	rsqr     bool
 }
 
 // amd64Reciprocal14Specs covers every opcode backed by Go 1.27's
@@ -18,189 +17,21 @@ var amd64Reciprocal14Specs = map[Op]amd64Reciprocal14Spec{
 	"VRCP14PD":   {laneBits: 64},
 	"VRCP14SS":   {laneBits: 32, scalar: true},
 	"VRCP14SD":   {laneBits: 64, scalar: true},
-	"VRSQRT14PS": {laneBits: 32, rsqr: true},
-	"VRSQRT14PD": {laneBits: 64, rsqr: true},
-	"VRSQRT14SS": {laneBits: 32, scalar: true, rsqr: true},
-	"VRSQRT14SD": {laneBits: 64, scalar: true, rsqr: true},
+	"VRSQRT14PS": {laneBits: 32},
+	"VRSQRT14PD": {laneBits: 64},
+	"VRSQRT14SS": {laneBits: 32, scalar: true},
+	"VRSQRT14SD": {laneBits: 64, scalar: true},
 }
 
-// lowerReciprocal14 implements the complete Go 1.27 RCP14/RSQRT14 family.
-// Packed PS/PD forms accept X/Y/Z register or memory sources, scalar-memory
-// broadcast, and K1-K7 merge/.Z masking. Scalar SS/SD forms accept an X or
-// scalar-memory source, an X passthrough, and the same masking on amd64; the
-// four-operand masked scalar form exceeds the 386 assembler's operand limit.
-func (c *amd64Ctx) lowerReciprocal14(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp, suffix := rawOp, ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
-	}
-	spec, found := amd64Reciprocal14Specs[Op(baseOp)]
-	if !found {
+// The complete Go RCP14/RSQRT14 family uses the existing typed native helper.
+// Its approximation observes dynamic DAZ/FTZ, and active native memory reads
+// must remain observable even when the numerical result is dead.
+func (c *amd64Ctx) lowerReciprocal14(op Op, ins Instr) (bool, bool, error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, known := amd64Reciprocal14Specs[Op(base)]; !known {
 		return false, false, nil
 	}
-	properties, validSuffix := parseAMD64BinaryFloatingSuffix(suffix)
-	if !validSuffix || properties.sae || properties.rounding != "" || spec.scalar && properties.broadcast {
-		return true, false, fmt.Errorf("%s %s suffix is absent from its Go 1.27 encoding: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if spec.scalar {
-		return c.lowerScalarReciprocal14(baseOp, spec, properties, ins)
-	}
-	return c.lowerPackedReciprocal14(baseOp, spec, properties, ins)
-}
-
-func (c *amd64Ctx) lowerPackedReciprocal14(baseOp string, spec amd64Reciprocal14Spec, properties amd64BinaryFloatingSuffix, ins Instr) (bool, bool, error) {
-	if len(ins.Args) != 2 && len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("%s %s expects source, [K1-K7,] destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 3
-	if properties.zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s.Z requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if masked && !amd64NonzeroKOperand(ins.Args[1]) {
-		return true, false, fmt.Errorf("%s %s masked form requires K1-K7: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	destination := ins.Args[len(ins.Args)-1]
-	if destination.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s destination must be X, Y, or Z: %q", c.goarch, baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	if byteWidth != 16 && byteWidth != 32 && byteWidth != 64 || !c.isGoEVEXVectorRegister(destination, byteWidth) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's EVEX vector class: %q", c.goarch, baseOp, ins.Raw)
-	}
-	source := ins.Args[0]
-	if properties.broadcast {
-		if !isAMD64MemoryOperand(source) {
-			return true, false, fmt.Errorf("%s %s.BCST requires a scalar memory source: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if source.Kind == OpReg {
-		if !c.isGoEVEXVectorRegister(source, byteWidth) {
-			return true, false, fmt.Errorf("%s %s source register must match its destination: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s source must be a matching vector register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	lanes := byteWidth * 8 / spec.laneBits
-	llvmType := amd64FloatingVectorType(lanes, spec.laneBits)
-	var sourceValue string
-	if properties.broadcast {
-		scalar, err := c.loadFloatingScalarOperand(source, spec.laneBits)
-		if err != nil {
-			return true, false, err
-		}
-		sourceValue = c.splatFloatingScalar(scalar, lanes, spec.laneBits)
-	} else {
-		var err error
-		sourceValue, err = c.loadFloatingVectorOperand(source, byteWidth, lanes, spec.laneBits)
-		if err != nil {
-			return true, false, err
-		}
-	}
-
-	passthrough := "zeroinitializer"
-	mask := "-1"
-	maskBits := 8
-	if spec.laneBits == 32 && byteWidth == 64 {
-		maskBits = 16
-	}
-	if masked {
-		loadedMask, err := c.loadK(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		mask = c.truncateReciprocal14Mask(loadedMask, maskBits)
-		if !properties.zeroing {
-			passthrough, err = c.loadFloatingVectorOperand(destination, byteWidth, lanes, spec.laneBits)
-			if err != nil {
-				return true, false, err
-			}
-		}
-	}
-	family := "rcp14"
-	if spec.rsqr {
-		family = "rsqrt14"
-	}
-	intrinsic := fmt.Sprintf("llvm.x86.avx512.%s.%s.%d", family, map[int]string{32: "ps", 64: "pd"}[spec.laneBits], byteWidth*8)
-	result := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call %s @%s(%s %s, %s %s, i%d %s)\n", result, llvmType, intrinsic, llvmType, sourceValue, llvmType, passthrough, maskBits, mask)
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <%d x i8>\n", out, llvmType, result, byteWidth)
-	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
-}
-
-func (c *amd64Ctx) lowerScalarReciprocal14(baseOp string, spec amd64Reciprocal14Spec, properties amd64BinaryFloatingSuffix, ins Instr) (bool, bool, error) {
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("%s %s expects source, passthrough, [K1-K7,] destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 4
-	if c.goarch == "386" && masked {
-		return true, false, fmt.Errorf("386 %s mask forms exceed the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
-	}
-	if properties.zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s.Z requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if masked && !amd64NonzeroKOperand(ins.Args[2]) {
-		return true, false, fmt.Errorf("%s %s masked form requires K1-K7: %q", c.goarch, baseOp, ins.Raw)
-	}
-	destination := ins.Args[len(ins.Args)-1]
-	passthroughArg := ins.Args[1]
-	if !c.isGoEVEXVectorRegister(destination, 16) || !c.isGoEVEXVectorRegister(passthroughArg, 16) {
-		return true, false, fmt.Errorf("%s %s passthrough and destination must be X registers: %q", c.goarch, baseOp, ins.Raw)
-	}
-	source := ins.Args[0]
-	if source.Kind == OpReg {
-		if !c.isGoEVEXVectorRegister(source, 16) {
-			return true, false, fmt.Errorf("%s %s source must be an X register or scalar memory: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s source must be an X register or scalar memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	lanes := 128 / spec.laneBits
-	llvmType := amd64FloatingVectorType(lanes, spec.laneBits)
-	scalar, err := c.loadFloatingScalarOperand(source, spec.laneBits)
-	if err != nil {
-		return true, false, err
-	}
-	sourceValue := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = insertelement %s zeroinitializer, %s %s, i32 0\n", sourceValue, llvmType, amd64FloatingScalarType(spec.laneBits), scalar)
-	passthrough, err := c.loadFloatingVectorOperand(passthroughArg, 16, lanes, spec.laneBits)
-	if err != nil {
-		return true, false, err
-	}
-	merge := "zeroinitializer"
-	mask := "-1"
-	if masked {
-		loadedMask, err := c.loadK(ins.Args[2].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		mask = c.truncateReciprocal14Mask(loadedMask, 8)
-		if !properties.zeroing {
-			merge, err = c.loadFloatingVectorOperand(destination, 16, lanes, spec.laneBits)
-			if err != nil {
-				return true, false, err
-			}
-		}
-	}
-	family := "rcp14"
-	if spec.rsqr {
-		family = "rsqrt14"
-	}
-	intrinsic := fmt.Sprintf("llvm.x86.avx512.%s.%s", family, map[int]string{32: "ss", 64: "sd"}[spec.laneBits])
-	result := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call %s @%s(%s %s, %s %%%s, %s %s, i8 %s)\n", result, llvmType, intrinsic, llvmType, passthrough, llvmType, sourceValue, llvmType, merge, mask)
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <16 x i8>\n", out, llvmType, result)
-	return true, false, c.storePackedMoveOperand(destination, 16, "%"+out)
-}
-
-func (c *amd64Ctx) truncateReciprocal14Mask(mask string, bits int) string {
-	truncated := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i%d\n", truncated, mask, bits)
-	return "%" + truncated
+	return c.lowerNativeFloatingHelper(op, ins)
 }
 
 // lowerReciprocalEstimate implements the complete Go 1.27 legacy and VEX

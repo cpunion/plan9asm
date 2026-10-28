@@ -106,6 +106,13 @@ func X86PackedBitCountConflictRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([
 		VPCONFLICTD VPCONFLICTQ`)
 }
 
+// X86Reciprocal14Rows retains all packed/scalar EVEX reciprocal14 estimates.
+// The byte grammar owns roles and tuples, not numerical or native authority.
+func X86Reciprocal14Rows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx,
+		"VRCP14PS VRCP14PD VRCP14SS VRCP14SD VRSQRT14PS VRSQRT14PD VRSQRT14SS VRSQRT14SD")
+}
+
 // X86PackedRotateRows retains the complete immediate and per-lane D/Q rotate family.
 // Variable members remain independently owned by the EVEX binary remainder scope.
 func X86PackedRotateRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -387,7 +394,7 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 		if move || shift && (!immediate || rule.Ytab == "_yvpslldq") {
 			optional = []string{"evexZeroingEnabled"}
 		}
-		if rule.Ytab == "_yvaddsd" {
+		if rule.Ytab == "_yvaddsd" || rule.Ytab == "_yvgetexpsd" {
 			tuple = 4
 			if wBit != 0 {
 				tuple = 8
