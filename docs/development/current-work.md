@@ -19,10 +19,12 @@ Those skips are not execution passes or new hardware acceptance.
 Its published inventory is **34 views, 2,927 rows / 11,010 witnesses**:
 2,793 of 3,568 AVX-table rows (78.3%) and 134 legacy rows. This measures
 initialized original-Go bytes and LLVM objects, not native execution or every
-amd64 opcode. Four locally qualified legacy groups extend the mixed-mode
-inventory to **38 views, 3,322 source records / 12,126 canonical witnesses**.
-They require combined primary-snapshot qualification before another publication.
-Their 386-only rows and double-shift fallback records are not an amd64 percentage.
+amd64 opcode. Four locally qualified legacy groups and the permutation/shuffle
+follow-up extend the mixed-mode inventory to **39 views, 3,406 source records /
+12,454 canonical witnesses**. The local AVX join is **2,877 / 3,568 rows
+(80.63%)**. These batches require combined primary-snapshot qualification before
+another publication. Their 386-only rows and double-shift fallback records are
+not an amd64 percentage.
 
 The preceding `4aeffe806` round also completed 325/325 with 88.1% coverage;
 its Windows union retained 278 root skips, separate from the current 276.
@@ -138,8 +140,22 @@ the complete adapter 41 / 131, assembly-build controls 21 / 23 and timeout
 controls 11 / 8. The fresh rebased host run additionally verifies equality
 selectors, browser control, runtime source/audit/equality owners and all affected
 static-byte-array/compiler roots: eight scopes total 157 / 303, with no skips.
-All 5,093 source files and ten tools remain frozen. Its thirteen new-head cloud
-workflows have started; completion and coverage remain required.
+All 5,093 source files and ten tools remain frozen. Its thirteen cloud workflows
+have completed: ten succeed and three fail, with 139 jobs comprising 133 successes,
+two failures, two hosted-runner capacity cancellations and two conditional skips.
+The cancellations have no assigned runner or executed steps. They are not test
+passes and were not canceled by the agent.
+
+One native macOS failure is a two-second global process census timing out during
+cleanup of `catomic` and `cppintf`. Local `f4ece686e` instead queries only the
+leased process group, preserving the deadline and strict zombie-only check.
+The original failure does not retain the child exit status. Its regression,
+192-method policy suite, 32 real owned-process groups and both original demos
+pass locally; this does not certify a new cloud revision. The other macOS
+failure exhausts both 45-minute `internal/build` test-binary budgets: only 748
+of 938 listed roots finish, with two active and 188 unstarted. No individual
+45-minute hang is established. Split scheduling and complete cross-job inventory
+and coverage validation are in progress before publishing either repair.
 
 A fresh compiler built from all 5,093 archived LLGo source files with Go1.27.0
 and LLVM22.1.8 passes CRC32 v1.3.0 and libc v1.75.7 ABI0 probes using Go1.27.3
@@ -329,10 +345,30 @@ target parameters and independent tests change, for 245 net lines. All previous
 the primary must additionally qualify its later condition group in the combined
 snapshot. Original IEEE/MXCSR/fault execution boundaries remain separate.
 
-The local mixed-mode union is now 38 views / 3,322 source records / 12,126
-canonical witnesses. Next join the remaining permutation/block-shuffle group:
-twelve names / 84 original rows across five operand tables. These remain a
-static plan until actual Go-byte, initialized-object and semantic qualification.
+Integrated `54be5811c` completes the remaining permutation/block-shuffle group:
+twelve names, 84 original rows across five operand tables and 328 canonical
+witnesses. Shared normalized forms feed effects, result analysis and lowering,
+removing 96 translator lines. Cold format helpers add 175 lines, so the measured
+implementation delta is 79 lines; this is not a whole-translator speed claim.
+Both SDKs verify actual Go bytes and initialized objects. Portable C oracles
+cover 108 kernels, 32 patterns and six masks per API/pipeline, checking defined
+FLAGS, upper-zero writes and canaries; 24 protected-page cases retain full and
+broadcast memory faults even with a zero mask or dead result. These are portable
+execution checks, not native AVX512 acceptance.
+
+Six members had actual missing typed input/result behavior. Bare old named/raw
+sources remain independent checks. Sixteen named 386 block-shuffle statements
+are rejected by the Go frontend, while physical raw forms have their own
+observations. The baseline retains 35 supported-to-Context changes and all 81
+original examples: 76 lack inputs and five lack a bound BP role. Initialized
+AX witnesses do not establish those original contracts. Five source profiles
+retain the exact before/after classifications; this is not execution with five
+historical compilers. The CLI namespace regression also retains its actual RED.
+
+All prior 38 collections remain byte identical. The new mixed-mode union is
+39 views / 3,406 source records / 12,454 canonical witnesses, with 441 generated
+source/declaration batches and two separate aliases. Author qualification is
+complete; the final combined primary snapshot remains to be qualified.
 
 The preceding shift/rotate cross-mode inventory had 3,234 records and 11,646 deduplicated
 row/instruction/encoding witnesses plus two aliases. These totals combine
@@ -558,9 +594,11 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Local shift/rotate and double-shift, both modes | 138 | 356 |
 | Local Jcc/SETcc, both modes | 64 | 432 |
 | Local legacy floating binary, both modes | 24 | 48 |
-| Local mixed-mode unique union (38 views) | **3,322** | **12,126** |
+| Local permutation and block shuffle | 84 | 328 |
+| Local mixed-mode unique union (39 views) | **3,406** | **12,454** |
 
-The published union contains 2,793 AVX rows of 3,568 (78.3%) and 134 legacy rows. The
+The published union contains 2,793 AVX rows of 3,568 (78.3%) and 134 legacy rows.
+The unpublished permutation join raises the AVX row total to 2,877 (80.63%). The
 complete rotate view overlaps 24 existing rows / 108 witnesses and is deduplicated.
 The 11,010 witnesses include 102 terminal trap controls, not 11,010
 normal executions. These joins retain independent ordered Go rows and actual Go bytes, then compile
@@ -630,12 +668,13 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 
 ## Remaining work, in order
 
-1. Both published rounds now pass: Plan9asm has 325 successful jobs, LLGo has
-   thirteen successful workflows / 137 successful jobs plus two conditional
-   publisher skips after its targeted retry. Preserve the original failures.
-   Finish the new public translator pin's LLGo execution qualification, then
-   publish it and require its own complete new-head CI. Finish combined
-   Plan9asm qualification before publishing the next complete family batch.
+1. Plan9asm's public round passes all 325 jobs. LLGo's preceding `9422371af`
+   round passed after its targeted retry, but current `b6871f8f0` has the two
+   macOS failures and two runner-capacity cancellations described above.
+   Complete and independently validate both repairs, then require passing
+   repaired-head CI. The current public translator pin already has fresh LLGo
+   execution qualification. Finish combined Plan9asm qualification before
+   publishing the next complete family batch.
    Keep external review, the official dependency
    requirement and native AVX512 hardware acceptance open.
    Retain the digest optimization's full byte identity and mutable-source
@@ -644,18 +683,21 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 2. Complete amd64 official-row ownership, 386 applicability and independent
    semantics. Extend existing family/object/native owners instead of creating
    another opcode registry or enumerating unrelated source/target products.
-   The remaining AVX inventory has 775 rows outside the local qualified
+   The remaining AVX inventory has 691 rows outside the local qualified
    union. Continue through remaining shared physical-format groups and full
    semantic families.
    Independently inventoried legacy machine-candidate rows are 1,306 on the
    current SDK and 1,305 on minimum, with 112 separate `ymovtab` fallback
-   records. The 301 locally joined amd64 legacy rows are a separate denominator. Preserve
+   records. Legacy joins have a separate denominator from AVX rows. Preserve
    mode refusals, exact duplicates and first-match/shadow mappings; static
    inventory is not missing implementation or initialized-object proof.
    GP RMW, shift/rotate, Jcc/SETcc and legacy floating binary are locally qualified,
    including original FLAGS, aliases, mode selection and first-match mappings.
-   Next join the complete remaining permutation/block-shuffle group using shared
-   formats and producers; retain defined-old-value and masked `.Z` boundaries.
+   The permutation/block-shuffle follow-up is integrated and requires combined
+   primary qualification. Next join the complete K-data groups through shared
+   formats, keeping encoded L/W/PP, semantic width and GP/memory widths separate.
+   The 386 KMOVQ GP alias needs an actual typed rule-class fix and independent
+   value checks; the static inventory alone grants no translation permission.
    Six MMX rows retain their separate unresolved machine-state contract.
    Static inventories are not successful object or execution receipts.
 3. Keep the 14 implicit-entry, GC-scan and system/runtime/test-hook failures
