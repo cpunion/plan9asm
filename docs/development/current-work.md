@@ -15,8 +15,12 @@ Its unique inventory is **2,400 rows / 8,604 witnesses**:
 initialized original-Go bytes and LLVM objects, not native execution or every
 amd64 opcode. Both endpoint SDKs passed the combined family, full rule and
 five-architecture gates before publication. Complete policies and the affected
-race scope also passed. Wait for whole-round exact-head CI before readiness;
-consult the contribution PR for live checks.
+race scope also passed. Its whole CI round has now completed **325/325**
+successfully, with **88.1%** statement coverage and a successful exact-head
+Codecov patch check. All 325 named jobs and their check IDs match the retained
+inventory. Complete race and Windows reports each cover all 22 packages;
+the historical race 299-root / seven-child and Windows 279-root skips remain
+skips. Local follow-up qualification and external approval remain separate.
 
 Preceding `52c40967a` attempt 1 finished with 321 successful checks, three
 failures and one cancellation. A targeted Windows rerun passed the original failed
@@ -32,8 +36,8 @@ root and seven child skips. Coverage is 88.1% and the exact-head patch check
 passes. Whole-round Windows completion remains separate. Do not call the
 preceding `52c40967a` round wholly successful.
 
-The preceding entirely green publication is `cd2413c1b`:
-[325/325 Go checks](https://github.com/xgo-dev/plan9asm/actions/runs/40666003559),
+The current entirely green publication is `61b5737f2`:
+[325/325 Go checks](https://github.com/xgo-dev/plan9asm/actions/runs/40688196703),
 88.1% main-package statement coverage and a successful Codecov patch check.
 Its 299 root and seven child skips remain skips. Its counts do not certify a
 later revision. Earlier source failures and infrastructure retries retain their
@@ -129,8 +133,9 @@ after file creation but before its complete write. Published `8f68e5878` fixes
 publication atomically and requires the Go/Git/Node/Bash tools used by policy
 tests. All 191 local policies pass without skips. Its child `9422371af`
 changes only benchmark-table display, separately validated against the complete
-YAML structure. Require new-head cloud acceptance, including cold tool setup
-within the unchanged five-minute budget.
+YAML structure. Its actual cloud policy passes all 191 unique methods without
+skips: cold Go1.27.0 / Node24.22.1 setup and tests take 111 seconds within the
+unchanged five-minute budget. The complete compiler round remains pending.
 
 The native Windows demo repair at `8c3555126` has actual six-profile CI coverage,
 including the unchanged 4 x 5,000-operation temporary-file stress cases. Preserve earlier
@@ -140,7 +145,7 @@ Never push or merge upstream directly.
 
 ## Next local family batch
 
-These four complete groups have individual endpoint-SDK qualification and
+These five complete groups have individual endpoint-SDK qualification and
 byte-identical integration. They are not yet published or jointly qualified
 on the final primary snapshot.
 
@@ -150,9 +155,10 @@ on the final primary snapshot.
 | Immediate integer comparisons | 48 / 240 | Eight signed/unsigned members; shared K-result transport; translator unchanged |
 | VPTESTM/NM | 48 / 240 | Eight members; typed effects and result ownership, conditional volatile reads preserve live/dead access behavior |
 | GFNI multiply and affine/inverse | 24 / 84 | Three members; shared format adapter; translator and initializer unchanged |
+| Leading-immediate vector group | 66 / 270 | Eleven names across four semantic families; existing FMA3 producer and fixed-prefix encoder reused |
 
-The local unique union is **2,682 rows / 10,044 witnesses**: 2,551 of 3,568
-AVX rows (71.5%) and 131 legacy rows. Both PADDD aliases and the 24-row /
+The local unique union is **2,748 rows / 10,314 witnesses**: 2,617 of 3,568
+AVX rows (73.3%) and 131 legacy rows. Both PADDD aliases and the 24-row /
 108-witness rotate overlap remain separate and are not double counted.
 All earlier fields, encodings, generated source/declarations and case IDs
 remain identical on both SDKs. Existing numerical owners retain their original
@@ -165,11 +171,18 @@ amd64 probe forms change from IR generation to Context: their original 150
 examples retain undefined inputs or unbound original SP/BP roles. They are not
 positive initialized objects. Other architectures and encoder data are unchanged.
 
-The next shared leading-immediate vector group has eleven names / 66 rows.
-Both SDKs reproduce the existing formatter rejection before repair; its
-270-witness projection is not yet successful coverage. It includes align,
-double-shift, ternary and byte-SAD families with separate old-destination and
-memory contracts. Byte-SAD still needs an independent fault-execution owner.
+The leading-immediate vector group first reproduces the formatter rejection
+on both SDKs, then verifies all 66 rows / 270 witnesses with original Go bytes
+and three-API objects. Strict tuple controls also fix incorrect broadcast
+metadata acceptance for W/BW forms. All old thirty views and 335 generated
+source/declaration batches remain identical. Align, double-shift, ternary and
+byte-SAD retain their separate numerical and old-destination contracts;
+byte-SAD still needs an independent fault-execution owner.
+
+Next, inventory PALIGNR/VPALIGNR, SHUFPD/VSHUFPD and SHUFPS/VSHUFPS together
+with the shared leading-immediate renderer. Its 27-row / 90-witness projection
+is not successful coverage. Preserve the strict existing format guards and
+all old output bytes; retain the abstraction only if it reduces total code.
 
 ## Current implementation
 
@@ -322,6 +335,7 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Immediate integer compare at `7c3ee63d7` | Each SDK objects **1 / 32**, full rules **75 / 614 PASS** | Eight names / 48 rows / 240 witnesses; old 27 views identical; translator unchanged |
 | VPTESTM/NM at `b633be333` | Each SDK family **5 / 68**, full rules **77 / 634 PASS** | Eight names / 48 rows / 240 witnesses; old 28 views identical; live/dead memory and original context classification audited |
 | GFNI at `40c876851` | Each SDK objects **1 / 12**, full rules **80 / 660 PASS** | Three names / 24 rows / 84 witnesses; old 29 views identical; translator unchanged |
+| Leading-immediate vectors at `9fab6a57e` | Each SDK objects **1 / 36**, full rules **82 / 684 PASS** | Eleven names / 66 rows / 270 witnesses; old 30 views identical; translator, producer and encoding primitive unchanged |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -372,11 +386,12 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Immediate integer comparisons | 48 | 240 |
 | VPTESTM/NM | 48 | 240 |
 | GFNI multiply and affine/inverse | 24 | 84 |
-| Local candidate unique union | **2,682** | **10,044** |
+| Leading-immediate vector group | 66 | 270 |
+| Local candidate unique union | **2,748** | **10,314** |
 
-The local union contains 2,551 AVX rows of 3,568 (71.5%) and 131 legacy rows. The
+The local union contains 2,617 AVX rows of 3,568 (73.3%) and 131 legacy rows. The
 complete rotate view overlaps 24 existing rows / 108 witnesses and is deduplicated.
-The 10,044 witnesses include 84 terminal trap controls, not 10,044
+The 10,314 witnesses include 84 terminal trap controls, not 10,314
 normal executions. These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
 separate. High banks force narrow EVEX; MMX has separate region/EMMS owners.
@@ -455,9 +470,10 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 2. Complete amd64 official-row ownership, 386 applicability and independent
    semantics. Extend existing family/object/native owners instead of creating
    another opcode registry or enumerating unrelated source/target products.
-   The remaining AVX inventory has 1,017 rows outside the local qualified
-   union. Finish the complete leading-immediate vector group, then join
-   remaining source families through their shared physical-format groups.
+   The remaining AVX inventory has 951 rows outside the local qualified
+   union. Consolidate the shared leading-immediate renderer while joining
+   complete align/shuffle families, then continue through remaining shared
+   physical-format groups.
    Six MMX rows retain their separate unresolved machine-state contract.
    Static inventories are not successful object or execution receipts.
 3. Keep the 14 implicit-entry, GC-scan and system/runtime/test-hook failures
