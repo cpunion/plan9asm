@@ -113,6 +113,12 @@ func X86PackedRotateRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86Packed
 		VPROLVD VPROLVQ VPRORVD VPRORVQ`)
 }
 
+// X86PackedDuplicateRows retains all legacy/VEX/EVEX duplicate-element moves.
+func X86PackedDuplicateRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx,
+		`MOVDDUP MOVSHDUP MOVSLDUP VMOVDDUP VMOVSHDUP VMOVSLDUP`)
+}
+
 // X86PackedMoveRows retains the twelve AVX whole-vector move names. Legacy
 // moves are separate; register alternatives belong to the first store rows.
 func X86PackedMoveRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -306,7 +312,7 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	}
 	header := rule.OpBytes[rule.EncodingOffset]
 	optional := []string{kind + "66", kind + "0F", kind + "0F38", kind + "W0", kind + "W1"}
-	if move || rule.Ytab == "_yvaddsd" {
+	if move || rule.Ytab == "_yvaddsd" || rule.Ytab == "_yvmovddup" {
 		optional = append(optional, kind+"F2", kind+"F3")
 	}
 	atoms, err := x86PackedEncodingAtoms(header, []string{
@@ -314,6 +320,11 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	}, optional)
 	if err != nil || atoms[kind+"0F"] == atoms[kind+"0F38"] || atoms[kind+"W0"] == atoms[kind+"W1"] {
 		return nil, fmt.Errorf("unmodeled packed encoding header %q", header)
+	}
+	duplicate := rule.Ytab == "_yvmovddup" && (atoms[kind+"F2"] || atoms[kind+"F3"])
+	if duplicate && (!atoms[kind+"0F"] || kind == "vex" && !atoms[kind+"W0"] ||
+		kind == "evex" && atoms[kind+"F2"] != atoms[kind+"W1"]) {
+		return nil, fmt.Errorf("duplicate prefix, map or W mode differs from its official transport")
 	}
 	if (shift || immediate) && (!atoms[kind+"66"] || !atoms[kind+"0F"] ||
 		(kind == "vex" || rule.Ytab == "_yvpslldq") && !atoms[kind+"W0"]) {
@@ -343,6 +354,12 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 		features := rule.OpBytes[rule.EncodingOffset+1]
 		tuple := width / 8
 		optional := []string{"evexZeroingEnabled", "evexBcstN4", "evexBcstN8"}
+		if duplicate {
+			optional = []string{"evexZeroingEnabled"}
+			if width == 128 && atoms["evexF2"] {
+				tuple = 8 // DDUP.X reads m64; other duplicate tuples stay full width.
+			}
+		}
 		if shift && !immediate {
 			tuple = 16 // Uniform count access stays m128 for X/Y/Z data.
 		}
@@ -538,6 +555,16 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 		row.RowIndex == 0 && row.ZCase == "Zm_r_xm" && row.ZOffset == 1 && row.UnmatchedOffset == 0:
 		if entry.Prefix == "Pm" {
 			prefix = []byte{0x0f}
+		}
+	case entry.Ytab == "yxm" && row.RowIndex == 0 && row.ZCase == "Zm_r_xm" &&
+		row.ZOffset == 1 && row.UnmatchedOffset == 0 && len(entry.OpBytes) == 1 &&
+		(entry.Prefix == "Pf2" && entry.OpBytes[0] == "0x12" ||
+			entry.Prefix == "Pf3" && (entry.OpBytes[0] == "0x12" || entry.OpBytes[0] == "0x16")):
+		// Only the duplicate move payloads join this prefix class; scalar
+		// arithmetic and conversion yxm rows keep their separate contracts.
+		prefix = []byte{0xf2, 0x0f}
+		if entry.Prefix == "Pf3" {
+			prefix[0] = 0xf3
 		}
 	case entry.Ytab == "yxm_q4" && entry.Prefix == "Pq4" && row.RowIndex == 0 && row.ZCase == "Zm_r" && row.ZOffset == 1 && row.UnmatchedOffset == 0:
 		prefix = append(prefix, 0x38)
