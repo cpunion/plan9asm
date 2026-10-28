@@ -8,24 +8,23 @@ this page records the current candidate and its limits.
 
 ## Publication and review
 
-PR40 remains draft. Published `bebc7092d` completes its
-[own CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40731923496):
+PR40 remains draft. Published `5831e71bc` completes its
+[own CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40782298561):
 **325/325 successful**, **88.1%** statement coverage and a successful exact-head
 Codecov patch check. Every job name and check ID is reconciled against the
 complete inventory. The race and Windows unions each contain all 22 packages;
-race retains 299 root / seven child skips, Windows 276 root / zero child skips.
+race retains 299 root / seven child skips, Windows 277 root / zero child skips.
 Those skips are not execution passes or new hardware acceptance.
 
-Its published inventory is **34 views, 2,927 rows / 11,010 witnesses**:
-2,793 of 3,568 AVX-table rows (78.3%) and 134 legacy rows. This measures
-initialized original-Go bytes and LLVM objects, not native execution or every
-amd64 opcode. Four locally qualified legacy groups and the permutation/shuffle
-follow-up extend the mixed-mode inventory to **39 views, 3,406 source records /
-12,454 canonical witnesses**. The local AVX join is **2,877 / 3,568 rows
-(80.63%)**. Combined local qualification is complete, including the corrected
-O2 scope below; another publication requires its own CI round. Their 386-only
-rows and double-shift fallback records are
-not an amd64 percentage.
+Its published inventory is **39 views, 3,406 mixed-mode source records /
+12,454 canonical witnesses**, with 441 source/declaration batches and two
+separate aliases. The AVX join is **2,877 / 3,568 rows (80.63%)**; 529 legacy
+and fallback records have a separate denominator. This measures initialized
+original-Go bytes and LLVM objects, not native execution or every amd64 opcode.
+Combined local qualification includes the corrected O2 scope below. The 386-only
+rows and double-shift fallback records are not an amd64 percentage. Preceding
+`bebc7092d` had 34 views / 2,927 rows / 11,010 witnesses and its own successful
+325-job / 88.1% round, retaining 276 Windows root skips.
 
 The preceding `4aeffe806` round also completed 325/325 with 88.1% coverage;
 its Windows union retained 278 root skips, separate from the current 276.
@@ -163,7 +162,12 @@ Linux/Windows defaults are unchanged. All 5,095 candidate files match the frozen
 197/197 local policy run, with no failures/errors/skips and all 192 prior
 methods retained. The first 196/197 policy failure remains recorded; its workflow
 condition was fixed without weakening the existing cancellation rule. The new
-head's expected 142 jobs / thirteen workflows remain pending cloud acceptance.
+head's 142 jobs finish with 139 successes, one collector failure and two
+conditional skips. Both actual build parts complete all 938 roots: 924 pass and
+fourteen retain platform/development skips. Both required ARM64 native roots
+RUN/PASS. The collector rejects only a rolling hosted ImageVersion difference;
+all source, Go/LLVM and compilation fields match. Its narrow comparison repair
+is in progress; the original cloud failure remains recorded.
 
 A fresh compiler built from all 5,093 archived LLGo source files with Go1.27.0
 and LLVM22.1.8 passes CRC32 v1.3.0 and libc v1.75.7 ABI0 probes using Go1.27.3
@@ -696,9 +700,10 @@ showed regression; no acceleration is claimed for the accepted cleanup.
    round passed after its targeted retry, but current `b6871f8f0` has the two
    macOS failures and two runner-capacity cancellations described above.
    Both repairs are independently validated and published at `625f3c0f7`;
-   require its complete repaired-head CI. The current public translator pin
-   already has fresh LLGo execution qualification. Publish the locally qualified
-   39-view Plan9asm batch, then require its own complete CI round.
+   its original failures pass, but the collector's hosted ImageVersion comparison
+   needs the narrow repair above and new-head CI. The current public translator
+   pin already has fresh LLGo execution qualification. The 39-view Plan9asm batch
+   is published at `5831e71bc`, with all 325 jobs successful.
    Keep external review, the official dependency
    requirement and native AVX512 hardware acceptance open.
    Retain the digest optimization's full byte identity and mutable-source

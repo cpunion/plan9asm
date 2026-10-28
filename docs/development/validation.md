@@ -70,6 +70,19 @@ oracles retain their additional live SDK/tool/file identity observations.
 ## Local and CI gates
 
 Run focused RED/GREEN tests first; preserve failures under ignored `_out/`.
+Before choosing a family selector, enumerate its canonical row/object roots and
+all changed regression owners. Check every name against the selector and the
+actual JSON RUN/terminal inventory; a broad-looking prefix can omit legacy
+owners. Keep source-row, witness, module-object and executed-case counts separate.
+An object helper's O0 pass does not establish O2: verify the actual compiler
+options for each API/module before reporting either level.
+
+Freeze each qualification snapshot. When only one test owner is strengthened,
+unaffected evidence may be inherited through explicit file/function and tool
+identity; rerun the changed owner and any omitted roots. Identify both revisions
+and never describe inherited evidence as a fresh execution. Preserve erroneous
+scope reports alongside their corrections.
+
 Then run the relevant complete gates:
 
 ```sh
