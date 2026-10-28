@@ -231,6 +231,34 @@ The local unique union is **2,927 rows / 11,010 witnesses**: 2,793 AVX rows
 combined primary-snapshot qualification and the current public CI round
 before another batch publication.
 
+The follow-ups are now jointly qualified and published at `bebc7092d`, with
+[new-head CI](https://github.com/xgo-dev/plan9asm/actions/runs/40731923496)
+pending. The preceding `4aeffe806` round completed 325/325 successfully,
+88.1% statement coverage and its exact-head Codecov patch check. Actual race
+and Windows unions retain their 299-root / seven-child and 278-root skips.
+
+## Local legacy GP follow-up
+
+Integrated `b57928448` preserves all 53 scalar RMW names / 169 original source
+rows. Actual Go selection and mode observations establish 167 rows / 278
+shapes on amd64 and 124 / 202 on 386. Two Px1 short-register rows remain
+386-only; all 45 Q-width/386 refusals have independent frontend observations.
+First-match, AL/AX aliases and shadow mappings retain their original records.
+The 480 cross-mode observations deduplicate to 280 physical forms.
+
+Six physical schemas consume original opcode payloads. The producer returns
+actual data and only defined FLAGS, using the existing POP/immediate-AND
+recovery rules; it grants no new numerical or storage permission. Both SDKs
+pass actual Go bytes, three-API O0/O2 objects, family 6 / 139, full rules
+92 / 1,029, five-architecture and policy gates. All old 34 groups, 367 generated
+source/declaration batches and two aliases remain byte identical. The original
+O0-only report is retained separately from the final O0/O2 qualification.
+
+This adds 167 amd64 legacy rows without overlap, for 301 locally joined legacy
+rows. AVX remains 2,793 / 3,568; modes and source inventories have separate
+denominators. This follow-up is not published and adds no runtime or performance
+claim. Translator, shared reader, encoder, initializer and baselines are unchanged.
+
 ## Current implementation
 
 - Native machine bits and dereference permissions remain separate in existing
@@ -386,6 +414,7 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Align/shuffle and shared renderer at `9452a9f8a` | Each SDK objects **1 / 12**, full rules **85 / 720 PASS** | 27 rows / 90 witnesses; old 31 views identical; same-coverage renderer net -37 lines |
 | Compact/expand at `3d331a0da` | Each SDK objects and displacement **2 / 28**, full rules **87 / 964 PASS** | 72 rows / 216 witnesses; old 32 views identical; eight additional actual-Go disp8 anchors; same-coverage renderer net -34 lines |
 | Five FP control families at `6cee2aae5` | Each SDK objects and displacement/SAE **2 / 52**, full rules **89 / 1,006 PASS** | 80 rows / 390 witnesses; old 33 views identical; translator, producer and encoder unchanged |
+| Legacy scalar RMW at `05b87b318` | Each SDK family **6 / 139**, full rules **92 / 1,029 PASS** | 169 source rows; actual selected/shadow/mode mapping; amd64 167 / 278 and 386 124 / 202 through three-API O0/O2 objects; old 34 groups unchanged |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -529,10 +558,12 @@ showed regression; no acceleration is claimed for the accepted cleanup.
    semantic families.
    Independently inventoried legacy machine-candidate rows are 1,306 on the
    current SDK and 1,305 on minimum, with 112 separate `ymovtab` fallback
-   records. The 134 joined legacy rows are a separate denominator. Preserve
+   records. The 301 locally joined amd64 legacy rows are a separate denominator. Preserve
    mode refusals, exact duplicates and first-match/shadow mappings; static
    inventory is not missing implementation or initialized-object proof.
-   GP RMW's 169 candidate rows are the next complete legacy join to prepare.
+   GP RMW's 169-source-row closure is qualified locally. Next prepare complete
+   scalar shift/rotate and double-shift formats, preserving count-dependent
+   FLAGS, CL aliases, mode selection and first-match mappings.
    Six MMX rows retain their separate unresolved machine-state contract.
    Static inventories are not successful object or execution receipts.
 3. Keep the 14 implicit-entry, GC-scan and system/runtime/test-hook failures
