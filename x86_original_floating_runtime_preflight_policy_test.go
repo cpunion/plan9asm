@@ -171,14 +171,14 @@ func TestX86OriginalFloatingRuntimeMinimumCapabilityBoundary(t *testing.T) {
 	// synthetic rows never authorize the separate original native opcodes.
 	const checks = `
 int main(void) {
-    for(unsigned profile=0;profile<6;profile++) for(unsigned flags=0;flags<64;flags++) {
+    for(unsigned profile=0;profile<8;profile++) for(unsigned flags=0;flags<64;flags++) {
         unsigned sse2=flags&1,avx=(flags>>1)&1,os=(flags>>2)&1;
         unsigned f=(flags>>3)&1,vl=(flags>>4)&1,fma=(flags>>5)&1;
         for(unsigned bits=0;bits<32;bits++) {
             const unsigned positions[]={1,2,5,6,7}; uint64_t xcr0=0;
             for(unsigned i=0;i<5;i++) if(bits&(1u<<i)) xcr0|=UINT64_C(1)<<positions[i];
             int expected=sse2&&avx&&os&&f&&bits==31&&
-                         (profile==1||profile==3||(profile==2&&vl&&fma)||(profile==4&&vl));
+                         (profile==1||profile==3||profile==5||(profile==2&&vl&&fma)||((profile==4||profile==6)&&vl));
             if(original_floating_required_state(profile,sse2,avx,os,f,vl,fma,xcr0)!=expected ||
                original_floating_required_state(profile,sse2,avx,os,f,vl,fma,xcr0|0x101)!=expected) return 1;
         }
@@ -262,7 +262,7 @@ func TestX86OriginalFloatingRuntimeBaselineObjectsAndFaultBoundary(t *testing.T)
 				resource = "#error original_floating_windows_must_not_include_posix_resource\n"
 			}
 			for name, contents := range map[string]string{
-				"stdint.h":       "typedef unsigned int uint32_t; typedef unsigned long long uint64_t;\n",
+				"stdint.h":       "typedef unsigned int uint32_t; typedef unsigned long long uint64_t;\n#define UINT64_C(v) v##ULL\n",
 				"stdio.h":        "typedef struct FILE FILE; extern FILE *stdout; int printf(const char*,...); int fflush(FILE*); int puts(const char*);\n",
 				"cpuid.h":        "int __get_cpuid(unsigned,unsigned*,unsigned*,unsigned*,unsigned*); int __get_cpuid_count(unsigned,unsigned,unsigned*,unsigned*,unsigned*,unsigned*);\n",
 				"sys/resource.h": resource,
@@ -271,8 +271,8 @@ func TestX86OriginalFloatingRuntimeBaselineObjectsAndFaultBoundary(t *testing.T)
 					t.Fatal(err)
 				}
 			}
-			for caseID := 0; caseID < 8; caseID++ {
-				profile, level := caseID%4+1, []string{"-O0", "-O2"}[caseID/4]
+			for caseID := 0; caseID < 12; caseID++ {
+				profile, level := caseID%6+1, []string{"-O0", "-O2"}[caseID/6]
 				source, object := filepath.Join(directory, "preflight.c"), filepath.Join(directory, "preflight.o")
 				program := fmt.Sprintf("#define REQUIRED_PROFILE %d\n", profile) + state + opcodes
 				if err := os.WriteFile(source, []byte(program), 0600); err != nil {
@@ -305,7 +305,7 @@ func TestX86OriginalFloatingRuntimeBaselineObjectsAndFaultBoundary(t *testing.T)
 						if len(group) == 0 || bytes.Contains(group, []byte("+avx")) || bytes.Contains(group, []byte("+fma")) {
 							t.Fatal("preflight main can fault before its CPUID/OS-state guard", string(group))
 						}
-						if profile == 3 || profile == 4 {
+						if profile >= 3 && profile <= 6 {
 							name := "original_unsigned_scalar_integer"
 							required := []string{"+avx512f"}
 							forbidden := []string{"+avx512vl", "+avx512dq", "+avx512bw"}
@@ -315,6 +315,17 @@ func TestX86OriginalFloatingRuntimeBaselineObjectsAndFaultBoundary(t *testing.T)
 								required = append(required, "+avx512vl", "+ssse3", "+avx2")
 								forbidden = []string{"+avx512dq", "+avx512bw"}
 								opcodes = []string{"vpabsb ", "psignw ", "vpsignd ", "vpabsd ", "vpabsq "}
+							}
+							if profile == 5 || profile == 6 {
+								name = "original_estimate14_f"
+								opcodes = []string{"vrcp14ps ", "vrcp14pd ", "vrsqrt14ps ", "vrsqrt14pd ",
+									"vrcp14ss ", "vrcp14sd ", "vrsqrt14ss ", "vrsqrt14sd "}
+								if profile == 6 {
+									name = "original_estimate14_fvl"
+									required = append(required, "+avx512vl")
+									forbidden = []string{"+avx512dq", "+avx512bw"}
+									opcodes = opcodes[:4]
+								}
 							}
 							probe := regexp.MustCompile(`(?m)^define [^\n]*@` + name + `\([^\n]* #([0-9]+)`).FindSubmatch(payload)
 							if len(probe) != 2 {

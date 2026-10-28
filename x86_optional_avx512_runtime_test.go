@@ -89,9 +89,15 @@ func TestX86OptionalAVX512RuntimeRequiresMissingHardwareReceipt(t *testing.T) {
 	if !x86OriginalFloatingRuntimeAllowsSkip("auto", 1, []byte(strings.Replace(missing, "\n", "\r\n", 1)), unavailable) {
 		t.Fatal("Windows receipt line ending rejected")
 	}
-	for _, profile := range []int{0, 5} {
+	for _, profile := range []int{0, 7} {
 		if x86OriginalFloatingRuntimeAllowsSkip("auto", profile, []byte(missing), unavailable) {
 			t.Fatal("unknown profile became optional", profile)
+		}
+	}
+	for _, profile := range []int{5, 6} {
+		receipt := strings.Replace(missing, "profile=1", fmt.Sprintf("profile=%d", profile), 1)
+		if x86OriginalFloatingRuntimeAllowsSkip("auto", profile, []byte(receipt), unavailable) {
+			t.Fatal("explicit RCP14 native qualification became an optional hardware skip", profile)
 		}
 	}
 }

@@ -22,6 +22,13 @@ func x86OriginalFloatingOpcodeListing(t *testing.T, profile, triple, level, ir s
 		t.Fatal("actual floating runtime ISA requires LLVM22 llc and llvm-objdump")
 	}
 	listing := x86FourSourceNativeObjectListing(t, llc, objdump, triple, level, ir)
+	x86OriginalFloatingAuditListing(t, profile, triple, level, listing, masked, fmas)
+}
+
+// Native family owners can inspect the exact object they subsequently execute;
+// the ordinary object owner and its finite ISA contract use the same auditor.
+func x86OriginalFloatingAuditListing(t *testing.T, profile, triple, level, listing string, masked bool, fmas int) {
+	t.Helper()
 	var violations []string
 	if strings.Contains(listing, "<unknown>") || strings.Contains(listing, "invalid") {
 		violations = append(violations, "actual object contains an undecoded instruction:\n"+listing)
@@ -82,7 +89,8 @@ func x86OriginalFloatingFMaskOpcode(op string) bool {
 // original runtime programs, not a general instruction/CPUID classifier.
 // Unknown backend choices require review instead of silently adding a CPU bit.
 func x86OriginalFloatingEVEXWithinProfile(profile, op string, code []byte) bool {
-	if profile != "scalar-precision" && profile != "fma-caller" || len(code) < 6 || code[0] != 0x62 {
+	estimate := profile == "estimate14-F" || profile == "estimate14-FVL"
+	if !estimate && profile != "scalar-precision" && profile != "fma-caller" || len(code) < 6 || code[0] != 0x62 {
 		return false
 	}
 	known, scalar, fma := false, false, false
@@ -108,6 +116,16 @@ func x86OriginalFloatingEVEXWithinProfile(profile, op string, code []byte) bool 
 		"vpmovusdb", "vpmovusdw", "vpmovusqb", "vpmovusqd", "vpmovusqw":
 		known = true
 	}
+	if estimate {
+		if fma {
+			return false
+		}
+		for _, member := range x86Reciprocal14TestMembers {
+			if op == strings.ToLower(member.op) {
+				known, scalar = true, member.scalar
+			}
+		}
+	}
 	if !known {
 		return false
 	}
@@ -118,7 +136,7 @@ func x86OriginalFloatingEVEXWithinProfile(profile, op string, code []byte) bool 
 		return true
 	}
 	length := code[3] >> 5 & 3
-	return length == 2 || profile == "fma-caller" && length < 2
+	return length == 2 || (profile == "fma-caller" || profile == "estimate14-FVL") && length < 2
 }
 
 func TestX86OriginalFloatingRuntimeEVEXProfileBoundaries(t *testing.T) {

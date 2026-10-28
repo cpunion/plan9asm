@@ -26,6 +26,26 @@ export LLVM_CONFIG="$llvm22_root/bin/llvm-config"
 
 Missing required LLVM tools, linkers or backends fail, never skip.
 Host-inapplicable execution requires its cross-runtime CI counterpart.
+
+RCP14/RSQRT14 original-Go bit, MXCSR and masked native-memory execution has
+explicit hardware qualification owners. On direct Linux/amd64 with enabled
+AVX512F register state, use the F owner; packed X/Y additionally require VL:
+
+```sh
+PLAN9ASM_AVX512_RUNTIME=required go test . -tags=plan9asm_native_avx512 \
+  -run '^TestX86Reciprocal14Native(F|VL)AMD64$' -count=1 -timeout=20m
+```
+
+The tag does not affect ordinary source/trace/actual-Go/three-API object tests.
+Darwin and native Linux/amd64 additionally compile and link the C fixtures
+without executing them; their receipts identify the actual x86_64 target.
+Default CI does not execute these two native owners. Missing hardware, tools or
+CPU/OS-state proof fails explicit qualification; `auto` cannot turn it into a
+passing skip. Until successful original-Go and every native pipeline/fault
+receipt exists, native RCP14 acceptance remains pending. These owners do not
+certify native386, AC-enabled faults, raw continuations or the two Context-only
+repeated opaque-pointer-index address constructions.
+
 CI also verifies the actual installed Go against the installer's resolved
 version and uses the shared exact Node22.23.4 action. A successful installer
 outcome without its version output is not a valid tool observation.

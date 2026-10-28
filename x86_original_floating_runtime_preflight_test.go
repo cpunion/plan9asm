@@ -61,6 +61,10 @@ func x86OriginalFloatingRuntimeRequireCPU(t *testing.T, profile, clang, triple s
 		required = 3
 	case "packed-abs-sign":
 		required = 4
+	case "estimate14-F":
+		required = 5
+	case "estimate14-FVL":
+		required = 6
 	default:
 		t.Fatal("unknown original floating execution profile", profile)
 	}
@@ -100,7 +104,7 @@ static int original_floating_required_state(unsigned profile,unsigned sse2,unsig
                                             unsigned osxsave,unsigned f,unsigned vl,
                                             unsigned fma,uint64_t xcr0) {
     if (!sse2 || !avx || !osxsave || !f || (xcr0&0xe6)!=0xe6) return 0;
-    return profile==1 || profile==3 || (profile==2 && vl && fma) || (profile==4 && vl);
+    return profile==1 || profile==3 || profile==5 || (profile==2 && vl && fma) || ((profile==4 || profile==6) && vl);
 }
 static int original_packed_abs_sign_required_legacy(unsigned ssse3,unsigned avx2) {
     return ssse3 && avx2;
@@ -180,6 +184,56 @@ static int original_packed_abs_sign(void) {
     return 1;
 }
 
+__attribute__((target("avx512f")))
+static int original_estimate14_f(void) {
+    uint32_t single[16]; uint64_t wide[8],packed[4][8];
+    for(unsigned i=0;i<16;i++) single[i]=0x3f800000u;
+    for(unsigned i=0;i<8;i++) wide[i]=UINT64_C(0x3ff0000000000000);
+    unsigned mask=1;
+    uint32_t scalar32[2]; uint64_t scalar64[2];
+    __asm__ volatile("vmovups %8,%%zmm0; vmovupd %9,%%zmm1; kmovw %10,%%k1; "
+                     "vrcp14ps %%zmm0,%%zmm2%{%%k1%}%{z%}; vmovups %%zmm2,%0; "
+                     "vrcp14pd %%zmm1,%%zmm2%{%%k1%}%{z%}; vmovups %%zmm2,%1; "
+                     "vrsqrt14ps %%zmm0,%%zmm2%{%%k1%}%{z%}; vmovups %%zmm2,%2; "
+                     "vrsqrt14pd %%zmm1,%%zmm2%{%%k1%}%{z%}; vmovups %%zmm2,%3; "
+                     "vrcp14ss %%xmm0,%%xmm0,%%xmm2%{%%k1%}%{z%}; vmovss %%xmm2,%4; "
+                     "vrcp14sd %%xmm1,%%xmm1,%%xmm2%{%%k1%}%{z%}; vmovsd %%xmm2,%5; "
+                     "vrsqrt14ss %%xmm0,%%xmm0,%%xmm2%{%%k1%}%{z%}; vmovss %%xmm2,%6; "
+                     "vrsqrt14sd %%xmm1,%%xmm1,%%xmm2%{%%k1%}%{z%}; vmovsd %%xmm2,%7; "
+                     : "=m"(packed[0]),"=m"(packed[1]),"=m"(packed[2]),"=m"(packed[3]),"=m"(scalar32[0]),"=m"(scalar64[0]),"=m"(scalar32[1]),"=m"(scalar64[1])
+                     : "m"(single),"m"(wide),"r"(mask) : "zmm0","zmm1","zmm2","k1","memory");
+    for(unsigned i=0;i<4;i++) for(unsigned j=0;j<8;j++) {
+        uint64_t expected=j?0:(i%2?UINT64_C(0x3ff0000000000000):UINT64_C(0x3f800000));
+        if(packed[i][j]!=expected) return 0;
+    }
+    if(scalar32[0]!=0x3f800000u || scalar32[1]!=0x3f800000u || scalar64[0]!=UINT64_C(0x3ff0000000000000) || scalar64[1]!=UINT64_C(0x3ff0000000000000)) return 0;
+    return 1;
+}
+
+__attribute__((target("avx512f,avx512vl")))
+static int original_estimate14_fvl(void) {
+    uint32_t single[16]; uint64_t wide[8],packed[8][8];
+    for(unsigned i=0;i<16;i++) single[i]=0x3f800000u;
+    for(unsigned i=0;i<8;i++) wide[i]=UINT64_C(0x3ff0000000000000);
+    unsigned mask=1;
+    __asm__ volatile("vmovups %8,%%zmm0; vmovupd %9,%%zmm1; kmovw %10,%%k1; "
+                     "vrcp14ps %%xmm0,%%xmm2%{%%k1%}%{z%}; vmovups %%zmm2,%0; "
+                     "vrcp14pd %%xmm1,%%xmm2%{%%k1%}%{z%}; vmovups %%zmm2,%1; "
+                     "vrsqrt14ps %%xmm0,%%xmm2%{%%k1%}%{z%}; vmovups %%zmm2,%2; "
+                     "vrsqrt14pd %%xmm1,%%xmm2%{%%k1%}%{z%}; vmovups %%zmm2,%3; "
+                     "vrcp14ps %%ymm0,%%ymm2%{%%k1%}%{z%}; vmovups %%zmm2,%4; "
+                     "vrcp14pd %%ymm1,%%ymm2%{%%k1%}%{z%}; vmovups %%zmm2,%5; "
+                     "vrsqrt14ps %%ymm0,%%ymm2%{%%k1%}%{z%}; vmovups %%zmm2,%6; "
+                     "vrsqrt14pd %%ymm1,%%ymm2%{%%k1%}%{z%}; vmovups %%zmm2,%7; "
+                     : "=m"(packed[0]),"=m"(packed[1]),"=m"(packed[2]),"=m"(packed[3]),"=m"(packed[4]),"=m"(packed[5]),"=m"(packed[6]),"=m"(packed[7])
+                     : "m"(single),"m"(wide),"r"(mask) : "zmm0","zmm1","zmm2","k1","memory");
+    for(unsigned i=0;i<8;i++) for(unsigned j=0;j<8;j++) {
+        uint64_t expected=j?0:(i%2?UINT64_C(0x3ff0000000000000):UINT64_C(0x3f800000));
+        if(packed[i][j]!=expected) return 0;
+    }
+    return 1;
+}
+
 int main(void) {
 #if !defined(_WIN32)
     struct rlimit no_core={0,0};
@@ -210,6 +264,8 @@ int main(void) {
     if (profile==2 && !original_fma_caller()) return 80;
     if (profile==3 && !original_unsigned_scalar_integer()) return 81;
     if (profile==4 && !original_packed_abs_sign()) return 82;
+    if (profile==5 && !original_estimate14_f()) return 83;
+    if (profile==6 && !original_estimate14_fvl()) return 84;
     puts("ORIGINAL_FLOATING_RUNTIME_CPU_OPCODES_OK");
     return 0;
 }
