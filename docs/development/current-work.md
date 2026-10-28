@@ -215,12 +215,21 @@ The local unique union is **2,847 rows / 10,620 witnesses**: 2,713 AVX rows
 protected-page/dead-result fault execution remains incomplete. The setup path
 and zero-test invocation failures remain recorded as setup failures.
 
-Next are the complete GETMANT, RNDSCALE, REDUCE, FIXUPIMM and RANGE families:
-twenty PS/PD/SS/SD names / eighty EVEX rows. Their 390-witness projection is
-not passing coverage. Reuse the existing typed/native FP owners, FMA producer
-and limited leading-immediate arity/SAE axes. Scalar N4/N8 tuples do not widen
-the X carrier; FIXUP still needs the active old destination even with `.Z`.
-The whole-family native fault/MXCSR execution matrix remains incomplete.
+Locally integrated `03c41000c` completes GETMANT, RNDSCALE, REDUCE, FIXUPIMM
+and RANGE: twenty PS/PD/SS/SD names / eighty EVEX rows / 390 actual Go
+witnesses. Both SDKs pass the original byte selections, six independent
+displacement/SAE anchors, three-API objects, full rules (89 / 1,006), policies
+and five-architecture gates. All old 33 views and 354 source/declaration
+batches remain identical. The small format factory and limited shared
+arity/SAE axes add 104 harness lines; translator, initializer and encoder are
+unchanged. Scalar N4/N8 tuples do not widen the X carrier; FIXUP still needs
+the active old destination even with `.Z`. Whole-family native fault/MXCSR
+execution remains incomplete.
+
+The local unique union is **2,927 rows / 11,010 witnesses**: 2,793 AVX rows
+(78.3%) and 134 legacy rows. The three local follow-ups await one final
+combined primary-snapshot qualification and the current public CI round
+before another batch publication.
 
 ## Current implementation
 
@@ -376,6 +385,7 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Leading-immediate vectors at `9fab6a57e` | Each SDK objects **1 / 36**, full rules **82 / 684 PASS** | Eleven names / 66 rows / 270 witnesses; old 30 views identical; translator, producer and encoding primitive unchanged |
 | Align/shuffle and shared renderer at `9452a9f8a` | Each SDK objects **1 / 12**, full rules **85 / 720 PASS** | 27 rows / 90 witnesses; old 31 views identical; same-coverage renderer net -37 lines |
 | Compact/expand at `3d331a0da` | Each SDK objects and displacement **2 / 28**, full rules **87 / 964 PASS** | 72 rows / 216 witnesses; old 32 views identical; eight additional actual-Go disp8 anchors; same-coverage renderer net -34 lines |
+| Five FP control families at `6cee2aae5` | Each SDK objects and displacement/SAE **2 / 52**, full rules **89 / 1,006 PASS** | 80 rows / 390 witnesses; old 33 views identical; translator, producer and encoder unchanged |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -429,11 +439,12 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Leading-immediate vector group | 66 | 270 |
 | Align and floating shuffle | 27 | 90 |
 | Compact and expand | 72 | 216 |
-| Local candidate unique union | **2,847** | **10,620** |
+| Five immediate FP control families | 80 | 390 |
+| Local candidate unique union | **2,927** | **11,010** |
 
-The local union contains 2,713 AVX rows of 3,568 (76.0%) and 134 legacy rows. The
+The local union contains 2,793 AVX rows of 3,568 (78.3%) and 134 legacy rows. The
 complete rotate view overlaps 24 existing rows / 108 witnesses and is deduplicated.
-The 10,620 witnesses include 102 terminal trap controls, not 10,620
+The 11,010 witnesses include 102 terminal trap controls, not 11,010
 normal executions. These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
 separate. High banks force narrow EVEX; MMX has separate region/EMMS owners.
@@ -513,9 +524,9 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 2. Complete amd64 official-row ownership, 386 applicability and independent
    semantics. Extend existing family/object/native owners instead of creating
    another opcode registry or enumerating unrelated source/target products.
-   The remaining AVX inventory has 855 rows outside the local qualified
-   union. Finish the five complete FP control families, then continue through
-   remaining shared physical-format groups and full semantic families.
+   The remaining AVX inventory has 775 rows outside the local qualified
+   union. Continue through remaining shared physical-format groups and full
+   semantic families.
    Independently inventoried legacy machine-candidate rows are 1,306 on the
    current SDK and 1,305 on minimum, with 112 separate `ymovtab` fallback
    records. The 134 joined legacy rows are a separate denominator. Preserve
