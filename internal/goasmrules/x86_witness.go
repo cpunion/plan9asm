@@ -42,14 +42,21 @@ func x86PackedImmediateExtensionRow(rule X86AVXRule) bool {
 		rule.ZCase == "Zevex_i_rm_vo" || rule.ZCase == "Zevex_i_rm_k_vo")
 }
 
+func x86PackedImmediateRegisterRow(rule X86AVXRule) bool {
+	return rule.Ytab == "_yvpshufd" && (rule.ZCase == "Zvex_i_rm_r" ||
+		rule.ZCase == "Zevex_i_rm_r" || rule.ZCase == "Zevex_i_rm_k_r")
+}
+
 func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	move, store := x86PackedMoveTable(rule.Ytab), x86PackedMoveStoreRow(rule)
-	shift, immediate := x86PackedUniformShiftTable(rule.Ytab), x86PackedImmediateExtensionRow(rule)
+	shift, extension := x86PackedUniformShiftTable(rule.Ytab), x86PackedImmediateExtensionRow(rule)
+	registerImmediate := x86PackedImmediateRegisterRow(rule)
+	immediate := extension || registerImmediate
 	floating := rule.Ytab == "_yvaddpd" || rule.Ytab == "_yvaddsd"
 	scalar := rule.Ytab == "_yvaddsd"
 	binaryTable := rule.Ytab == "_yvandnpd" || rule.Ytab == "_yvblendmpd" ||
 		rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvpcmpeqb" || rule.Ytab == "_yvprold" || floating || shift
-	unaryTable := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move
+	unaryTable := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move || registerImmediate
 	if (!unary && !binaryTable || unary && !unaryTable) || rule.Prefix != "Pavx" {
 		return nil, fmt.Errorf("%s is outside the audited packed vector table grammar", rule.Opcode)
 	}
@@ -57,7 +64,10 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	if immediate {
 		maskCase = "Zevex_i_rm_k_vo"
 	}
-	if unary {
+	if registerImmediate {
+		maskCase = "Zevex_i_rm_k_r"
+	}
+	if unary && !immediate {
 		maskCase = "Zevex_rm_k_r"
 	}
 	if store {
@@ -65,7 +75,7 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	}
 	masked := rule.ZCase == maskCase
 	evex := masked || rule.ZCase == "Zevex_rm_v_r" || store && rule.ZCase == "Zevex_r_v_rm" ||
-		immediate && rule.ZCase == "Zevex_i_rm_vo"
+		extension && rule.ZCase == "Zevex_i_rm_vo" || registerImmediate && rule.ZCase == "Zevex_i_rm_r"
 	if rule.Ytab == "_yvprold" && (!immediate || !evex) {
 		return nil, fmt.Errorf("packed immediate rotates require an EVEX immediate format")
 	}
@@ -78,14 +88,14 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 		return nil, fmt.Errorf("%s encoding generation differs from its packed table", rule.Opcode)
 	}
 	if !evex && rule.ZCase != "Zvex_rm_v_r" && !(store && rule.ZCase == "Zvex_r_v_rm") &&
-		!(immediate && rule.ZCase == "Zvex_i_rm_vo") {
+		!(extension && rule.ZCase == "Zvex_i_rm_vo") && !(registerImmediate && rule.ZCase == "Zvex_i_rm_r") {
 		return nil, fmt.Errorf("%s has an unmodeled packed vector zcase %s", rule.Opcode, rule.ZCase)
 	}
 	count := 3
 	if masked {
 		count = 4
 	}
-	if unary {
+	if unary && !immediate {
 		count--
 	}
 	if len(rule.Classes) != count {
@@ -116,7 +126,9 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 		if immediate {
 			firstClass, secondClass = "Yu8", candidate.memory
 			if !evex {
-				secondClass = candidate.register
+				if extension {
+					secondClass = candidate.register
+				}
 				if rule.Classes[0] == "Yi8" {
 					firstClass = "Yi8"
 				}
@@ -125,7 +137,7 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 		if store {
 			firstClass, resultClass = candidate.register, candidate.memory
 		}
-		if rule.Classes[0] == firstClass && (unary || rule.Classes[1] == secondClass) &&
+		if rule.Classes[0] == firstClass && (unary && !immediate || rule.Classes[1] == secondClass) &&
 			rule.Classes[count-1] == resultClass {
 			bank = candidate.bank
 			break
@@ -138,7 +150,7 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	if evex {
 		stride = 3
 	}
-	if immediate {
+	if extension {
 		stride++ // The selected opcode is followed by a literal ModRM /digit.
 	}
 	if rule.EncodingOffset < 0 || rule.EncodingOffset+stride > len(rule.OpBytes) {
@@ -195,7 +207,7 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	if shift && !immediate {
 		sources[0] = "X0"
 	}
-	if immediate && !evex {
+	if extension && !evex {
 		sources = sources[:1] // VEX immediate rows are register-only.
 	}
 	if store {
