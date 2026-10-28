@@ -26,6 +26,12 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86ImmediateIntegerCompareRows retains all signed/unsigned B/W/D/Q
+// immediate comparisons, with K results independent from the input width.
+func X86ImmediateIntegerCompareRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VPCMPB VPCMPUB VPCMPW VPCMPUW VPCMPD VPCMPUD VPCMPQ VPCMPUQ`)
+}
+
 // X86PackedNumericConversionRows retains ordinary packed FP/integer numeric
 // conversions. The six original MMX rows keep their separate region owner.
 func X86PackedNumericConversionRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -313,6 +319,9 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if rule.Ytab == "_yvpcmpb" {
+		return x86ImmediateIntegerCompareRowWitnesses(rule)
+	}
 	if strings.HasPrefix(rule.Ytab, "_yvcvt") && x86PackedWideningRatio(rule) == 0 {
 		return x86PackedNumericConversionRowWitnesses(rule)
 	}
