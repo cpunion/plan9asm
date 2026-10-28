@@ -45,8 +45,8 @@ func (c *amd64Ctx) lowerElementPermute(form x86ElementPermuteForm, ins Instr) (b
 			return true, false, err
 		}
 		data := c.bitcastVectorBytesToIntegerLanes(form.byteWidth, lanes, form.bits, dataBytes)
-		if form.qword {
-			// Qword r/m is data, whereas VPERMIL r/m is control.
+		if form.wholeVector {
+			// Whole-vector r/m is data, whereas VPERMIL r/m is control.
 			data, input = input, data
 		}
 		result = c.emitVariableElementPermute(data, input, form)
@@ -88,14 +88,14 @@ func (c *amd64Ctx) emitVariableElementPermute(data, control string, form x86Elem
 	lanes, laneBits := form.byteWidth*8/form.bits, form.bits
 	result := "poison"
 	groupLanes := 128 / laneBits
-	if form.qword {
+	if form.wholeVector {
 		groupLanes = lanes
 	}
 	for lane := 0; lane < lanes; lane++ {
 		controlLane := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i%d> %s, i32 %d\n", controlLane, lanes, laneBits, control, lane)
 		selectorValue := "%" + controlLane
-		if laneBits == 64 && !form.qword {
+		if laneBits == 64 && !form.wholeVector {
 			shifted := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = lshr i64 %%%s, 1\n", shifted, controlLane)
 			selectorValue = "%" + shifted

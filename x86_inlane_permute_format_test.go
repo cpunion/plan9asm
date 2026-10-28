@@ -29,6 +29,9 @@ func x86ElementPermuteUnboundFormatObject(t *testing.T, source, arch, triple str
 		for _, instruction := range function.Instrs {
 			if instruction.Op != OpTEXT && instruction.Op != OpRET {
 				_, known, err := x86ElementPermuteProperties(instruction.Op, instruction, arch)
+				if !known {
+					_, known, err = x86Shuffle128BitBlocksProperties(instruction.Op, instruction, arch)
+				}
 				if known && errors.Is(err, ErrProbeNeedsContext) && arch == "386" &&
 					x86Mode32VectorRegisterContext(instruction, arch) != nil {
 					contextual++
@@ -50,6 +53,9 @@ func x86ElementPermuteUnboundFormatObject(t *testing.T, source, arch, triple str
 	return x86InstructionFormatObjectUnit(t, &units, signatures, arch, triple, 0,
 		func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
 			form, known, err := x86ElementPermuteProperties(instruction.Op, instruction, arch)
+			if !known {
+				return c.lowerShuffle128BitBlocks(instruction.Op, instruction)
+			}
 			if !known || err != nil {
 				return known, false, err
 			}

@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -41,20 +42,35 @@ func TestTranslateX86Shuffle128BitBlocksCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
+			if target.goarch == "386" {
+				// Go's mode32 frontend rejects every original four-operand
+				// spelling here. Keep those source observations; they are
+				// neither numerical Context nor physical LLVM object passes.
+				goAssemblerOracleOutput(t, "386", "#include \"textflag.h\"\n"+source.String(), "", false)
+				file, err := Parse(ArchAMD64, source.String())
+				if err != nil {
+					t.Fatal(err)
+				}
+				count := 0
+				for _, instruction := range file.Funcs[0].Instrs {
+					if instruction.Op == OpTEXT || instruction.Op == OpRET {
+						continue
+					}
+					t.Run(fmt.Sprint("GoFrontendRejects/", count), func(t *testing.T) {
+						goAssemblerOracleOutput(t, "386", "TEXT ·rejected(SB),4,$0-0\n"+instruction.Raw+"\nRET\n", "", false)
+						_, known, err := x86Shuffle128BitBlocksProperties(instruction.Op, instruction, "386")
+						if !known || err == nil || errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("Go-refused frontend arity became an input Context or accepted form", instruction.Raw, err)
+						}
+					})
+					count++
+				}
+				if count != 16 {
+					t.Fatal("original mode32 source directory changed", count)
+				}
+				return
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"shuffle128bitblockforms": {Name: "shuffle128bitblockforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86ElementPermuteUnboundFormatObject(t, source.String(), target.goarch, target.triple, 28, 0)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

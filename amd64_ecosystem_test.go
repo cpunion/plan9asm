@@ -4383,7 +4383,7 @@ func TestTranslateAMD64VariableDwordPermuteCompleteGoAssemblerForms(t *testing.T
 	}
 	src.WriteString("\tRET\n")
 
-	ll := translateAMD64EcosystemCase(t, src.String(), "variabledwordpermuteforms")
+	ll := x86ElementPermuteUnboundFormatObject(t, src.String(), "amd64", "x86_64-unknown-linux-gnu", 24, 0)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -4438,10 +4438,6 @@ func TestTranslate386VariableDwordPermuteCompleteGoAssemblerForms(t *testing.T) 
 	source.WriteString("\tRET\n")
 	requireX86GoAssemblerResult(t, "386", source.String(), true)
 
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -4454,16 +4450,7 @@ func TestTranslate386VariableDwordPermuteCompleteGoAssemblerForms(t *testing.T) 
 		{name: "windows", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       "386",
-				Sigs: map[string]FuncSig{
-					"variabledwordpermuteforms386": {Name: "variabledwordpermuteforms386", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86ElementPermuteUnboundFormatObject(t, source.String(), "386", target.triple, 8, 4)
 			compileLLVMToObject(t, llc, target.triple, "variable-dword-permute-forms-386-"+target.name+".ll", "variable-dword-permute-forms-386-"+target.name+".o", ll)
 		})
 	}

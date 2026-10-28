@@ -52,6 +52,9 @@ func x86FixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm,
 }
 
 func x86OtherFixedVectorValueProperties(ins Instr, arch string) (x86PackedBinaryForm, bool, bool, error) {
+	if parsed, known, err := x86Shuffle128BitBlocksProperties(ins.Op, ins, arch); known {
+		return parsed.x86PackedBinaryForm, false, known, err
+	}
 	if parsed, known, err := x86PackedRotateProperties(ins.Op, ins, arch); known {
 		return parsed.x86PackedBinaryForm, false, known, err
 	}

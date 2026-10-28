@@ -8,15 +8,15 @@ import (
 
 // Physical immediate/source/result roles do not combine the families'
 // numerical, old-destination or native-access contracts.
-type x86LeadingImmediateVectorFormat struct {
+type x86VectorResultFormat struct {
 	width                         int
 	unary, masked, broadcast, sae bool
 	encoding                      x86PackedAVXOpcode
 }
 
-func x86LeadingImmediateVectorFormatForRule(rule X86AVXRule) (x86LeadingImmediateVectorFormat, error) {
-	f := x86LeadingImmediateVectorFormat{masked: rule.ZCase == "Zevex_i_rm_v_k_r"}
-	fail := func() (x86LeadingImmediateVectorFormat, error) {
+func x86LeadingImmediateVectorFormatForRule(rule X86AVXRule) (x86VectorResultFormat, error) {
+	f := x86VectorResultFormat{masked: rule.ZCase == "Zevex_i_rm_v_k_r"}
+	fail := func() (x86VectorResultFormat, error) {
 		return f, fmt.Errorf("leading-immediate two-vector result roles differ from their official format")
 	}
 	count, maskIndex := 4, 0
@@ -119,9 +119,13 @@ func x86LeadingImmediateVectorRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWi
 	return f.witnesses(rule.Opcode), nil
 }
 
-// Only the validated leading-imm8/vector-source/vector-result transport is shared.
+// Only validated vector-source/vector-result transport is shared.
 // Family factories retain mandatory prefixes, W, tuples and broadcast guards.
-func (f x86LeadingImmediateVectorFormat) witnesses(opcode string) []X86PackedBinaryWitness {
+func (f x86VectorResultFormat) witnesses(opcode string) []X86PackedBinaryWitness {
+	return f.witnessesWithControl(opcode, true, 7)
+}
+
+func (f x86VectorResultFormat) witnessesWithControl(opcode string, immediate bool, selector int) []X86PackedBinaryWitness {
 	bank := map[int]string{128: "X", 256: "Y", 512: "Z"}[f.width]
 	first, second, destination := bank+"0", bank+"1", bank+"2"
 	if f.encoding.kind == "evex" {
@@ -144,7 +148,10 @@ func (f x86LeadingImmediateVectorFormat) witnesses(opcode string) []X86PackedBin
 				if zeroing && !f.masked {
 					continue
 				}
-				operands, suffix, vvvv := "$7,"+source, "", byte(0x70)
+				operands, suffix, vvvv := source, "", byte(0x70)
+				if immediate {
+					operands = fmt.Sprintf("$%d,%s", selector, source)
+				}
 				p0, p2, modrm := byte(0xa0), f.encoding.length<<5, byte(0xd0)
 				if f.unary {
 					vvvv, p2 = 0x78, p2|8 // Reserved vvvv and V', independent of rm.
@@ -163,11 +170,15 @@ func (f x86LeadingImmediateVectorFormat) witnesses(opcode string) []X86PackedBin
 				if zeroing {
 					suffix, p2 = suffix+".Z", p2|0x80
 				}
+				encoding := f.encoding.bytes(vvvv, p0, p2, modrm)
+				if immediate {
+					encoding = append(encoding, byte(selector))
+				}
 				witnesses = append(witnesses, X86PackedBinaryWitness{
 					Instruction: opcode + suffix + " " + operands + "," + destination, Generation: f.encoding.kind,
 					First: source, Second: second, Destination: destination, Width: f.width,
 					Memory: source == "(AX)", Masked: f.masked, Zeroing: zeroing, Broadcast: broadcast,
-					Encoding: append(f.encoding.bytes(vvvv, p0, p2, modrm), 7),
+					Encoding: encoding,
 				})
 			}
 		}

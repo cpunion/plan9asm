@@ -96,7 +96,7 @@ func x86GFNIAffineRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error
 	if !f.immediate {
 		return nil, fmt.Errorf("GFNI multiply retains the generic binary transport")
 	}
-	return (x86LeadingImmediateVectorFormat{
+	return (x86VectorResultFormat{
 		width: f.width, masked: f.masked, broadcast: f.broadcast, encoding: f.encoding,
 	}).witnesses(rule.Opcode), nil
 }

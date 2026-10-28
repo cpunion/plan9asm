@@ -32,7 +32,7 @@ func x86ResultElementPermuteStep(ins Instr, state *x86ResultState, owned []bool,
 		index, _ := amd64VectorRegisterIndex(ins.Args[f.data].Reg, f.byteWidth)
 		data, control := state.vectorBytes(index), source
 		dataWidth := f.byteWidth
-		if f.qword {
+		if f.wholeVector {
 			data, control = source, data
 			if f.broadcast {
 				dataWidth = f.memoryBytes
@@ -45,7 +45,7 @@ func x86ResultElementPermuteStep(ins Instr, state *x86ResultState, owned []bool,
 		bytes := f.bits / 8
 		for lane := 0; lane < f.byteWidth/bytes; lane++ {
 			controlByte := lane * bytes
-			if f.broadcast && !f.qword {
+			if f.broadcast && !f.wholeVector {
 				controlByte = 0
 			}
 			if control>>uint(controlByte)&1 == 0 {

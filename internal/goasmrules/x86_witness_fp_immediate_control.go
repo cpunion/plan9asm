@@ -9,7 +9,7 @@ import (
 // vector rows. Scalar N4/N8 tuples do not change the X register carrier or
 // certify MXCSR, old-destination, numerical input or native memory authority.
 func x86FloatingImmediateControlRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
-	f := x86LeadingImmediateVectorFormat{unary: rule.Ytab == "_yvgetmantpd"}
+	f := x86VectorResultFormat{unary: rule.Ytab == "_yvgetmantpd"}
 	fail := func() ([]X86PackedBinaryWitness, error) {
 		return nil, fmt.Errorf("FP immediate source/carrier/tuple/SAE differs from its official format")
 	}

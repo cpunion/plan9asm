@@ -5,104 +5,56 @@ import (
 	"strings"
 )
 
-var amd64Shuffle128BitBlockLaneBits = map[string]int{
-	"VSHUFF32X4": 32,
-	"VSHUFI32X4": 32,
-	"VSHUFF64X2": 64,
-	"VSHUFI64X2": 64,
-}
-
-// lowerShuffle128BitBlocks implements the complete Go 1.27 _yvshuff32x4
-// table. Floating and integer spellings have identical bit-level behavior.
-func (c *amd64Ctx) lowerShuffle128BitBlocks(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
+// Complete E4NF data reads survive zero masks and dead results. The same
+// validated form supplies byte effects, result dependencies and lowering.
+func (c *amd64Ctx) lowerShuffle128BitBlocks(op Op, ins Instr) (bool, bool, error) {
+	form, known, err := x86Shuffle128BitBlocksProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	laneBits, ok := amd64Shuffle128BitBlockLaneBits[baseOp]
-	if !ok {
-		return false, false, nil
+	if err := c.validateConflictFunnelMemory(ins, form.x86PackedBinaryForm); err != nil {
+		return true, false, err
 	}
-	suffixes, err := amd64ParseTwoSourcePermuteSuffixes(rawOp, baseOp)
-	if err != nil {
-		return true, false, fmt.Errorf("%w: %q", err, ins.Raw)
+	readWidth := form.byteWidth
+	if form.memory >= 0 {
+		readWidth = form.memoryBytes
 	}
-	if len(ins.Args) != 4 && len(ins.Args) != 5 {
-		return true, false, fmt.Errorf("amd64 %s expects $imm8, first source, second source, [K mask,] destination: %q", baseOp, ins.Raw)
-	}
-	if ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" || ins.Args[0].Imm < 0 || ins.Args[0].Imm > 255 {
-		return true, false, fmt.Errorf("amd64 %s expects an unsigned-byte immediate: %q", baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 5
-	if masked && c.goarch == "386" {
-		return true, false, fmt.Errorf("386 %s masked form exceeds the Go assembler frontend's operand limit: %q", baseOp, ins.Raw)
-	}
-	if suffixes.zeroing && !masked {
-		return true, false, fmt.Errorf("amd64 %s .Z requires a K1-K7 mask: %q", baseOp, ins.Raw)
-	}
-
-	destination := ins.Args[len(ins.Args)-1]
-	byteWidth := 0
-	if destination.Kind == OpReg {
-		byteWidth = amd64VectorByteWidth(destination.Reg)
-	}
-	if byteWidth != 32 && byteWidth != 64 || !c.isGoPackedVectorMoveRegister(destination, byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s expects an in-range Y or Z destination: %q", baseOp, ins.Raw)
-	}
-	second := ins.Args[2]
-	if !c.isGoPackedVectorMoveRegister(second, byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s second source must match the destination width: %q", baseOp, ins.Raw)
-	}
-	first := ins.Args[1]
-	if first.Kind == OpReg {
-		if !c.isGoPackedVectorMoveRegister(first, byteWidth) {
-			return true, false, fmt.Errorf("amd64 %s first source register must match the destination width: %q", baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(first) {
-		return true, false, fmt.Errorf("amd64 %s first source must be a matching vector register or memory: %q", baseOp, ins.Raw)
-	}
-	if suffixes.broadcast && !isAMD64MemoryOperand(first) {
-		return true, false, fmt.Errorf("amd64 %s.BCST requires a memory first source: %q", baseOp, ins.Raw)
-	}
-
-	mask := ""
-	if masked {
-		maskArg := ins.Args[3]
-		if maskArg.Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		maskIndex, validMask := amd64ParseKReg(maskArg.Reg)
-		if !validMask || maskIndex == 0 {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		mask, err = c.loadK(maskArg.Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
-
-	firstValue, err := c.loadPackedCompareLanes(first, byteWidth, laneBits, suffixes.broadcast)
+	firstBytes, err := c.loadX86PackedShiftBytes(ins.Args[form.first], readWidth, true)
 	if err != nil {
 		return true, false, err
 	}
-	secondValue, err := c.loadPackedCompareLanes(second, byteWidth, laneBits, false)
+	lanes := form.byteWidth * 8 / form.laneBits
+	var first string
+	if form.broadcast {
+		scalar := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to i%d\n", scalar, readWidth, firstBytes, form.laneBits)
+		first = amd64SplatInteger(c, lanes, form.laneBits, "%"+scalar)
+	} else {
+		first = c.bitcastVectorBytesToIntegerLanes(form.byteWidth, lanes, form.laneBits, firstBytes)
+	}
+	secondBytes, err := c.loadX86PackedShiftBytes(ins.Args[form.second], form.byteWidth, true)
 	if err != nil {
 		return true, false, err
 	}
-	lanes := byteWidth * 8 / laneBits
-	computed := c.emitShuffle128BitBlocks(lanes, laneBits, firstValue, secondValue, uint8(ins.Args[0].Imm))
-	if masked {
-		oldBytes, err := c.loadPackedCompareBytes(destination, byteWidth)
+	second := c.bitcastVectorBytesToIntegerLanes(form.byteWidth, lanes, form.laneBits, secondBytes)
+	result := c.emitShuffle128BitBlocks(lanes, form.laneBits, first, second, form.immediate)
+	if form.mask >= 0 {
+		mask, err := c.loadK(ins.Args[form.mask].Reg)
 		if err != nil {
 			return true, false, err
 		}
-		old := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, laneBits, oldBytes)
-		computed = amd64ApplyIntegerLaneMask(c, lanes, laneBits, computed, old, mask, suffixes.zeroing)
+		old := "zeroinitializer"
+		if !form.zeroing {
+			old, err = c.loadPackedCompareLanes(ins.Args[form.destination], form.byteWidth, form.laneBits, false)
+			if err != nil {
+				return true, false, err
+			}
+		}
+		result = amd64ApplyIntegerLaneMask(c, lanes, form.laneBits, result, old, mask, form.zeroing)
 	}
 	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, laneBits, computed, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, form.laneBits, result, form.byteWidth)
+	return true, false, c.storePackedMoveOperand(ins.Args[form.destination], form.byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) emitShuffle128BitBlocks(lanes, laneBits int, firstPlan9, secondPlan9 string, immediate uint8) string {

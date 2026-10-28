@@ -250,17 +250,7 @@ func TestTranslateX86RawEVEXVariableDwordPermuteLLVM22Objects(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawVariableDwordPermute": {Name: "rawVariableDwordPermute", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-vpermd.ll", "raw-vpermd.o", ir)
 		})
 	}

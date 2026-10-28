@@ -26,6 +26,14 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86PermutationShuffleRows retains complete in-lane, whole-vector and block
+// permutations. Existing I2/T2 and B/W indexed rows keep their original owner.
+func X86PermutationShuffleRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VPERMILPD VPERMILPS VPERMPD VPERMQ
+		VPERMD VPERMPS VPERM2F128 VPERM2I128
+		VSHUFF32X4 VSHUFF64X2 VSHUFI32X4 VSHUFI64X2`)
+}
+
 // X86LegacyFloatingBinaryRows retains all six legacy PS/PD/SS/SD binary
 // families. Shared media encoding does not merge their numerical contracts.
 func X86LegacyFloatingBinaryRows(legacy X86LegacyCatalog, _ []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -392,6 +400,10 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if rule.Ytab == "_yvpermilpd" || rule.Ytab == "_yvpermq" || rule.Ytab == "_yvpermd" ||
+		rule.Ytab == "_yvperm2f128" || rule.Ytab == "_yvshuff32x4" {
+		return x86PermutationShuffleRowWitnesses(rule)
+	}
 	if rule.Ytab == "_yvgetmantpd" || rule.Ytab == "_yvfixupimmpd" || rule.Ytab == "_yvfixupimmsd" {
 		return x86FloatingImmediateControlRowWitnesses(rule)
 	}

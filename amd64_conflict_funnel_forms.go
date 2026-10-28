@@ -152,6 +152,10 @@ func x86TypedConflictFunnelByteEffect(op Op, ins Instr, arch string) (x86TypedBy
 	if !known || err != nil {
 		return x86TypedByteEffect{}, known, err
 	}
+	return x86TypedFixedVectorInputs(ins, form, old), true, nil
+}
+
+func x86TypedFixedVectorInputs(ins Instr, form x86PackedBinaryForm, old bool) x86TypedByteEffect {
 	width, firstWidth := int64(form.byteWidth), int64(form.byteWidth)
 	if form.memory >= 0 {
 		firstWidth = int64(form.memoryBytes)
@@ -169,5 +173,5 @@ func x86TypedConflictFunnelByteEffect(op Op, ins Instr, arch string) (x86TypedBy
 		effect.operands = append(effect.operands,
 			x86TypedByteOperand{index: form.mask, operand: ins.Args[form.mask], width: 8, read: true})
 	}
-	return effect, true, nil
+	return effect
 }

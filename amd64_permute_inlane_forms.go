@@ -13,7 +13,7 @@ var x86InLanePermuteBits = map[Op]int{"VPERMILPS": 32, "VPERMILPD": 64}
 // selector topology and which variable operand is data remain distinct.
 type x86ElementPermuteForm struct {
 	bits, byteWidth, source, data, destination, mask, memory, memoryBytes int
-	immediate, broadcast, zeroing, qword                                  bool
+	immediate, broadcast, zeroing, wholeVector                            bool
 	selector                                                              uint8
 }
 
@@ -30,12 +30,29 @@ func x86ElementPermuteProperties(op Op, ins Instr, arch string) (x86ElementPermu
 	if form, known, err := x86InLanePermuteProperties(op, ins, arch); known {
 		return form, true, err
 	}
-	return x86QwordPermuteProperties(op, ins, arch)
+	if form, known, err := x86QwordPermuteProperties(op, ins, arch); known {
+		return form, true, err
+	}
+	return x86VariableDwordPermuteProperties(op, ins, arch)
 }
 
-func x86ElementPermuteFormProperties(op Op, ins Instr, arch string, bits int, qword bool) (x86ElementPermuteForm, bool, error) {
+func x86VariableDwordPermuteProperties(op Op, ins Instr, arch string) (x86ElementPermuteForm, bool, error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	switch base {
+	case "VPERMD", "VPERMPS":
+	default:
+		return x86ElementPermuteForm{}, false, nil
+	}
+	form, known, err := x86ElementPermuteFormProperties(op, ins, arch, 32, true)
+	if err == nil && form.immediate {
+		err = fmt.Errorf("%s requires a vector index source, not an immediate", op)
+	}
+	return form, known, err
+}
+
+func x86ElementPermuteFormProperties(op Op, ins Instr, arch string, bits int, wholeVector bool) (x86ElementPermuteForm, bool, error) {
 	_, suffix, dotted := strings.Cut(strings.ToUpper(string(op)), ".")
-	f := x86ElementPermuteForm{bits: bits, qword: qword, source: 0, data: 1,
+	f := x86ElementPermuteForm{bits: bits, wholeVector: wholeVector, source: 0, data: 1,
 		destination: len(ins.Args) - 1, mask: -1, memory: -1}
 	fail := func() (x86ElementPermuteForm, bool, error) {
 		return f, true, fmt.Errorf("%s %s outside Go's complete element-permute grammar: %q", arch, op, ins.Raw)
@@ -77,7 +94,7 @@ func x86ElementPermuteFormProperties(op Op, ins Instr, arch string, bits int, qw
 		index, _ := amd64VectorRegisterIndex(operand.Reg, f.byteWidth)
 		return arch != "386" || f.byteWidth != 64 || index < 8
 	}
-	if f.byteWidth != 16 && f.byteWidth != 32 && f.byteWidth != 64 || qword && f.byteWidth == 16 ||
+	if f.byteWidth != 16 && f.byteWidth != 32 && f.byteWidth != 64 || wholeVector && f.byteWidth == 16 ||
 		!register(ins.Args[f.destination]) {
 		return fail()
 	}
@@ -113,7 +130,7 @@ func (f x86ElementPermuteForm) sourceByte(output int) int {
 	}
 	bytes := f.bits / 8
 	lane := output / bytes
-	if f.qword {
+	if f.wholeVector {
 		return output/32*32 + int(f.selector>>uint(2*(lane%4))&3)*8 + output%8
 	}
 	control, mask := uint(lane), uint8(1)
