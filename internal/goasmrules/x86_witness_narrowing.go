@@ -6,17 +6,9 @@ import (
 	"strings"
 )
 
-// A narrowing store has independent source width, shrinking memory tuple and
-// register carrier. Memory zeroing remains an encoded terminal #UD witness.
-type x86PackedSingleSourceNarrowFormat struct {
-	width, tuple, carrier int
-	masked                bool
-	encoding              x86PackedAVXOpcode
-}
-
-func x86PackedSingleSourceNarrowFormatForRule(rule X86AVXRule) (x86PackedSingleSourceNarrowFormat, error) {
-	f := x86PackedSingleSourceNarrowFormat{masked: rule.ZCase == "Zevex_r_k_rm"}
-	fail := func() (x86PackedSingleSourceNarrowFormat, error) {
+func x86PackedSingleSourceNarrowFormatForRule(rule X86AVXRule) (x86PackedUnaryMemoryFormat, error) {
+	f := x86PackedUnaryMemoryFormat{masked: rule.ZCase == "Zevex_r_k_rm", store: true}
+	fail := func() (x86PackedUnaryMemoryFormat, error) {
 		return f, fmt.Errorf("single-source narrowing source/tuple/carrier differs from its official format")
 	}
 	if rule.Prefix != "Pavx" || rule.Ytab != "_yvpmovdb" && rule.Ytab != "_yvpmovdw" ||
@@ -77,32 +69,5 @@ func x86PackedSingleSourceNarrowRowWitnesses(rule X86AVXRule) ([]X86PackedBinary
 	if err != nil {
 		return nil, err
 	}
-	source := map[int]string{128: "X16", 256: "Y16", 512: "Z16"}[f.width]
-	destination := map[int]string{16: "X18", 32: "Y18"}[f.carrier]
-	var witnesses []X86PackedBinaryWitness
-	for _, destination := range []string{destination, "(AX)"} {
-		controls := []string{""}
-		if f.masked {
-			controls = append(controls, ".Z")
-		}
-		for _, suffix := range controls {
-			operands := source + "," + destination
-			p0, p2, modrm := byte(0xa0), f.encoding.length<<5|8, byte(0xc2)
-			if destination == "(AX)" {
-				p0, modrm = 0xe0, 0
-			}
-			if f.masked {
-				operands, p2 = source+",K1,"+destination, p2|1
-			}
-			if suffix != "" {
-				p2 |= 0x80
-			}
-			witnesses = append(witnesses, X86PackedBinaryWitness{
-				Instruction: rule.Opcode + suffix + " " + operands, Generation: "evex",
-				First: source, Destination: destination, Width: f.width, Masked: f.masked, Zeroing: suffix != "",
-				Encoding: f.encoding.bytes(0x78, p0, p2, modrm),
-			})
-		}
-	}
-	return witnesses, nil
+	return f.witnesses(rule.Opcode), nil
 }

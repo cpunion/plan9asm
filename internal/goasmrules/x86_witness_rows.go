@@ -26,6 +26,13 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86CompactExpandRows retains both unary directions and all twelve members.
+// Go-encoded memory .Z compression remains a terminal #UD witness.
+func X86CompactExpandRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VCOMPRESSPS VCOMPRESSPD VPCOMPRESSB VPCOMPRESSW VPCOMPRESSD VPCOMPRESSQ
+		VEXPANDPS VEXPANDPD VPEXPANDB VPEXPANDW VPEXPANDD VPEXPANDQ`)
+}
+
 // X86LeadingImmediateVectorRows retains four distinct numerical families on
 // the original shared immediate/two-vector/vector-result encoding grammar.
 func X86LeadingImmediateVectorRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -345,6 +352,10 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if strings.HasPrefix(rule.Opcode, "VCOMPRESS") || strings.HasPrefix(rule.Opcode, "VPCOMPRESS") ||
+		strings.HasPrefix(rule.Opcode, "VEXPAND") || strings.HasPrefix(rule.Opcode, "VPEXPAND") {
+		return x86PackedCompactRowWitnesses(rule)
+	}
 	if rule.Ytab == "_yvalignd" {
 		return x86LeadingImmediateVectorRowWitnesses(rule)
 	}
