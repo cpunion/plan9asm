@@ -47,16 +47,51 @@ func x86PackedImmediateRegisterRow(rule X86AVXRule) bool {
 		rule.ZCase == "Zevex_i_rm_r" || rule.ZCase == "Zevex_i_rm_k_r")
 }
 
+// Integer widening spells both element sizes in its BW/BD/BQ/WD/WQ/DQ
+// suffix. Keep that ratio independent of the register carrier's capacity;
+// an X source alone cannot distinguish m2/m4/m8/m16 tuples.
+func x86PackedWideningRatio(rule X86AVXRule) int {
+	name := rule.Opcode
+	if len(name) != 9 || !strings.HasPrefix(name, "VPMOVSX") && !strings.HasPrefix(name, "VPMOVZX") {
+		return 0
+	}
+	input, output := strings.IndexByte("BWDQ", name[7]), strings.IndexByte("BWDQ", name[8])
+	if input < 0 || output <= input {
+		return 0
+	}
+	ratio := 1 << (output - input)
+	table := "_yvbroadcastss"
+	if ratio == 2 {
+		table = "_yvcvtdq2pd"
+	}
+	if rule.Ytab != table {
+		return 0
+	}
+	return ratio
+}
+
+func x86PackedWideningSource(destinationBytes, ratio int, evex bool) (string, int) {
+	tuple, class := destinationBytes/ratio, "Yxm"
+	if tuple > 16 {
+		class = "Yym"
+	}
+	if evex {
+		class += "Evex"
+	}
+	return class, tuple
+}
+
 func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	move, store := x86PackedMoveTable(rule.Ytab), x86PackedMoveStoreRow(rule)
 	shift, extension := x86PackedUniformShiftTable(rule.Ytab), x86PackedImmediateExtensionRow(rule)
 	registerImmediate := x86PackedImmediateRegisterRow(rule)
+	widening := x86PackedWideningRatio(rule)
 	immediate := extension || registerImmediate
 	scalar := rule.Ytab == "_yvaddsd" || rule.Ytab == "_yvgetexpsd"
 	floating := rule.Ytab == "_yvaddpd" || scalar
 	binaryTable := rule.Ytab == "_yvandnpd" || rule.Ytab == "_yvblendmpd" ||
 		rule.Ytab == "_yvaddsubpd" || rule.Ytab == "_yvpcmpeqb" || rule.Ytab == "_yvprold" || floating || shift
-	unaryTable := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move || registerImmediate
+	unaryTable := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move || registerImmediate || widening != 0
 	if (!unary && !binaryTable || unary && !unaryTable) || rule.Prefix != "Pavx" {
 		return nil, fmt.Errorf("%s is outside the audited packed vector table grammar", rule.Opcode)
 	}
@@ -116,6 +151,10 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 			resultClass = "Yk"
 		}
 		firstClass, secondClass := candidate.memory, candidate.register
+		if widening != 0 {
+			bytes := map[string]int{"X": 16, "Y": 32, "Z": 64}[candidate.bank]
+			firstClass, _ = x86PackedWideningSource(bytes, widening, evex)
+		}
 		if shift && !immediate {
 			// Register/m128 counts retain X even when data/result is Y/Z.
 			firstClass = "Yxm"
@@ -204,6 +243,9 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 		witnesses = append(witnesses, rule.Opcode+suffix+" "+strings.Join(operands, ","))
 	}
 	sources := []string{bank + "0", "(AX)"}
+	if widening != 0 {
+		sources[0] = strings.ToUpper(rule.Classes[0][1:2]) + "0"
+	}
 	if shift && !immediate {
 		sources[0] = "X0"
 	}

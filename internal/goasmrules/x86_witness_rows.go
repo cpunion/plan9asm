@@ -133,6 +133,16 @@ func X86PackedImmediateShuffleRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([
 		`PSHUFL PSHUFD PSHUFHW PSHUFLW VPSHUFD VPSHUFHW VPSHUFLW`)
 }
 
+// X86PackedWideningRows retains the complete sign/zero-extension source family.
+// Shrinking native tuples and source carriers remain separate from result width.
+func X86PackedWideningRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		PMOVSXBW PMOVSXBD PMOVSXBQ PMOVSXWD PMOVSXWQ PMOVSXDQ
+		PMOVZXBW PMOVZXBD PMOVZXBQ PMOVZXWD PMOVZXWQ PMOVZXDQ
+		VPMOVSXBW VPMOVSXBD VPMOVSXBQ VPMOVSXWD VPMOVSXWQ VPMOVSXDQ
+		VPMOVZXBW VPMOVZXBD VPMOVZXBQ VPMOVZXWD VPMOVZXWQ VPMOVZXDQ`)
+}
+
 // X86PackedMoveRows retains the twelve AVX whole-vector move names. Legacy
 // moves are separate; register alternatives belong to the first store rows.
 func X86PackedMoveRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -271,8 +281,9 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	move, store := x86PackedMoveTable(rule.Ytab), x86PackedMoveStoreRow(rule)
 	shift, extensionRow := x86PackedUniformShiftTable(rule.Ytab), x86PackedImmediateExtensionRow(rule)
 	registerImmediate := x86PackedImmediateRegisterRow(rule)
+	widening := x86PackedWideningRatio(rule)
 	immediate := extensionRow || registerImmediate
-	unary := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move || registerImmediate
+	unary := rule.Ytab == "_yvmovddup" || rule.Ytab == "_yvexpandpd" || move || registerImmediate || widening != 0
 	syntax, err := x86PackedSyntaxWitnesses(rule, unary)
 	if err != nil {
 		return nil, err
@@ -286,11 +297,14 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	if extensionRow {
 		stride++
 	}
-	// The validated official source class owns vector width, independently
-	// of register/memory witnesses and vector versus K result classes.
+	// The validated data/result class owns vector width. Widening has a
+	// smaller independent source carrier; mask results keep their data class.
 	dataClass := rule.Classes[0]
 	if shift || immediate {
 		dataClass = rule.Classes[1]
+	}
+	if widening != 0 {
+		dataClass = rule.Classes[len(rule.Classes)-1]
 	}
 	bank := strings.ToUpper(dataClass[1:2])
 	if bank == "Y" {
@@ -301,6 +315,10 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	wantClass := map[string]string{"X": "Yxm", "Y": "Yym", "Z": "Yzm"}[bank]
 	if kind == "evex" && bank != "Z" {
 		wantClass += "Evex"
+	}
+	wideningTuple := 0
+	if widening != 0 {
+		wantClass, wideningTuple = x86PackedWideningSource(width/8, widening, kind == "evex")
 	}
 	if shift && !immediate {
 		wantClass = "Yxm"
@@ -336,6 +354,9 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 	}, optional)
 	if err != nil || atoms[kind+"0F"] == atoms[kind+"0F38"] || atoms[kind+"W0"] == atoms[kind+"W1"] {
 		return nil, fmt.Errorf("unmodeled packed encoding header %q", header)
+	}
+	if widening != 0 && (!atoms[kind+"66"] || !atoms[kind+"0F38"] || !atoms[kind+"W0"]) {
+		return nil, fmt.Errorf("widening prefix, map or W mode differs from its official transport")
 	}
 	duplicate := rule.Ytab == "_yvmovddup" && (atoms[kind+"F2"] || atoms[kind+"F3"])
 	if duplicate && (!atoms[kind+"0F"] || kind == "vex" && !atoms[kind+"W0"] ||
@@ -376,6 +397,9 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 		features := rule.OpBytes[rule.EncodingOffset+1]
 		tuple := width / 8
 		optional := []string{"evexZeroingEnabled", "evexBcstN4", "evexBcstN8"}
+		if widening != 0 {
+			tuple, optional = wideningTuple, []string{"evexZeroingEnabled"}
+		}
 		if registerImmediate {
 			optional = []string{"evexZeroingEnabled"}
 			if atoms["evex66"] {
@@ -432,6 +456,12 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 		if kind == "evex" {
 			// High banks force EVEX even for unmasked X/Y forms. Low-bank
 			// syntax alone cannot identify overlapping VEX/EVEX rows.
+			if widening != 0 {
+				sourceBank := strings.ToUpper(rule.Classes[0][1:2])
+				if sourceBank != bank {
+					instruction = strings.Replace(instruction, sourceBank+"0", sourceBank+"16", 1)
+				}
+			}
 			instruction = strings.NewReplacer(bank+"0", bank+"16", bank+"1", bank+"17", bank+"2", bank+"18").Replace(instruction)
 		}
 		if kind == "evex" && shift && !immediate {
