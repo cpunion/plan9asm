@@ -127,13 +127,24 @@ The failed `004da9f44` cache-policy round and earlier failures retain their
 original outcomes. Its stale Node assertion was repaired without removing
 the actual Go lifecycle, ownership or cleanup checks.
 
-[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), publication `9422371af`,
-is rebased onto `748cf1811` and still pins the qualified public
-`v0.0.0-20261027230043-3b61ac1fb97c`. All 117 contribution patches survive the
-rebase unchanged. The public ZIP's 5,049 files match exact Git blobs and its
-license. Adapter, assembly-build and affected Go checks retain their separate
-receipts; neither those tests nor this temporary dependency resolves every
-runtime/ABI issue.
+[LLGo PR2694](https://github.com/xgo-dev/llgo/pull/2694), publication `ca022c520`,
+is rebased onto `748cf1811` and pins the qualified public
+`v0.0.0-20261028164338-bebc7092d11c`. The 117 rebased contribution patches remain;
+this dependency update changes only `go.mod` and `go.sum`. All 5,106 module ZIP
+files match the exact Git snapshot and the bundled license text. Actual Go module
+download, SumDB and module verification pass. New-pin host qualification passes
+the complete adapter 41 / 131, assembly-build controls 21 / 23 and timeout
+controls 11 / 8. Its own cloud round is required; prior CI does not certify it.
+
+A fresh compiler built from all 5,077 archived LLGo source files with Go1.27.0
+and LLVM22.1.8 passes CRC32 v1.3.0 and libc v1.75.7 ABI0 probes using Go1.27.3
+sources. Both cases select actual assembly, verify symabis and final text
+symbols, link and execute with no inapplicable result. This is local emulated
+Linux/amd64 Docker execution, not native cloud acceptance. The local compatibility
+runner fixes successful download diagnostics contaminating JSON; its real RED,
+12-root / 12-child GREEN and original failed report are retained separately.
+Neither these two cases nor the temporary dependency resolves every runtime/ABI
+issue, full SQLite, purego, callback or system-stack contract.
 
 All ten WASM suites passed at `df6f5eeb2` after splitting original stdlib
 targets and caller profiles into independent jobs. Original cases, flags,
@@ -146,8 +157,8 @@ tests. All 191 local policies pass without skips. Its child `9422371af`
 changes only benchmark-table display, separately validated against the complete
 YAML structure. Its actual cloud policy passes all 191 unique methods without
 skips: cold Go1.27.0 / Node24.22.1 setup and tests take 111 seconds within the
-unchanged five-minute budget. All thirteen compiler workflows now succeed;
-the latest 139 jobs contain 137 successes and two conditional publisher skips.
+unchanged five-minute budget. That preceding head's thirteen workflows succeed;
+its latest 139 jobs contain 137 successes and two conditional publisher skips.
 The first round's artifact-transfer failure remains recorded. Only its failed
 prepare job actually reruns; all six ZIP digests match and the candidate script
 produces six YAMLs. No source, runner or timeout repair was needed for this retry.
