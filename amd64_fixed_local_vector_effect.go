@@ -8,6 +8,10 @@ func fixedLocalVectorByteEffect(ins Instr) (x86TypedByteEffect, bool, error) {
 	if ins.x86NumericalRead != nil {
 		return x86TypedByteEffect{}, false, nil // Preserve the existing owner-specific consumer.
 	}
+	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+	if _, known := amd64Reciprocal14Specs[Op(base)]; known {
+		return x86TypedFloatingHelperByteEffect(ins.Op, ins, "amd64")
+	}
 	parse := x86PackedBinaryByteEffect
 	if strings.HasPrefix(strings.ToUpper(string(ins.Op)), "V") {
 		parse = x86UnmaskedVEXByteEffect

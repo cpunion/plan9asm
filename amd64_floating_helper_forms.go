@@ -187,6 +187,10 @@ func x86TypedFloatingHelperByteEffect(op Op, ins Instr, arch string) (x86TypedBy
 	}}
 	if form.spec.estimate14 {
 		effect.vector.upperWrite = x86TypedVectorUpperZero
+		// The E4/E5 native instruction accepts unaligned memory. Its original
+		// masked access/fault behavior still executes in the native helper;
+		// this alignment metadata supplies no private/caller storage authority.
+		effect.vector.memoryAlignment = 1
 	}
 	if form.second >= 0 {
 		// A scalar upper source is copied as bits. Sparse numerical knowledge

@@ -232,6 +232,9 @@ func fixedLocalTypedByteStep(ins *Instr, state *x86FixedLocalState, sig FuncSig,
 // address-index, scalar transport or result-ABI predicates.
 func fixedLocalMachineRead(ins *Instr, operand x86TypedByteOperand, state *x86FixedLocalState,
 	sig FuncSig, proof *x86FixedLocalProof, residue int) bool {
+	if amd64IsKOperand(operand.operand) {
+		return operand.width == 8 && state.masks[operand.operand.Reg]
+	}
 	if operand.operand.Kind == OpFP {
 		value, err := fixedLocalReadValue(ins, operand.index, state, sig, proof, residue, operand.width, false)
 		return err == nil && !value.pointer && (!value.opaque || fixedLocalOriginOwners(value.identity, proof))
