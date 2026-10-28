@@ -136,7 +136,11 @@ tests. All 191 local policies pass without skips. Its child `9422371af`
 changes only benchmark-table display, separately validated against the complete
 YAML structure. Its actual cloud policy passes all 191 unique methods without
 skips: cold Go1.27.0 / Node24.22.1 setup and tests take 111 seconds within the
-unchanged five-minute budget. The complete compiler round remains pending.
+unchanged five-minute budget. All thirteen compiler workflows now succeed;
+the latest 139 jobs contain 137 successes and two conditional publisher skips.
+The first round's artifact-transfer failure remains recorded. Only its failed
+prepare job actually reruns; all six ZIP digests match and the candidate script
+produces six YAMLs. No source, runner or timeout repair was needed for this retry.
 
 The native Windows demo repair at `8c3555126` has actual six-profile CI coverage,
 including the unchanged 4 x 5,000-operation temporary-file stress cases. Preserve earlier
@@ -258,6 +262,23 @@ This adds 167 amd64 legacy rows without overlap, for 301 locally joined legacy
 rows. AVX remains 2,793 / 3,568; modes and source inventories have separate
 denominators. This follow-up is not published and adds no runtime or performance
 claim. Translator, shared reader, encoder, initializer and baselines are unchanged.
+
+Integrated `f23cb32d2` completes eight shift/rotate stems across B/W/L/Q:
+120 original `optab` rows and eighteen `ymovtab` double-shift records. Both
+SDKs pass 138 amd64 rows / 356 shapes and 100 386 rows / 264 shapes, including
+38 concrete Q/386 frontend refusals, actual Go bytes and three-API O0/O2
+objects. Defined-FLAGS masks retain count-dependent and existing paired-choice
+boundaries. All prior groups and runtime source/declaration/C-driver bytes
+remain identical. Full rules pass 94 / 1,046, family 6 / 138, both five-architecture
+gates and complete policies. No runtime execution, permission or translator
+change is claimed.
+
+The cross-mode source inventory now has 3,234 records and 11,646 deduplicated
+row/instruction/encoding witnesses plus two aliases. These totals combine
+modes; they are not a single-architecture percentage. The amd64 additions are
+120 `optab` rows plus eighteen separately counted fallback records. Next,
+validate all Jcc/SETcc source forms with input-dependent results, retaining
+hint/short/near/alias selection and 386 synthesized byte-register paths.
 
 ## Current implementation
 
@@ -415,6 +436,7 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Compact/expand at `3d331a0da` | Each SDK objects and displacement **2 / 28**, full rules **87 / 964 PASS** | 72 rows / 216 witnesses; old 32 views identical; eight additional actual-Go disp8 anchors; same-coverage renderer net -34 lines |
 | Five FP control families at `6cee2aae5` | Each SDK objects and displacement/SAE **2 / 52**, full rules **89 / 1,006 PASS** | 80 rows / 390 witnesses; old 33 views identical; translator, producer and encoder unchanged |
 | Legacy scalar RMW at `05b87b318` | Each SDK family **6 / 139**, full rules **92 / 1,029 PASS** | 169 source rows; actual selected/shadow/mode mapping; amd64 167 / 278 and 386 124 / 202 through three-API O0/O2 objects; old 34 groups unchanged |
+| Scalar shift/rotate at `dfad1a73b` | Each SDK family **6 / 138**, full rules **94 / 1,046 PASS** | 120 optab + eighteen double-shift records; amd64 138 / 356 and 386 100 / 264; original runtime source and prior groups unchanged |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
