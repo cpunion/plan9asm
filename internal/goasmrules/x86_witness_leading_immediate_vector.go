@@ -9,9 +9,9 @@ import (
 // Physical immediate/source/result roles do not combine the families'
 // numerical, old-destination or native-access contracts.
 type x86LeadingImmediateVectorFormat struct {
-	width             int
-	masked, broadcast bool
-	encoding          x86PackedAVXOpcode
+	width                         int
+	unary, masked, broadcast, sae bool
+	encoding                      x86PackedAVXOpcode
 }
 
 func x86LeadingImmediateVectorFormatForRule(rule X86AVXRule) (x86LeadingImmediateVectorFormat, error) {
@@ -119,7 +119,7 @@ func x86LeadingImmediateVectorRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWi
 	return f.witnesses(rule.Opcode), nil
 }
 
-// Only the validated leading-imm8/two-vector/vector-result transport is shared.
+// Only the validated leading-imm8/vector-source/vector-result transport is shared.
 // Family factories retain mandatory prefixes, W, tuples and broadcast guards.
 func (f x86LeadingImmediateVectorFormat) witnesses(opcode string) []X86PackedBinaryWitness {
 	bank := map[int]string{128: "X", 256: "Y", 512: "Z"}[f.width]
@@ -127,26 +127,38 @@ func (f x86LeadingImmediateVectorFormat) witnesses(opcode string) []X86PackedBin
 	if f.encoding.kind == "evex" {
 		first, second, destination = bank+"16", bank+"17", bank+"18"
 	}
+	if f.unary {
+		second = ""
+	}
 	var witnesses []X86PackedBinaryWitness
 	for _, source := range []string{first, "(AX)"} {
-		for _, broadcast := range []bool{false, true} {
+		for _, control := range []string{"", "BCST", "SAE"} {
+			broadcast, sae := control == "BCST", control == "SAE"
 			if broadcast && (source != "(AX)" || !f.broadcast) {
+				continue
+			}
+			if sae && (source == "(AX)" || !f.sae) {
 				continue
 			}
 			for _, zeroing := range []bool{false, true} {
 				if zeroing && !f.masked {
 					continue
 				}
-				operands, suffix := "$7,"+source+","+second, ""
+				operands, suffix, vvvv := "$7,"+source, "", byte(0x70)
 				p0, p2, modrm := byte(0xa0), f.encoding.length<<5, byte(0xd0)
+				if f.unary {
+					vvvv, p2 = 0x78, p2|8 // Reserved vvvv and V', independent of rm.
+				} else {
+					operands += "," + second
+				}
 				if source == "(AX)" {
 					p0, modrm = 0xe0, 0x10
 				}
 				if f.masked {
 					operands, p2 = operands+",K1", p2|1
 				}
-				if broadcast {
-					suffix, p2 = ".BCST", p2|0x10
+				if control != "" {
+					suffix, p2 = "."+control, p2|0x10
 				}
 				if zeroing {
 					suffix, p2 = suffix+".Z", p2|0x80
@@ -155,7 +167,7 @@ func (f x86LeadingImmediateVectorFormat) witnesses(opcode string) []X86PackedBin
 					Instruction: opcode + suffix + " " + operands + "," + destination, Generation: f.encoding.kind,
 					First: source, Second: second, Destination: destination, Width: f.width,
 					Memory: source == "(AX)", Masked: f.masked, Zeroing: zeroing, Broadcast: broadcast,
-					Encoding: append(f.encoding.bytes(0x70, p0, p2, modrm), 7),
+					Encoding: append(f.encoding.bytes(vvvv, p0, p2, modrm), 7),
 				})
 			}
 		}

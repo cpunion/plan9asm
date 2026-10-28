@@ -26,6 +26,17 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86FloatingImmediateControlRows retains the five complete PS/PD/SS/SD
+// immediate-control families. Numerical/environment contracts stay typed.
+func X86FloatingImmediateControlRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `
+		VGETMANTPS VGETMANTPD VGETMANTSS VGETMANTSD
+		VRNDSCALEPS VRNDSCALEPD VRNDSCALESS VRNDSCALESD
+		VREDUCEPS VREDUCEPD VREDUCESS VREDUCESD
+		VFIXUPIMMPS VFIXUPIMMPD VFIXUPIMMSS VFIXUPIMMSD
+		VRANGEPS VRANGEPD VRANGESS VRANGESD`)
+}
+
 // X86CompactExpandRows retains both unary directions and all twelve members.
 // Go-encoded memory .Z compression remains a terminal #UD witness.
 func X86CompactExpandRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -352,6 +363,9 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if rule.Ytab == "_yvgetmantpd" || rule.Ytab == "_yvfixupimmpd" || rule.Ytab == "_yvfixupimmsd" {
+		return x86FloatingImmediateControlRowWitnesses(rule)
+	}
 	if strings.HasPrefix(rule.Opcode, "VCOMPRESS") || strings.HasPrefix(rule.Opcode, "VPCOMPRESS") ||
 		strings.HasPrefix(rule.Opcode, "VEXPAND") || strings.HasPrefix(rule.Opcode, "VPEXPAND") {
 		return x86PackedCompactRowWitnesses(rule)
