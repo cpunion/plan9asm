@@ -367,8 +367,17 @@ historical compilers. The CLI namespace regression also retains its actual RED.
 
 All prior 38 collections remain byte identical. The new mixed-mode union is
 39 views / 3,406 source records / 12,454 canonical witnesses, with 441 generated
-source/declaration batches and two separate aliases. Author qualification is
-complete; the final combined primary snapshot remains to be qualified.
+source/declaration batches and two separate aliases. Author component
+qualification retains its original receipts. Independent review found that its
+all-format object owner compiled O0 only; the narrower executed value/fault
+owners also used O2, but did not establish O2 for all 328 forms. A test-only
+extension now requires both object levels through the same three APIs. Its new
+O2 execution remains pending. The primary's twelve completed gates pass on
+frozen `94ba90f3d`, including both SDKs' 85-root / 5,378-child joint scopes,
+24 / 1,482 affected regressions, full rules, five architectures, race, policies
+and current CLI namespace. The initial selector missed the six legacy shift
+roots and one FP root; these and the strengthened O2 root need explicit endpoint
+qualification. Do not call that initial scope the complete five-batch acceptance.
 
 The preceding shift/rotate cross-mode inventory had 3,234 records and 11,646 deduplicated
 row/instruction/encoding witnesses plus two aliases. These totals combine

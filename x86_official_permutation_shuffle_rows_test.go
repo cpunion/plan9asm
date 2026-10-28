@@ -10,7 +10,14 @@ import (
 )
 
 func TestX86OfficialPermutationShuffleRowsInitializedThreeAPIsObjects(t *testing.T) {
-	x86OfficialPackedRowsObjects(t, goasmrules.X86PermutationShuffleRows, 84, 328, 0)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	x86OfficialPackedRowsObjectsInspect(t, goasmrules.X86PermutationShuffleRows, 84, 328, 0,
+		x86OfficialPackedAssembly, func(t *testing.T, ir string, _ []x86OfficialPackedCase) {
+			x86PackedStringCompileObject(t, llc, "x86_64-unknown-linux-gnu", ir, "-O2")
+		})
 }
 
 func TestX86PermutationShuffleInputsAndZeroingStayIndependent(t *testing.T) {
