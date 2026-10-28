@@ -8,14 +8,24 @@ this page records the current candidate and its limits.
 
 ## Publication and review
 
-PR40 remains draft. Published `4aeffe806` has its
-[own CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40713618690).
-Its unique inventory is **2,748 rows / 10,314 witnesses**:
-2,617 of 3,568 AVX-table rows (73.3%) and 131 legacy rows. This measures
+PR40 remains draft. Published `bebc7092d` completes its
+[own CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40731923496):
+**325/325 successful**, **88.1%** statement coverage and a successful exact-head
+Codecov patch check. Every job name and check ID is reconciled against the
+complete inventory. The race and Windows unions each contain all 22 packages;
+race retains 299 root / seven child skips, Windows 276 root / zero child skips.
+Those skips are not execution passes or new hardware acceptance.
+
+Its published inventory is **34 views, 2,927 rows / 11,010 witnesses**:
+2,793 of 3,568 AVX-table rows (78.3%) and 134 legacy rows. This measures
 initialized original-Go bytes and LLVM objects, not native execution or every
-amd64 opcode. Both endpoint SDKs passed the combined family, full rule and
-five-architecture gates before publication. Complete policies and the affected
-race scope also passed. Require its complete new-head CI and coverage.
+amd64 opcode. Three locally qualified legacy groups extend the mixed-mode
+inventory to **37 views, 3,298 source records / 12,078 canonical witnesses**.
+They require combined primary-snapshot qualification before another publication.
+Their 386-only rows and double-shift fallback records are not an amd64 percentage.
+
+The preceding `4aeffe806` round also completed 325/325 with 88.1% coverage;
+its Windows union retained 278 root skips, separate from the current 276.
 The preceding `61b5737f2` round completed **325/325** successfully, with
 **88.1%** statement coverage and a successful exact-head
 Codecov patch check. All 325 named jobs and their check IDs match the retained
@@ -237,7 +247,9 @@ before another batch publication.
 
 The follow-ups are now jointly qualified and published at `bebc7092d`, with
 [new-head CI](https://github.com/xgo-dev/plan9asm/actions/runs/40731923496)
-pending. The preceding `4aeffe806` round completed 325/325 successfully,
+complete: 325/325 successful, 88.1% coverage and a successful exact-head patch
+check. Its actual race and Windows unions retain 299-root / seven-child and
+276-root skips. The preceding `4aeffe806` round completed 325/325 successfully,
 88.1% statement coverage and its exact-head Codecov patch check. Actual race
 and Windows unions retain their 299-root / seven-child and 278-root skips.
 
@@ -273,12 +285,29 @@ remain identical. Full rules pass 94 / 1,046, family 6 / 138, both five-architec
 gates and complete policies. No runtime execution, permission or translator
 change is claimed.
 
-The cross-mode source inventory now has 3,234 records and 11,646 deduplicated
+Integrated `ca1c23112` completes Jcc/SETcc: 32 canonical names and 64 original
+source records. Each mode observes 240 canonical forms, 87 branch-hint aliases
+and sixteen AL aliases. The cross-mode canonical union is 432. Separate actual
+Go anchors cover signed rel8 endpoints, near branches and 386 byte-register
+synthesis; synthetic multi-instruction sequences do not masquerade as one opcode.
+Initialized caller inputs, both branch alternatives and preserved upper bytes
+remain required. Both SDKs pass family 5 / 108, full rules 97 / 1,083,
+three-API O0/O2 objects, five-architecture and complete policy gates. All previous
+source batches remain identical. No translator, runtime permission or native
+execution claim changes.
+
+The three legacy follow-ups share existing typed producers and original-byte
+observers rather than introducing mnemonic-specific translators. Their mixed-mode
+union is 37 views / 3,298 source records / 12,078 canonical witnesses. Next join
+all 24 legacy ADD/SUB/MUL/DIV/MIN/MAX PS/PD/SS/SD members through the existing FP
+format and producer. Keep original prefixes, first-match selection, 386 pointer
+widths and independent IEEE/MXCSR/fault execution boundaries.
+
+The preceding shift/rotate cross-mode inventory had 3,234 records and 11,646 deduplicated
 row/instruction/encoding witnesses plus two aliases. These totals combine
 modes; they are not a single-architecture percentage. The amd64 additions are
-120 `optab` rows plus eighteen separately counted fallback records. Next,
-validate all Jcc/SETcc source forms with input-dependent results, retaining
-hint/short/near/alias selection and 386 synthesized byte-register paths.
+120 `optab` rows plus eighteen separately counted fallback records. Jcc/SETcc
+now supplies the next complete source view, with the separate boundaries above.
 
 ## Current implementation
 
@@ -437,6 +466,7 @@ are mixed (+4.58% / -0.39%), so no complete-SDK speedup is claimed.
 | Five FP control families at `6cee2aae5` | Each SDK objects and displacement/SAE **2 / 52**, full rules **89 / 1,006 PASS** | 80 rows / 390 witnesses; old 33 views identical; translator, producer and encoder unchanged |
 | Legacy scalar RMW at `05b87b318` | Each SDK family **6 / 139**, full rules **92 / 1,029 PASS** | 169 source rows; actual selected/shadow/mode mapping; amd64 167 / 278 and 386 124 / 202 through three-API O0/O2 objects; old 34 groups unchanged |
 | Scalar shift/rotate at `dfad1a73b` | Each SDK family **6 / 138**, full rules **94 / 1,046 PASS** | 120 optab + eighteen double-shift records; amd64 138 / 356 and 386 100 / 264; original runtime source and prior groups unchanged |
+| Jcc/SETcc at `e44dad97b` | Each SDK family **5 / 108**, full rules **97 / 1,083 PASS** | 32 names / 64 records, 432 unique cross-mode canonical witnesses; actual branch endpoints and 386 synthetic sequences kept separate |
 
 The joint native scope executes 45 logical kernels over all 256 byte values
 with separate and overlapping buffers, 36 original shifted-literal kernels
@@ -491,9 +521,13 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Align and floating shuffle | 27 | 90 |
 | Compact and expand | 72 | 216 |
 | Five immediate FP control families | 80 | 390 |
-| Local candidate unique union | **2,927** | **11,010** |
+| Published unique union (34 views) | **2,927** | **11,010** |
+| Local scalar RMW, both modes | 169 | 280 |
+| Local shift/rotate and double-shift, both modes | 138 | 356 |
+| Local Jcc/SETcc, both modes | 64 | 432 |
+| Local mixed-mode unique union (37 views) | **3,298** | **12,078** |
 
-The local union contains 2,793 AVX rows of 3,568 (78.3%) and 134 legacy rows. The
+The published union contains 2,793 AVX rows of 3,568 (78.3%) and 134 legacy rows. The
 complete rotate view overlaps 24 existing rows / 108 witnesses and is deduplicated.
 The 11,010 witnesses include 102 terminal trap controls, not 11,010
 normal executions. These joins retain independent ordered Go rows and actual Go bytes, then compile
@@ -563,11 +597,13 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 
 ## Remaining work, in order
 
-1. Finish current Plan9asm and LLGo cloud rounds and repair actual failures.
-   Verify the published LLGo fixture/tool repair on actual cloud runners.
-   Finish combined Plan9asm publication gates, publish complete
-   family batches, then require exact-head CI/coverage. Requalify the LLGo pin
-   against that public source. Keep external review, the official dependency
+1. Both published rounds now pass: Plan9asm has 325 successful jobs, LLGo has
+   thirteen successful workflows / 137 successful jobs plus two conditional
+   publisher skips after its targeted retry. Preserve the original failures.
+   Finish the new public translator pin's LLGo execution qualification, then
+   publish it and require its own complete new-head CI. Finish combined
+   Plan9asm qualification before publishing the next complete family batch.
+   Keep external review, the official dependency
    requirement and native AVX512 hardware acceptance open.
    Retain the digest optimization's full byte identity and mutable-source
    checks during combined integration; keep its encoder measurements separate
@@ -583,9 +619,9 @@ showed regression; no acceleration is claimed for the accepted cleanup.
    records. The 301 locally joined amd64 legacy rows are a separate denominator. Preserve
    mode refusals, exact duplicates and first-match/shadow mappings; static
    inventory is not missing implementation or initialized-object proof.
-   GP RMW's 169-source-row closure is qualified locally. Next prepare complete
-   scalar shift/rotate and double-shift formats, preserving count-dependent
-   FLAGS, CL aliases, mode selection and first-match mappings.
+   GP RMW, shift/rotate and Jcc/SETcc are locally qualified, including original
+   FLAGS, aliases, mode selection and first-match mappings. Next join the complete
+   legacy floating binary family using the existing format and producer.
    Six MMX rows retain their separate unresolved machine-state contract.
    Static inventories are not successful object or execution receipts.
 3. Keep the 14 implicit-entry, GC-scan and system/runtime/test-hook failures
