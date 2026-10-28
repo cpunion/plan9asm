@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Physical immediate/source/result roles do not combine the four families'
+// Physical immediate/source/result roles do not combine the families'
 // numerical, old-destination or native-access contracts.
 type x86LeadingImmediateVectorFormat struct {
 	width             int
@@ -23,47 +23,89 @@ func x86LeadingImmediateVectorFormatForRule(rule X86AVXRule) (x86LeadingImmediat
 	if f.masked {
 		count, maskIndex = 5, 1
 	}
-	if rule.Ytab != "_yvalignd" || rule.Prefix != "Pavx" ||
-		rule.ZCase != "Zevex_i_rm_v_r" && !f.masked || len(rule.Classes) != count ||
+	evex := strings.HasPrefix(rule.ZCase, "Zevex_")
+	plain, kind := "Zvex_i_rm_v_r", "vex"
+	if evex {
+		plain, kind = "Zevex_i_rm_v_r", "evex"
+	}
+	if rule.Prefix != "Pavx" || rule.ZCase != plain && !f.masked || len(rule.Classes) != count ||
 		rule.Classes[0] != "Yu8" || f.masked && rule.Classes[3] != "Yknot0" {
 		return fail()
 	}
-	f.width = map[string]int{"YxmEvex": 128, "YymEvex": 256, "Yzm": 512}[rule.Classes[1]]
-	register := map[int]string{128: "YxrEvex", 256: "YyrEvex", 512: "Yzr"}[f.width]
+	f.width = map[string]int{"Yxm": 128, "Yym": 256}[rule.Classes[1]]
+	register := map[int]string{128: "Yxr", 256: "Yyr"}[f.width]
+	if evex {
+		f.width = map[string]int{"YxmEvex": 128, "YymEvex": 256, "Yzm": 512}[rule.Classes[1]]
+		register = map[int]string{128: "YxrEvex", 256: "YyrEvex", 512: "Yzr"}[f.width]
+	}
 	widthIndex := map[int]int{128: 0, 256: 1, 512: 2}[f.width]
-	if f.width == 0 || rule.Classes[2] != register || rule.Classes[count-1] != register ||
-		rule.RowIndex != widthIndex*2+maskIndex || rule.ZOffset != maskIndex*3 ||
-		rule.EncodingOffset != widthIndex*3 || len(rule.OpBytes) != 9 {
-		return fail()
-	}
-	offset := rule.EncodingOffset
-	w := "evexW0"
-	if strings.HasSuffix(rule.Opcode, "Q") || strings.HasSuffix(rule.Opcode, "DW") {
-		w = "evexW1"
-	}
-	if _, err := x86PackedEncodingAtoms(rule.OpBytes[offset], []string{
-		"avxEscape", "evex" + strconv.Itoa(f.width), "evex66", "evex0F3A", w,
-	}, nil); err != nil {
-		return fail()
-	}
-	f.broadcast = strings.HasSuffix(rule.Opcode, "D") || strings.HasSuffix(rule.Opcode, "Q")
-	features := []string{"evexN" + strconv.Itoa(f.width/8), "evexZeroingEnabled"}
-	if f.broadcast {
-		bytes := 4
-		if w == "evexW1" {
-			bytes = 8
+	index, offset, zoffset, extent := widthIndex*2+maskIndex, widthIndex*3, maskIndex*3, 9
+	if rule.Ytab == "_yvgf2p8affineinvqb" {
+		extent = 13
+		index, offset = index+2, offset+4
+		if !evex {
+			index, offset, zoffset = widthIndex, widthIndex*2, 2
 		}
-		features = append(features, "evexBcstN"+strconv.Itoa(bytes))
-	}
-	if _, err := x86PackedEncodingAtoms(rule.OpBytes[offset+1], features, nil); err != nil {
+	} else if rule.Ytab != "_yvalignd" || !evex {
 		return fail()
 	}
-	opcode, err := strconv.ParseUint(rule.OpBytes[offset+2], 0, 8)
+	if f.width == 0 || rule.Classes[2] != register || rule.Classes[count-1] != register ||
+		rule.RowIndex != index || rule.ZOffset != zoffset ||
+		rule.EncodingOffset != offset || len(rule.OpBytes) != extent {
+		return fail()
+	}
+	w, opcodeMap, pp, mapByte, bcstBytes := "W0", "0F3A", byte(1), byte(3), 0
+	if strings.HasSuffix(rule.Opcode, "Q") || strings.HasSuffix(rule.Opcode, "DW") {
+		w = "W1"
+	}
+	if strings.HasSuffix(rule.Opcode, "D") || strings.HasSuffix(rule.Opcode, "Q") {
+		bcstBytes = 4
+		if w == "W1" {
+			bcstBytes = 8
+		}
+	}
+	if extent == 13 {
+		switch rule.Opcode {
+		case "VPALIGNR":
+		case "VSHUFPS", "VSHUFPD":
+			opcodeMap, mapByte = "0F", 1
+			if rule.Opcode == "VSHUFPS" {
+				pp, bcstBytes = 0, 4
+			} else {
+				bcstBytes = 8
+				if evex {
+					w = "W1"
+				}
+			}
+		default:
+			return fail()
+		}
+	}
+	header := []string{"avxEscape", kind + strconv.Itoa(f.width), kind + opcodeMap, kind + w}
+	if pp != 0 {
+		header = append(header, kind+"66")
+	}
+	if _, err := x86PackedEncodingAtoms(rule.OpBytes[offset], header, nil); err != nil {
+		return fail()
+	}
+	opcodeOffset := offset + 1
+	if evex {
+		f.broadcast = bcstBytes != 0
+		features := []string{"evexN" + strconv.Itoa(f.width/8), "evexZeroingEnabled"}
+		if f.broadcast {
+			features = append(features, "evexBcstN"+strconv.Itoa(bcstBytes))
+		}
+		if _, err := x86PackedEncodingAtoms(rule.OpBytes[offset+1], features, nil); err != nil {
+			return fail()
+		}
+		opcodeOffset++
+	}
+	opcode, err := strconv.ParseUint(rule.OpBytes[opcodeOffset], 0, 8)
 	if err != nil {
 		return fail()
 	}
-	f.encoding = x86PackedAVXOpcode{kind: "evex", mapByte: 3, pp: 1, length: byte(widthIndex), opcode: byte(opcode)}
-	if w == "evexW1" {
+	f.encoding = x86PackedAVXOpcode{kind: kind, mapByte: mapByte, pp: pp, length: byte(widthIndex), opcode: byte(opcode)}
+	if w == "W1" {
 		f.encoding.wBit = 0x80
 	}
 	return f, nil
@@ -74,9 +116,19 @@ func x86LeadingImmediateVectorRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWi
 	if err != nil {
 		return nil, err
 	}
+	return f.witnesses(rule.Opcode), nil
+}
+
+// Only the validated leading-imm8/two-vector/vector-result transport is shared.
+// Family factories retain mandatory prefixes, W, tuples and broadcast guards.
+func (f x86LeadingImmediateVectorFormat) witnesses(opcode string) []X86PackedBinaryWitness {
 	bank := map[int]string{128: "X", 256: "Y", 512: "Z"}[f.width]
+	first, second, destination := bank+"0", bank+"1", bank+"2"
+	if f.encoding.kind == "evex" {
+		first, second, destination = bank+"16", bank+"17", bank+"18"
+	}
 	var witnesses []X86PackedBinaryWitness
-	for _, source := range []string{bank + "16", "(AX)"} {
+	for _, source := range []string{first, "(AX)"} {
 		for _, broadcast := range []bool{false, true} {
 			if broadcast && (source != "(AX)" || !f.broadcast) {
 				continue
@@ -85,7 +137,7 @@ func x86LeadingImmediateVectorRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWi
 				if zeroing && !f.masked {
 					continue
 				}
-				operands, suffix := "$7,"+source+","+bank+"17", ""
+				operands, suffix := "$7,"+source+","+second, ""
 				p0, p2, modrm := byte(0xa0), f.encoding.length<<5, byte(0xd0)
 				if source == "(AX)" {
 					p0, modrm = 0xe0, 0x10
@@ -100,13 +152,13 @@ func x86LeadingImmediateVectorRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWi
 					suffix, p2 = suffix+".Z", p2|0x80
 				}
 				witnesses = append(witnesses, X86PackedBinaryWitness{
-					Instruction: rule.Opcode + suffix + " " + operands + "," + bank + "18", Generation: "evex",
-					First: source, Second: bank + "17", Destination: bank + "18", Width: f.width,
+					Instruction: opcode + suffix + " " + operands + "," + destination, Generation: f.encoding.kind,
+					First: source, Second: second, Destination: destination, Width: f.width,
 					Memory: source == "(AX)", Masked: f.masked, Zeroing: zeroing, Broadcast: broadcast,
 					Encoding: append(f.encoding.bytes(0x70, p0, p2, modrm), 7),
 				})
 			}
 		}
 	}
-	return witnesses, nil
+	return witnesses
 }

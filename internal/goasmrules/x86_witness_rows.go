@@ -33,6 +33,12 @@ func X86LeadingImmediateVectorRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([
 		VPSHLDW VPSHLDD VPSHLDQ VPSHRDW VPSHRDD VPSHRDQ VPTERNLOGD VPTERNLOGQ VDBPSADBW`)
 }
 
+// X86TwoSourceImmediateShuffleRows retains the legacy RMW and AVX three-data
+// forms. Their shared transport does not combine align and shuffle semantics.
+func X86TwoSourceImmediateShuffleRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `PALIGNR VPALIGNR SHUFPD VSHUFPD SHUFPS VSHUFPS`)
+}
+
 // X86GFNIRows retains all named Go multiply and affine/inverse GFNI rows.
 // Matrix qword broadcast is independent from byte-granular result masking.
 func X86GFNIRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -343,7 +349,10 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 		return x86LeadingImmediateVectorRowWitnesses(rule)
 	}
 	if rule.Ytab == "_yvgf2p8affineinvqb" {
-		return x86GFNIRowWitnesses(rule)
+		if rule.Opcode == "VPALIGNR" || rule.Opcode == "VSHUFPS" || rule.Opcode == "VSHUFPD" {
+			return x86LeadingImmediateVectorRowWitnesses(rule)
+		}
+		return x86GFNIAffineRowWitnesses(rule)
 	}
 	if rule.Opcode == "VGF2P8MULB" {
 		if _, err := x86GFNIFormatForRule(rule); err != nil {
@@ -661,7 +670,7 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 		row.RowIndex == 1 && row.ZCase == "Zlitm_r" && row.ZOffset == 5 && row.UnmatchedOffset == 4
 	shift := entry.Ytab == "yps" || entry.Ytab == "ypsdq"
 	immediate := shift && strings.Join(row.Classes, ",") == "Yi8,Yxr"
-	shuffle := entry.Ytab == "yxshuf" && strings.Join(row.Classes, ",") == "Yu8,Yxm,Yxr"
+	shuffle := (entry.Ytab == "yxshuf" || entry.Ytab == "ypalignr") && strings.Join(row.Classes, ",") == "Yu8,Yxm,Yxr"
 	conversion := entry.Ytab == "yxcvm1" || entry.Ytab == "yxcvm2"
 	if entry.Kind != "encoding" || entry.EscapeAdjustment != 0 && !literal ||
 		strings.Join(row.Classes, ",") != "Yxm,Yxr" && !immediate && !shuffle {
@@ -697,13 +706,25 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 	case entry.Ytab == "ypsdq" && entry.Prefix == "Pq" && immediate && row.RowIndex == 0 &&
 		row.ZCase == "Zibo_m" && row.ZOffset == 2 && row.UnmatchedOffset == 0 && len(entry.OpBytes) == 2:
 	case shuffle && row.RowIndex == 0 && row.ZCase == "Zibm_r" && row.ZOffset == 2 && row.UnmatchedOffset == 0 &&
-		len(entry.OpBytes) == 2 && entry.OpBytes[0] == "0x70" && (entry.OpBytes[1] == "0" || entry.OpBytes[1] == "00") &&
-		(entry.Prefix == "Pq" || entry.Prefix == "Pf2" || entry.Prefix == "Pf3"):
-		// The second atom is the original stride placeholder, not /digit.
-		if entry.Prefix == "Pf2" {
-			prefix[0] = 0xf2
-		} else if entry.Prefix == "Pf3" {
-			prefix[0] = 0xf3
+		len(entry.OpBytes) == 2:
+		switch {
+		case entry.Ytab == "ypalignr" && entry.Prefix == "Pq" && entry.OpBytes[0] == "0x3a" && entry.OpBytes[1] == "0x0f":
+			opcodeBytes = 2
+		case entry.Ytab == "yxshuf" && (entry.OpBytes[1] == "0" || entry.OpBytes[1] == "00"):
+			// The second atom is the original stride placeholder, not /digit.
+			if entry.OpBytes[0] == "0xc6" {
+				if entry.Opcode == "SHUFPS" && entry.Prefix == "Pm" {
+					prefix = []byte{0x0f}
+				} else if entry.Opcode != "SHUFPD" || entry.Prefix != "Pq" {
+					return nil, fmt.Errorf("unmodeled legacy PS/PD shuffle prefix")
+				}
+			} else if entry.OpBytes[0] == "0x70" && (entry.Prefix == "Pf2" || entry.Prefix == "Pf3") {
+				prefix[0] = map[string]byte{"Pf2": 0xf2, "Pf3": 0xf3}[entry.Prefix]
+			} else if entry.Prefix != "Pq" || entry.OpBytes[0] != "0x70" {
+				return nil, fmt.Errorf("unmodeled legacy immediate shuffle prefix")
+			}
+		default:
+			return nil, fmt.Errorf("unmodeled legacy immediate shuffle payload")
 		}
 	case literal:
 		// Zlitm_r emits the selected zero-terminated sequence verbatim,
@@ -772,7 +793,10 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 		encoded := append(append([]byte(nil), encoding...), modrm)
 		second := "X1"
 		if shuffle {
-			instruction, second = entry.Opcode+" $7,"+first+",X1", ""
+			instruction = entry.Opcode + " $7," + first + ",X1"
+			if entry.OpBytes[0] == "0x70" {
+				second = "" // Unary integer shuffle; align/PS/PD retain old destination.
+			}
 			encoded = append(encoded, 7)
 		}
 		if immediate {

@@ -88,58 +88,15 @@ func x86GFNIFormatForRule(rule X86AVXRule) (x86GFNIFormat, error) {
 	return f, nil
 }
 
-func x86GFNIRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+func x86GFNIAffineRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
 	f, err := x86GFNIFormatForRule(rule)
 	if err != nil {
 		return nil, err
 	}
-	bank := map[int]string{128: "X", 256: "Y", 512: "Z"}[f.width]
-	first, second, destination := bank+"0", bank+"1", bank+"2"
-	if f.encoding.kind == "evex" {
-		first, second, destination = bank+"16", bank+"17", bank+"18"
+	if !f.immediate {
+		return nil, fmt.Errorf("GFNI multiply retains the generic binary transport")
 	}
-	controls := []string{""}
-	if f.masked {
-		controls = append(controls, ".Z")
-	}
-	var witnesses []X86PackedBinaryWitness
-	add := func(source, suffix string) {
-		operands, p0, p2, modrm := source+","+second, byte(0xa0), f.encoding.length<<5, byte(0xd0)
-		if f.immediate {
-			operands = "$7," + operands
-		}
-		if source == "(AX)" {
-			p0, modrm = 0xe0, 0x10
-		}
-		if f.masked {
-			operands, p2 = operands+",K1", p2|1
-		}
-		zeroing, broadcast := strings.HasSuffix(suffix, ".Z"), strings.Contains(suffix, ".BCST")
-		if zeroing {
-			p2 |= 0x80
-		}
-		if broadcast {
-			p2 |= 0x10
-		}
-		encoding := f.encoding.bytes(0x70, p0, p2, modrm)
-		if f.immediate {
-			encoding = append(encoding, 7)
-		}
-		witnesses = append(witnesses, X86PackedBinaryWitness{
-			Instruction: rule.Opcode + suffix + " " + operands + "," + destination, Generation: f.encoding.kind,
-			First: source, Second: second, Destination: destination, Width: f.width,
-			Memory: source == "(AX)", Masked: f.masked, Zeroing: zeroing, Broadcast: broadcast, Encoding: encoding,
-		})
-	}
-	for _, source := range []string{first, "(AX)"} {
-		for _, suffix := range controls {
-			add(source, suffix)
-		}
-	}
-	if f.broadcast {
-		for _, suffix := range controls {
-			add("(AX)", ".BCST"+suffix)
-		}
-	}
-	return witnesses, nil
+	return (x86LeadingImmediateVectorFormat{
+		width: f.width, masked: f.masked, broadcast: f.broadcast, encoding: f.encoding,
+	}).witnesses(rule.Opcode), nil
 }
