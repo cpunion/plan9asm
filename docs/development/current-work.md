@@ -26,8 +26,51 @@ rows and double-shift fallback records are not an amd64 percentage. Preceding
 `bebc7092d` had 34 views / 2,927 rows / 11,010 witnesses and its own successful
 325-job / 88.1% round, retaining 276 Windows root skips.
 
+The next locally qualified batch has **41 views / 3,575 source records** and
+**12,751 observed canonical witnesses**. Its AVX source-row ownership is
+**3,046 / 3,568 (85.37%)**. This retains the previous source-row denominator;
+it is not a new claim that every row has a directly selectable named encoding.
+The insert/extract addition owns all 82 original records: 79 selected rows /
+194 ordinary witnesses have actual Go bytes and three-API O0/O2 objects, while
+three fully shadowed alternatives have independent Go selection observations.
+Their alternative physical encodings are not object passes. Twelve additional
+memory `.Z` forms are architectural terminal forms on those same rows, not
+twelve new rows or ordinary numerical results. Void and logical-return contexts
+do not double their physical-form count.
+
+K-data joins 59 names / 87 rows / 91 witnesses across both source modes. One
+normalized mask-move form serves validation, effects, result analysis and
+lowering, fixing GP Q transfers in mode32 without narrowing K/K or memory Q.
+At the K-component snapshot, each SDK passes the 35-root / 1,034-child scope, full rules,
+old39 byte identity, five architectures and policies. Independent integer
+oracles exercise ten named/raw kernels through three APIs and three pipelines;
+these are portable host executions, not native386 or AVX512 acceptance.
+The subsequent test-only KMOV owners cover all GP widths and four exact memory
+widths: each SDK actually checks 3,888 integer results, 432 independently owned
+fault processes and 72 complete-page canaries. No production repair was needed
+for those additional cases.
+
+Insert/extract reuses a direction/tuple/GP format and existing producers. A
+shared terminal flag handles twelve Go-encodable memory `.Z` forms that Intel
+specifies as #UD. Exact UD2/unreachable precedes input/address reads; ordinary
+native-store/result analysis cannot treat it as a numerical continuation.
+Void and logical-return controls retain pre-trap unknown-address read/write
+rejections. Existing whole-function result obligations remain enabled. This
+adds nineteen translator lines, without changing ordinary SIMD arithmetic or
+general pointer permissions. Each SDK passes new canonical 8 / 49, full rules
+105 / 4,227 and affected 32 / 830; three existing host-inapplicable roots remain
+skips with required Linux counterparts. Old40 snapshots retain every field,
+byte, source and declaration. The source batch count is 456 official plus four
+existing runtime batches; the separate 30-member preflight is not a new form.
+
+The final integrated `adb136c05` source also passes both KMOV runtime roots
+(2 / 38 per SDK), Node573 and Go26 / 301 on frozen source/tools/driver. Component
+evidence is inherited only through exact file/function/tool identity. The two
+test-only identity overlays are recorded separately from ordinary binaries.
+This batch needs its own complete cloud round after publication.
+
 The preceding `4aeffe806` round also completed 325/325 with 88.1% coverage;
-its Windows union retained 278 root skips, separate from the current 276.
+its Windows union retained 278 root skips, separate from `5831e71bc`'s 277.
 The preceding `61b5737f2` round completed **325/325** successfully, with
 **88.1%** statement coverage and a successful exact-head
 Codecov patch check. All 325 named jobs and their check IDs match the retained
@@ -623,11 +666,20 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Local Jcc/SETcc, both modes | 64 | 432 |
 | Local legacy floating binary, both modes | 24 | 48 |
 | Local permutation and block shuffle | 84 | 328 |
-| Local mixed-mode unique union (39 views) | **3,406** | **12,454** |
+| Published mixed-mode union (39 views) | **3,406** | **12,454** |
+| Local K-data, both modes | 87 | 91 |
+| Local insert/extract source ownership | 82 | 194 selected ordinary + 12 terminal |
+| Local mixed-mode source union (41 views) | **3,575** | **12,751 observed** |
 
-The published union contains 2,793 AVX rows of 3,568 (78.3%) and 134 legacy rows.
-The unpublished permutation join raises the AVX row total to 2,877 (80.63%). The
-complete rotate view overlaps 24 existing rows / 108 witnesses and is deduplicated.
+Three insert/extract source rows are fully shadowed: their alternative physical
+encodings are not among the 194 selected ordinary witnesses. Terminal contexts
+share twelve physical forms and do not add rows. These counts do not redefine
+the historical source-row tally as a globally selected-row percentage.
+
+The earlier `bebc7092d` union contained 2,793 AVX rows of 3,568 (78.3%) and
+134 legacy rows. The later published `5831e71bc` permutation join raised the
+AVX row total to 2,877 (80.63%). The complete rotate view overlaps 24 existing
+rows / 108 witnesses and is deduplicated.
 The 11,010 witnesses include 102 terminal trap controls, not 11,010
 normal executions. These joins retain independent ordered Go rows and actual Go bytes, then compile
 initialized functions through three APIs with LLVM22. Two PADDD aliases are
@@ -696,14 +748,13 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 
 ## Remaining work, in order
 
-1. Plan9asm's public round passes all 325 jobs. LLGo's preceding `9422371af`
-   round passed after its targeted retry, but current `b6871f8f0` has the two
-   macOS failures and two runner-capacity cancellations described above.
-   Both repairs are independently validated and published at `625f3c0f7`;
-   its original failures pass, but the collector's hosted ImageVersion comparison
-   needs the narrow repair above and new-head CI. The current public translator
-   pin already has fresh LLGo execution qualification. The 39-view Plan9asm batch
-   is published at `5831e71bc`, with all 325 jobs successful.
+1. Plan9asm's `5831e71bc` round passes all 325 jobs. Publish the locally qualified
+   41-view batch together and require its own complete round. LLGo `b4381f2de`
+   has published the narrow hosted ImageVersion repair; its actual cloud199,
+   Go workflow, complete macOS coverage collector and upload pass. The remaining
+   Native/Release jobs still require whole-round completion. Original b687/625
+   failures and retries retain their own receipts. The current public translator
+   pin already has fresh LLGo execution qualification.
    Keep external review, the official dependency
    requirement and native AVX512 hardware acceptance open.
    Retain the digest optimization's full byte identity and mutable-source
@@ -712,7 +763,7 @@ showed regression; no acceleration is claimed for the accepted cleanup.
 2. Complete amd64 official-row ownership, 386 applicability and independent
    semantics. Extend existing family/object/native owners instead of creating
    another opcode registry or enumerating unrelated source/target products.
-   The remaining AVX inventory has 691 rows outside the local qualified
+   The remaining AVX source inventory has 522 rows outside the local qualified
    union. Continue through remaining shared physical-format groups and full
    semantic families.
    Independently inventoried legacy machine-candidate rows are 1,306 on the
@@ -723,10 +774,11 @@ showed regression; no acceleration is claimed for the accepted cleanup.
    GP RMW, shift/rotate, Jcc/SETcc and legacy floating binary are locally qualified,
    including original FLAGS, aliases, mode selection and first-match mappings.
    The permutation/block-shuffle follow-up has complete local qualification.
-   Next join the complete K-data groups through shared
-   formats, keeping encoded L/W/PP, semantic width and GP/memory widths separate.
-   The 386 KMOVQ GP alias needs an actual typed rule-class fix and independent
-   value checks; the static inventory alone grants no translation permission.
+   K-data and insert/extract are locally qualified, including the mode32 GP-Q
+   fix and all-width KMOV value/fault owners. Continue through the remaining
+   move formats and conversion groups. Keep encoded L/W/PP, semantic width,
+   GP/memory widths and first-match shadows separate. HLPS/LHPS now has a real
+   initialized-source proof failure to repair through the existing half form.
    Six MMX rows retain their separate unresolved machine-state contract.
    Static inventories are not successful object or execution receipts.
 3. Keep the 14 implicit-entry, GC-scan and system/runtime/test-hook failures
