@@ -593,22 +593,27 @@ func (c *amd64Ctx) storeXFromI64x2(r Reg, value string) error {
 }
 
 type amd64MoveHalfSpec struct {
-	high   bool
-	vector bool
+	high         bool
+	vector       bool
+	registerOnly bool
 }
 
-// amd64MoveHalfSpecs is the complete Go 1.27 yxmov/_yvmovhpd family. Legacy
-// PS register forms alias MOVHLPS/MOVLHPS; VEX/EVEX forms deliberately accept
-// only memory loads (memory, upper-lane X, destination X) and memory stores.
+// The memory halves use yxmov/_yvmovhpd. The explicit register-only aliases
+// add yxr/_yvmovhlps while sharing the selected source/base/output halves.
+// VEX/EVEX memory halves still accept only m64 loads or stores.
 var amd64MoveHalfSpecs = map[Op]amd64MoveHalfSpec{
-	"MOVLPS":  {},
-	"MOVHPS":  {high: true},
-	"MOVLPD":  {},
-	"MOVHPD":  {high: true},
-	"VMOVLPS": {vector: true},
-	"VMOVHPS": {high: true, vector: true},
-	"VMOVLPD": {vector: true},
-	"VMOVHPD": {high: true, vector: true},
+	"MOVHLPS":  {registerOnly: true},
+	"MOVLHPS":  {high: true, registerOnly: true},
+	"VMOVHLPS": {vector: true, registerOnly: true},
+	"VMOVLHPS": {high: true, vector: true, registerOnly: true},
+	"MOVLPS":   {},
+	"MOVHPS":   {high: true},
+	"MOVLPD":   {},
+	"MOVHPD":   {high: true},
+	"VMOVLPS":  {vector: true},
+	"VMOVHPS":  {high: true, vector: true},
+	"VMOVLPD":  {vector: true},
+	"VMOVHPD":  {high: true, vector: true},
 }
 
 func (c *amd64Ctx) lowerMOVHalf(op Op, ins Instr) (bool, bool, error) {

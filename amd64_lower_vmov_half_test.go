@@ -9,14 +9,18 @@ import (
 
 func TestAMD64MoveHalfGrammarCoversCompleteGoFamily(t *testing.T) {
 	expected := map[Op]amd64MoveHalfSpec{
-		"MOVLPS":  {},
-		"MOVHPS":  {high: true},
-		"MOVLPD":  {},
-		"MOVHPD":  {high: true},
-		"VMOVLPS": {vector: true},
-		"VMOVHPS": {high: true, vector: true},
-		"VMOVLPD": {vector: true},
-		"VMOVHPD": {high: true, vector: true},
+		"MOVHLPS":  {registerOnly: true},
+		"MOVLHPS":  {high: true, registerOnly: true},
+		"VMOVHLPS": {vector: true, registerOnly: true},
+		"VMOVLHPS": {high: true, vector: true, registerOnly: true},
+		"MOVLPS":   {},
+		"MOVHPS":   {high: true},
+		"MOVLPD":   {},
+		"MOVHPD":   {high: true},
+		"VMOVLPS":  {vector: true},
+		"VMOVHPS":  {high: true, vector: true},
+		"VMOVLPD":  {vector: true},
+		"VMOVHPD":  {high: true, vector: true},
 	}
 	if len(amd64MoveHalfSpecs) != len(expected) {
 		t.Fatalf("move-half grammar has %d entries, want %d", len(amd64MoveHalfSpecs), len(expected))

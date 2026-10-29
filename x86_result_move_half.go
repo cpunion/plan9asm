@@ -11,8 +11,8 @@ func x86ResultMoveHalfStep(ins Instr, state *x86ResultState, owned []bool, resul
 		if !native || !x86RawMoveHalfSource(ins, arch) {
 			return false, true
 		}
-		// Only this exact sealed vector source may share the paired native
-		// access. No caller, raw entry or memory fact follows from projection.
+		// Only this exact sealed source may share the paired projection.
+		// Register-only aliases supply no native address, caller or entry fact.
 		ins.x86Encoded, ins.x86SourceRaw = false, nil
 	}
 	source := uint64(0xff)
@@ -45,5 +45,5 @@ func x86ResultMoveHalfStep(ins Instr, state *x86ResultState, owned []bool, resul
 
 func x86RawMoveHalfSource(ins Instr, arch string) bool {
 	form, known, err := x86MoveHalfProperties(ins.Op, ins, arch)
-	return known && err == nil && form.spec.vector && x86RawOrdinaryVectorSource(ins, arch)
+	return known && err == nil && (form.spec.vector || form.spec.registerOnly) && x86RawOrdinaryVectorSource(ins, arch)
 }

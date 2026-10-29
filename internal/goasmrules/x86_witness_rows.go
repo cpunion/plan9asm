@@ -26,6 +26,15 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86MoveRemainderRows retains complete scalar, half, GP/vector, sign-mask
+// and non-temporal move tables, including named-source shadow alternatives.
+func X86MoveRemainderRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VLDDQU VMASKMOVDQU VMASKMOVPD VMASKMOVPS
+		VMOVD VMOVHLPS VMOVHPD VMOVHPS VMOVLHPS VMOVLPD VMOVLPS
+		VMOVMSKPD VMOVMSKPS VMOVNTDQ VMOVNTDQA VMOVNTPD VMOVNTPS
+		VMOVQ VMOVSD VMOVSS VPMASKMOVD VPMASKMOVQ VPMOVMSKB`)
+}
+
 // X86InsertExtractRows retains all original rows, including alternate physical
 // encodings shadowed by earlier named-source rows. Selection needs its observer.
 func X86InsertExtractRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -411,6 +420,9 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if x86MoveRemainderTable(rule.Ytab) {
+		return x86MoveRemainderRowWitnesses(rule)
+	}
 	if x86KDataTable(rule.Opcode) != "" {
 		return x86KDataRowWitnesses(rule)
 	}

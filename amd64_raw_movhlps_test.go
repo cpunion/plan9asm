@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -154,11 +155,18 @@ func TestTranslateRawVectorHighLowMoveLLVM22Targets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			x86LEAActualTargetGoObject(t, target.goarch, target.triple, source.String())
 			ir, err := Translate(file, Options{
 				Goarch:       target.goarch,
 				TargetTriple: target.triple,
 				Sigs:         map[string]FuncSig{"rawHighLowMoveFamily": {Name: "rawHighLowMoveFamily", Ret: Void}},
 			})
+			if target.goarch == "386" {
+				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					t.Fatal("original high-bank whole source acquired mode32 numerical authority", err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
