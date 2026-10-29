@@ -199,6 +199,10 @@ func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bo
 	if !recognized || err != nil {
 		return x86TypedByteEffect{}, recognized, err
 	}
+	return x86ExplicitIMULByteEffect(form), true, nil
+}
+
+func x86ExplicitIMULByteEffect(form x86ExplicitIMULForm) x86TypedByteEffect {
 	width := int64(form.bits / 8)
 	sourceIndex, destinationIndex := 0, 1
 	if form.three {
@@ -211,7 +215,7 @@ func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bo
 	if form.three {
 		effect.operands = append([]x86TypedByteOperand{{index: 0, operand: form.immediate, width: width, read: true}}, effect.operands...)
 	}
-	return effect, true, nil
+	return effect
 }
 
 // Only a validated XOR row selecting the same physical GP bytes is independent

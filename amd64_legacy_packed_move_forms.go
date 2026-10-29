@@ -236,6 +236,11 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 		return x86TypedByteEffect{}, true, err
 	}
 	if effect, recognized, err := x86TypedGPByteEffect(op, ins, arch); recognized {
+		// Only this local summary adds a routing obligation. The GP directory
+		// and caller/frame consumers retain their original admission/effects.
+		if err == nil && x86GPByteEffectReadsMemory(effect) {
+			effect.requiresResultProof = true
+		}
 		return effect, recognized, err
 	}
 	if effect, known, err := x86TypedImplicitMultiplyByteEffect(op, ins, arch); known {

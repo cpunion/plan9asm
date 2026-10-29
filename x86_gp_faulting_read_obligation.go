@@ -6,17 +6,6 @@ import "strings"
 // it cannot provide its address, numerical inputs, raw identity or native entry.
 // Keep the general effect directory's caller/frame admission domains unchanged.
 func x86GPFaultingReadNeedsProof(ins Instr, arch string) bool {
-	if effect, known, err := x86TypedGPByteEffect(ins.Op, ins, arch); known {
-		if err != nil {
-			return false
-		}
-		for _, operand := range effect.operands {
-			if operand.read && x86FaultingReadMemoryOperand(operand.operand) {
-				return true // Dynamic bit strings still read; this grants no fixed span.
-			}
-		}
-		return false
-	}
 	// Ordinary MOV and native atomics have complete existing grammars, but no
 	// general GP effect registration. Project only their memory-read obligation;
 	// do not register unconditional numerical writes for conditional exchanges.
@@ -29,6 +18,15 @@ func x86GPFaultingReadNeedsProof(ins Instr, arch string) bool {
 	}
 	if form, known, err := x86CompareExchangeProperties(ins.Op, ins, arch); known {
 		return err == nil && !form.spec.pair && x86FaultingReadMemoryOperand(form.destination)
+	}
+	return false
+}
+
+func x86GPByteEffectReadsMemory(effect x86TypedByteEffect) bool {
+	for _, operand := range effect.operands {
+		if operand.read && x86FaultingReadMemoryOperand(operand.operand) {
+			return true // Dynamic bit strings still read; this grants no fixed span.
+		}
 	}
 	return false
 }

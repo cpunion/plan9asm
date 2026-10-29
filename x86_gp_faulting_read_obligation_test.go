@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -337,6 +338,129 @@ func TestX86GPFaultingReadNonMemoryControls(t *testing.T) {
 							t.Fatal("NONFAULTING_CONTROL_REJECTED", err)
 						}
 					})
+				}
+			})
+		}
+	}
+}
+
+func TestX86GPFaultingReadProjectionBoundaries(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range x86GPFaultingReadCases(arch) {
+			t.Run(arch+"/"+row.instruction, func(t *testing.T) {
+				ins := x86YMMReadSource(t, strings.Replace(row.instruction, "MEM", "(DX)", 1))
+				original := ins
+				original.Args = append([]Operand(nil), ins.Args...)
+				gp, gpKnown, gpErr := x86TypedGPByteEffect(ins.Op, ins, arch)
+				universal, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch)
+				if gpKnown {
+					if gpErr != nil || !known || err != nil {
+						t.Fatal("complete source changed its typed effect domain", gpErr, err)
+					}
+					want := gp
+					want.requiresResultProof = true
+					if !reflect.DeepEqual(universal, want) {
+						t.Fatal("routing projection changed more than its local mandatory bit", gp, universal)
+					}
+				} else if known || err != nil {
+					t.Fatal("private MOV/atomic routing registered a new general effect", known, err)
+				}
+				after, afterKnown, afterErr := x86TypedGPByteEffect(ins.Op, ins, arch)
+				if !reflect.DeepEqual(gp, after) || gpKnown != afterKnown || (gpErr == nil) != (afterErr == nil) ||
+					!reflect.DeepEqual(ins, original) {
+					t.Fatal("routing mutated the GP directory or original operands")
+				}
+			})
+		}
+		for _, instruction := range []string{"ADDL AX,BX", "LEAL 3(AX)(CX*2),BX", "NOPW (AX)"} {
+			ins := x86YMMReadSource(t, instruction)
+			gp, known, err := x86TypedGPByteEffect(ins.Op, ins, arch)
+			universal, universalKnown, universalErr := x86TypedInstructionByteEffect(ins.Op, ins, arch)
+			if !known || err != nil || !universalKnown || universalErr != nil || !reflect.DeepEqual(gp, universal) {
+				t.Fatal("non-memory GP/LEA/NOP summary changed", arch, instruction)
+			}
+		}
+		ins := x86YMMReadSource(t, "MOVUPS (DX),X1")
+		vector, known, err := x86TypedLegacyPackedMoveByteEffect(ins.Op, ins, arch)
+		universal, universalKnown, universalErr := x86TypedInstructionByteEffect(ins.Op, ins, arch)
+		if !known || err != nil || !universalKnown || universalErr != nil || !reflect.DeepEqual(vector, universal) ||
+			x86GPFaultingReadNeedsProof(ins, arch) {
+			t.Fatal("GP routing expanded the vector effect domain", arch)
+		}
+	}
+}
+
+func TestX86GPFaultingReadUintptrRolePolicy(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		var fixtures []x86GPFaultingFixture
+		seen := make(map[string]bool)
+		for _, row := range x86GPFaultingReadCases(target.arch) {
+			if seen[row.family] {
+				continue
+			}
+			seen[row.family] = true
+			for _, live := range []bool{false, true} {
+				name := fmt.Sprintf("Numeric%d", len(fixtures))
+				fixture := x86GPFaultingSource(row, target.arch, name, "", false, live)
+				fixture.declaration = strings.Replace(fixture.declaration, "*[32]byte", "uintptr", 1)
+				fixtures = append(fixtures, fixture)
+			}
+		}
+		x86GPFaultingGoBatches(t, target.arch, fixtures)
+		for _, fixture := range fixtures {
+			t.Run(target.triple+"/"+fixture.row.family+"/"+fixture.label, func(t *testing.T) {
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(api, func(t *testing.T) {
+						ir, err := x86ScalarFPBitViewAPI(t, fixture.source, fixture.declaration, target.arch, target.triple, api)
+						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+							t.Fatal("UINTPTR_ROLE_POLICY_ACCEPTED: NUM input gained a pointer role", err)
+						}
+					})
+				}
+			})
+		}
+	}
+}
+
+func TestX86GPFaultingReadIMULAddressAlias(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		var fixtures []x86GPFaultingFixture
+		for _, row := range x86GPFaultingReadCases(target.arch) {
+			if row.family != "imul" {
+				continue
+			}
+			three := strings.HasPrefix(row.instruction, "IMUL3")
+			name := fmt.Sprintf("Alias%d", len(fixtures))
+			fixture := x86GPFaultingSource(row, target.arch, name, "partner", false, false)
+			fixture.source = strings.ReplaceAll(fixture.source, "DX", "BX")
+			fixture.accept = three
+			fixtures = append(fixtures, fixture)
+		}
+		x86GPFaultingGoBatches(t, target.arch, fixtures)
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(target.triple+"/"+api, func(t *testing.T) {
+				var source, declarations strings.Builder
+				for _, fixture := range fixtures {
+					if !fixture.accept {
+						ir, err := x86ScalarFPBitViewAPI(t, fixture.source, fixture.declaration, target.arch, target.triple, api)
+						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+							t.Fatal("two-operand IMUL obtained old-destination NUM from its pointer role", err)
+						}
+						continue
+					}
+					source.WriteString(fixture.source)
+					declarations.WriteString(fixture.declaration + "\n")
+				}
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+				if err != nil || ir == "" {
+					t.Fatal("three-operand IMUL overwrites its pointer destination after reading its address", err)
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, ir, level)
 				}
 			})
 		}

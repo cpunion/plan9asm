@@ -281,8 +281,8 @@ func x86LoweredExplicitIMULNativeRead(ins Instr, state *x86ResultState, owned []
 	if !x86ResultNamedPredicateInstruction(ins) {
 		return false, true
 	}
-	effect, known, err := x86TypedGPByteEffect(ins.Op, ins, arch)
-	if !known || err != nil || effect.dynamicMemory || state.flags&effect.flagsRead != effect.flagsRead {
+	effect := x86ExplicitIMULByteEffect(form)
+	if effect.dynamicMemory || state.flags&effect.flagsRead != effect.flagsRead {
 		return false, true
 	}
 	for _, operand := range effect.operands {
