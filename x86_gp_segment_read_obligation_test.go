@@ -79,6 +79,10 @@ func x86GPSegmentListingBytes(t *testing.T, listing string, names []string) map[
 			}
 			continue
 		}
+		if line != "" && line[0] != ' ' && line[0] != '\t' {
+			current = "" // A following data symbol is outside this TEXT body.
+			continue
+		}
 		fields := strings.Fields(line)
 		if !wanted[current] || len(fields) < 2 || !strings.HasPrefix(fields[0], "0x") {
 			continue

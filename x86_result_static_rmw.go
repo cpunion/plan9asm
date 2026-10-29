@@ -6,9 +6,12 @@ package plan9asm
 // declaration-only query gains storage, address or initialized-result facts.
 func (c *amd64Ctx) scalarStaticRMWTransfer(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
 	form, known, err := x86LockScalarRMWProperties(ins.Op, ins, arch)
-	if !known || err != nil || form.spec.bitString ||
+	if !known || err != nil ||
 		!x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil {
 		return false, false
+	}
+	if form.spec.bitString {
+		return c.scalarStaticBitStringTransfer(form, state, owned, arch)
 	}
 	destination, static := x86StaticSBReadAddress(form.destination, arch)
 	relocation := x86AbsoluteRelocationSource(form.source, arch, form.spec.bits)
@@ -55,4 +58,28 @@ func (c *amd64Ctx) scalarStaticRMWTransfer(ins Instr, state *x86ResultState, own
 	}
 	state.flags = state.flags&^form.spec.flagsKilled | form.spec.flagsDefined
 	return true, true // No new memory-read capability or unrelated state escapes.
+}
+
+// Both native emitters retain the complete BTC/BTR/BTS memory effect: the LOCK
+// helper, or the ordinary emitter's volatile access and signed word selection.
+// The actual module owns this writable base word; this is not a bound on the
+// register-indexed access. If native execution continues, only its FLAGS result
+// becomes numerical. No dynamic extent or reusable memory fact is exported.
+func (c *amd64Ctx) scalarStaticBitStringTransfer(form x86LockScalarRMWForm, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	destination, static := x86StaticSBReadAddress(form.destination, arch)
+	if !static {
+		return false, false
+	}
+	values := c.fpStaticAddressValues
+	if values == nil || state == nil {
+		return false, true
+	}
+	name := resolveAssemblyDataSymbol(destination.symbol, c.resolve)
+	width := int64(form.spec.bits / 8)
+	if !values.objects[name] || !values.writable[name] || c.fpScalarData[destination] < width ||
+		!x86ResultRead(form.source, width, state, owned, arch) {
+		return false, true
+	}
+	state.flags = state.flags&^form.spec.flagsKilled | form.spec.flagsDefined
+	return true, true
 }

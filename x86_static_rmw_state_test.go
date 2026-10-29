@@ -114,3 +114,100 @@ func TestX86StaticRMWActualMutabilityDirectory(t *testing.T) {
 		})
 	}
 }
+
+func TestX86StaticBitStringNativeContinuationDoesNotExportFacts(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range x86LockScalarOracleForms(arch) {
+			if !strings.HasPrefix(row.op, "BT") {
+				continue
+			}
+			t.Run(arch+"/"+row.text, func(t *testing.T) {
+				context := x86StaticBitStringTestContext(t, arch)
+				ins := x86ScalarLaneInstruction(t, strings.Replace(row.text, "1(SI)", "·sink(SB)", 1))
+				state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
+				index, _, _ := x86ResultGP(CX, x86ResultPointerWord(arch), arch)
+				state.gp[index], state.canonicalGP[index] = 0xff, 0x55
+				state.callerAddressGP[index], state.callerAddressOrigin[index] = true, 9
+				state.gp[0], state.pointerGP[0] = 0, true
+				want := state.clone()
+				want.flags &^= x86ByteFlagOF | x86ByteFlagSF | x86ByteFlagAF | x86ByteFlagPF
+				query := state.clone()
+				if x86ResultTransfer(ins, &query, nil, 0, arch) {
+					t.Fatal("standalone transfer borrowed an actual module's native storage")
+				}
+				accepted, known := context.scalarStaticRMWTransfer(ins, &state, nil, arch)
+				if !accepted || !known || !reflect.DeepEqual(state, want) {
+					t.Fatal("paired native bit string changed unrelated state or lost CF", accepted, known)
+				}
+			})
+		}
+	}
+}
+
+func TestX86StaticBitStringRejectsUnownedOrUndefinedInputs(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range x86LockScalarOracleForms(arch) {
+			if !strings.HasPrefix(row.op, "BT") || !strings.Contains(row.text, "CX,") {
+				continue
+			}
+			for _, mutation := range []string{"no-directory", "no-object", "readonly", "short-base", "external",
+				"missing-index", "partial-index", "pointer-index", "raw", "address-override", "segment"} {
+				t.Run(arch+"/"+row.text+"/"+mutation, func(t *testing.T) {
+					context := x86StaticBitStringTestContext(t, arch)
+					ins := x86ScalarLaneInstruction(t, strings.Replace(row.text, "1(SI)", "·sink(SB)", 1))
+					form, _, _ := x86LockScalarRMWProperties(ins.Op, ins, arch)
+					state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionForward}
+					index, _, _ := x86ResultGP(CX, x86ResultPointerWord(arch), arch)
+					state.gp[index] = 0xff
+					switch mutation {
+					case "no-directory":
+						context.fpStaticAddressValues = nil
+					case "no-object":
+						delete(context.fpStaticAddressValues.objects, "sink")
+					case "readonly":
+						context.fpStaticAddressValues.writable["sink"] = false
+					case "short-base":
+						context.fpScalarData[x86StaticSBAddress{"·sink", 0}] = int64(form.spec.bits/8 - 1)
+					case "external":
+						ins.Args[1] = Operand{Kind: OpSym, Sym: "external(SB)"}
+					case "missing-index":
+						state.gp[index] = 0
+					case "partial-index":
+						state.gp[index] = 1
+					case "pointer-index":
+						state.gp[index], state.pointerGP[index] = 0, true
+					case "raw":
+						ins.x86Encoded = true
+					case "address-override":
+						ins.x86AddressBits = 16
+					case "segment":
+						ins.x86SegmentPrefix = 0x64
+					}
+					before := state.clone()
+					if accepted, _ := context.scalarStaticRMWTransfer(ins, &state, nil, arch); accepted || !reflect.DeepEqual(state, before) {
+						t.Fatal("unowned native bit string acquired facts or partially changed state")
+					}
+				})
+			}
+		}
+	}
+}
+
+func x86StaticBitStringTestContext(t *testing.T, arch string) *amd64Ctx {
+	t.Helper()
+	file, err := Parse(ArchAMD64, "DATA ·sink+0(SB)/8,$0x1234\n"+
+		"DATA ·sink+8(SB)/8,$0x5678\nGLOBL ·sink(SB),16,$16\n"+
+		"TEXT ·base(SB),4,$0-0\nBTSL $1,·sink(SB)\nRET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolve := func(symbol string) string { return strings.TrimPrefix(symbol, "·") }
+	context := &amd64Ctx{resolve: resolve,
+		fpStaticAddressValues: x86LoweredStaticAddressValues(file, resolve, nil, arch),
+		fpScalarData:          x86LoweredScalarDataReads(file, resolve, nil, arch),
+	}
+	if context.fpScalarData[x86StaticSBAddress{"·sink", 0}] != 16 {
+		t.Fatal("actual complete source did not expose its initialized base word")
+	}
+	return context
+}
