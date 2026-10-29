@@ -86,16 +86,7 @@ func TestTranslateX86RoundRejectsFormsOutsideGoAssemblerTables(t *testing.T) {
 	}
 }
 
-func TestAMD64RoundRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test only runs on amd64 host")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
-	source := `
+const x86LegacyRoundOriginalRuntimeSource = `
 TEXT roundsemantics(SB),NOSPLIT,$0-40
 	MOVQ out+0(FP), AX
 	MOVQ a32+8(FP), BX
@@ -131,17 +122,76 @@ TEXT roundsemantics(SB),NOSPLIT,$0-40
 	VZEROUPPER
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	frame := FrameLayout{Params: []FrameSlot{
+
+func x86LegacyRoundOriginalRuntimeFrame() FrameLayout {
+	return FrameLayout{Params: []FrameSlot{
 		{Offset: 0, Type: Ptr, Index: 0, Field: -1},
 		{Offset: 8, Type: Ptr, Index: 1, Field: -1},
 		{Offset: 16, Type: Ptr, Index: 2, Field: -1},
 		{Offset: 24, Type: Ptr, Index: 3, Field: -1},
 		{Offset: 32, Type: Ptr, Index: 4, Field: -1},
 	}}
+}
+
+// This is the exact existing five-opaque-Ptr runtime fixture, compiled on
+// every host. It does not bypass the independent native runtime guard below.
+func TestX86LegacyRoundOriginalRuntimeSourceObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	pkg := mustGoPackage(t, "bitview", "package bitview\nfunc roundsemantics(out,a32,a64,upper32,upper64 *byte)\n")
+	for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			// Only the Go oracle adds its standard NOSPLIT macro definition.
+			// The original shared assembly body itself is byte-identical.
+			x86LEAActualTargetGoObject(t, "amd64", triple, "#include \"textflag.h\"\n"+x86LegacyRoundOriginalRuntimeSource)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					manualCalls := 0
+					manual := func(name string) (FuncSig, bool) {
+						if name != "roundsemantics" {
+							return FuncSig{}, false
+						}
+						manualCalls++
+						return FuncSig{Name: name, Args: []LLVMType{Ptr, Ptr, Ptr, Ptr, Ptr}, Ret: Void,
+							Frame: x86LegacyRoundOriginalRuntimeFrame()}, true
+					}
+					ir, err := x86ScalarFPBitViewPackageAPIWithManual(t, x86LegacyRoundOriginalRuntimeSource,
+						pkg, "amd64", triple, api, manual)
+					if err != nil || ir == "" || manualCalls == 0 {
+						t.Fatal("exact original runtime source/manual pointer frame rejected", api, manualCalls, err)
+					}
+					for _, level := range []string{"0", "2"} {
+						t.Run("IR"+level+"/backend"+level, func(t *testing.T) {
+							objectIR := ir
+							if level == "2" {
+								objectIR = x86DwordProductIROptimize(t, ir)
+							}
+							x86PackedStringCompileObject(t, llc, triple, objectIR, "-O"+level)
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestAMD64RoundRuntimeSemantics(t *testing.T) {
+	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
+	if runtime.GOARCH != "amd64" && !crossRosetta {
+		t.Skip("runtime execution test only runs on amd64 host")
+	}
+	llc, clang, ok := findLlcAndClang(t)
+	if !ok {
+		t.Fatal("LLVM 22 llc/clang not found")
+	}
+	source := x86LegacyRoundOriginalRuntimeSource
+	file, err := Parse(ArchAMD64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frame := x86LegacyRoundOriginalRuntimeFrame()
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 	var runPrefix []string
 	if crossRosetta {
