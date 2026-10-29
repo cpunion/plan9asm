@@ -136,9 +136,22 @@ func cloneX86ReplayFixedLocalMemory(input map[int]x86FixedLocalAccess) map[int]x
 	return output
 }
 
-func (replay *x86RawReplaySource) validate(fn Func, arch string) error {
-	if replay == nil || replay.goarch != arch || fn.Sym != replay.sym || fn.FrameSize != replay.frame || fn.ArgSize != replay.args || len(replay.normalized) == 0 {
+// Repeated normalization may preserve a sealed checkpoint, never replace it
+// with edited instructions. Full source replay remains the consumer's check.
+func (replay *x86RawReplaySource) validateNormalized(fn Func, arch string) error {
+	if replay == nil || x86SourceStackScalarArch(replay.goarch) != x86SourceStackScalarArch(arch) ||
+		fn.Sym != replay.sym || fn.FrameSize != replay.frame || fn.ArgSize != replay.args || len(replay.normalized) == 0 {
 		return fmt.Errorf("%w: result initialization AUTO: original raw source identity changed", ErrProbeNeedsContext)
+	}
+	if !reflect.DeepEqual(fn.Instrs, replay.normalized) {
+		return fmt.Errorf("%w: result initialization AUTO: normalized raw source identity changed", ErrProbeNeedsContext)
+	}
+	return nil
+}
+
+func (replay *x86RawReplaySource) validate(fn Func, arch string) error {
+	if err := replay.validateNormalized(fn, arch); err != nil {
+		return err
 	}
 	parsed, err := Parse(ArchAMD64, replay.source)
 	if err != nil || parsed == nil || len(parsed.Funcs) != 1 || len(parsed.UnlinkedPrelude) != 0 || len(parsed.Data) != 0 || len(parsed.Globl) != 0 {
@@ -149,7 +162,7 @@ func (replay *x86RawReplaySource) validate(fn Func, arch string) error {
 		return fmt.Errorf("%w: result initialization AUTO: original raw source identity changed", ErrProbeNeedsContext)
 	}
 	decoded, err := decodeX86RawDirectives(original, arch)
-	if err != nil || !reflect.DeepEqual(decoded.Instrs, replay.decoded) || !reflect.DeepEqual(fn.Instrs, replay.normalized) {
+	if err != nil || !reflect.DeepEqual(decoded.Instrs, replay.decoded) {
 		return fmt.Errorf("%w: result initialization AUTO: normalized raw source identity changed", ErrProbeNeedsContext)
 	}
 	return nil

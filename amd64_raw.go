@@ -43,6 +43,11 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 	}
 	for i := range normalized.Funcs {
 		originalFn := normalized.Funcs[i]
+		if replay := originalFn.x86RawReplay; replay != nil {
+			if err := replay.validateNormalized(originalFn, goarch); err != nil {
+				return nil, fmt.Errorf("%s: %w", originalFn.Sym, err)
+			}
+		}
 		if normalized.Funcs[i].X86RawText != nil {
 			if err := validateX86AddressSensitiveRawText(normalized.Funcs[i], goarch); err != nil {
 				return nil, fmt.Errorf("%s: %w", normalized.Funcs[i].Sym, err)

@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -9,18 +10,18 @@ import (
 func TestX86AlternatingRoundNativeContinuationBoundaries(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		for _, row := range []struct {
-			text           string
-			native         bool
-			tuple, carrier int
+			text            string
+			vex, pairedRead bool
+			tuple, carrier  int
 		}{
-			{"ADDSUBPS (AX),X1", false, 16, 16},
-			{"VADDSUBPS (AX),Y1,Y2", true, 32, 32},
-			{"ROUNDPS $7,(AX),X2", false, 16, 16},
-			{"VROUNDPS $7,(AX),Y2", true, 32, 32},
-			{"ROUNDSS $7,(AX),X2", false, 4, 16},
-			{"VROUNDSS $7,(AX),X1,X2", true, 4, 16},
-			{"ROUNDSD $7,(AX),X2", false, 8, 16},
-			{"VROUNDSD $7,(AX),X1,X2", true, 8, 16},
+			{"ADDSUBPS (AX),X1", false, true, 16, 16},
+			{"VADDSUBPS (AX),Y1,Y2", true, true, 32, 32},
+			{"ROUNDPS $7,(AX),X2", false, true, 16, 16},
+			{"VROUNDPS $7,(AX),Y2", true, true, 32, 32},
+			{"ROUNDSS $7,(AX),X2", false, true, 4, 16},
+			{"VROUNDSS $7,(AX),X1,X2", true, true, 4, 16},
+			{"ROUNDSD $7,(AX),X2", false, true, 8, 16},
+			{"VROUNDSD $7,(AX),X1,X2", true, true, 8, 16},
 		} {
 			t.Run(arch+"/"+row.text, func(t *testing.T) {
 				ins := x86ScalarLaneInstruction(t, row.text)
@@ -34,13 +35,14 @@ func TestX86AlternatingRoundNativeContinuationBoundaries(t *testing.T) {
 				memory, destination := 0, 1
 				if round {
 					memory, destination = 1, len(ins.Args)-1
-				} else if row.native {
+				} else if row.vex {
 					destination = 2
 				}
 				state := x86ResultState{flags: x86ByteFlagsAll, direction: x86ResultDirectionBackward}
 				state.pointerGP[0] = true
-				state.writeVector(1, 64, ^uint64(0), false)
-				state.writeVector(2, 64, ^uint64(0), false)
+				// Partial high aliases distinguish legacy preservation from VEX zeroing.
+				state.writeVector(1, 64, 0xffffffff, false)
+				state.writeVector(2, 64, 0xffffffffffff, false)
 				apply := func(i Instr, s *x86ResultState, native bool) (bool, bool) {
 					if round {
 						return x86ResultRoundStep(i, s, nil, arch, native)
@@ -71,11 +73,21 @@ func TestX86AlternatingRoundNativeContinuationBoundaries(t *testing.T) {
 					}
 					before := current.clone()
 					accepted, known := apply(changed, &current, native)
-					// Scalar ROUND propagates only the available upper-copy bytes;
-					// the independent typed read effect owns their source obligation.
-					want := row.native && (change == "paired" || change == "missing-upper" && round)
+					// Encoding selects operand roles and upper aliases. Paired read
+					// permission is independent: legacy memory now has a whole SSE
+					// emitter too. Scalar ROUND propagates only available upper bytes.
+					want := row.pairedRead && (change == "paired" || change == "missing-upper" && round ||
+						change == "raw" && row.vex && !round)
+					if change == "raw" && row.vex && !round {
+						// This primitive checks exact instruction metadata, not the
+						// original whole producer. Its caller must check replay first.
+						fake := Func{Sym: "fake", Instrs: []Instr{changed}}
+						if err := x86LoweredNumericalProducerReplay(fake, arch); !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("fabricated raw primitive acquired whole-source replay", err)
+						}
+					}
 					if !known || accepted != want {
-						t.Fatal("legacy or unbound input borrowed native continuation", change, known, accepted, want)
+						t.Fatal("paired source contract or encoding role changed", change, known, accepted, want)
 					}
 					if !accepted {
 						if !reflect.DeepEqual(before, current) {
@@ -89,7 +101,7 @@ func TestX86AlternatingRoundNativeContinuationBoundaries(t *testing.T) {
 					if change == "missing-upper" && round && (strings.HasSuffix(string(ins.Op), "SS") || strings.HasSuffix(string(ins.Op), "SD")) {
 						defined = x86CallerVectorByteMask(int64(row.tuple))
 					}
-					expected.writeVector(index, row.carrier, defined, false)
+					expected.writeVector(index, row.carrier, defined, !row.vex)
 					if !reflect.DeepEqual(current, expected) {
 						t.Fatal("native read changed pointer, FLAGS, unrelated bytes or storage", change)
 					}

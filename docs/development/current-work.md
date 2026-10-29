@@ -9,10 +9,11 @@ Original qualification, failures and host exclusions remain in their reports.
 ## Published and local revisions
 
 [PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The published
-batch `fad14e2e1` has its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40872759334)
-in progress. Its formatting, private MULX context, bare raw ADDSUB fixture and
-legacy ROUND memory failures have local repairs while the remaining jobs
-finish. The public baseline `5616f67d8` completed its
+batch `fad14e2e1` completed its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40872759334)
+with 280 successful and 45 failed jobs. The failures comprise formatting,
+eleven jobs each for private MULX context, bare raw ADDSUB and legacy ROUND
+memory, plus eleven derived collectors. Local repairs require their own CI.
+The public baseline `5616f67d8` completed its
 [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40851464196)
 with 325/325 successful jobs. Those results certify that baseline. Every newly
 published head needs its own complete CI, coverage and external review.
@@ -87,6 +88,11 @@ permission. Its SSE3/SSE4.1 carrier, matching target and source inputs remain
 explicit. Logical FP and register paths retain their mathematical emitters.
 Initialized raw ADDSUB uses the existing exact source identity and whole-source
 replay; the bare original bytes retain public Context and private format objects.
+
+Repeated raw normalization checks the existing sealed checkpoint before making
+a new lowering view. Text fallback starts from that source rather than an
+already rewritten address view. Default AMD64 and explicit AMD64 remain the
+same decoding mode without changing retained source spelling; 386 stays distinct.
 
 ROUND RIP literals reuse the existing exact decoder, source replay, DATA and
 raw-return binding. Self-contained packed literals retain public translation.

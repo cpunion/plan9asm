@@ -176,6 +176,9 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 	if err != nil {
 		return llvm.Module{}, err
 	}
+	// The direct emitter may use a derived address view. A textual fallback
+	// must start from the sealed source and derive its own lowering view.
+	sourceForFallback := file
 	file, err = normalizeX86SourceIntegerAddresses(file, opt)
 	if err != nil {
 		return llvm.Module{}, err
@@ -216,7 +219,7 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 			return llvm.Module{}, err
 		}
 	}
-	ir, err := translateIRTextWithFixedLocalResult(file, opt, fixedLocalResult)
+	ir, err := translateIRTextWithFixedLocalResult(sourceForFallback, opt, fixedLocalResult)
 	if err != nil {
 		return llvm.Module{}, err
 	}
