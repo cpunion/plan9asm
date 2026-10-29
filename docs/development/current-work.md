@@ -1,174 +1,113 @@
 # PR40 closeout
 
-Updated 2026-10-29. Finish **amd64 correctness, shared typed families and
-translation efficiency first**, preserving all five architecture gates.
+Updated 2026-10-29. Finish amd64 correctness, shared typed families and
+translation efficiency while preserving all five architecture gates.
 Start with [architecture](architecture.md), [family development](instructions.md),
 [x86 convergence](x86-convergence.md) and [validation](validation.md).
-This page describes the active work; earlier qualification history remains in
-git and the original ignored reports.
+Original qualification, failures and host exclusions remain in their reports.
 
-## Published revision
+## Published and local revisions
 
-[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft at
-`18492758d`. Its [complete CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40820775107)
-passes **325/325 jobs**, with **88.1%** statement coverage and **95.07%**
-Codecov patch coverage against an 87.83% target. Every expected job name and
-actual job/check ID is accounted for at this exact head.
+[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft at published
+`5616f67d8`. Its current CI round is still running. Final CI, coverage and external review
+remain pending; the local batch below has not been published.
+The previous `18492758d` [round](https://github.com/xgo-dev/plan9asm/actions/runs/40820775107)
+passed 325/325 jobs with 88.1% statement coverage; those results belong to that
+previous head. External review remains outstanding.
 
-Fresh Windows and race aggregates each contain all 22 root-module packages.
-Windows retains 278 root skips; race retains 299 root / seven child skips.
-Zero skipped jobs does not mean zero skipped tests. These skips do not qualify
-native386, AVX512 or unexecuted semantics. External approval remains outstanding.
+The local batch through `862099524` has the following source-table ownership:
 
-| Published inventory | Count and meaning |
+| Local inventory | Count and meaning |
 |---|---|
-| Family views | 42, including explicit overlapping views |
-| AVX source-row ownership | 3,147 / 3,568 (88.20%) |
-| Mixed-mode source records | 3,676, including 529 separate legacy/fallback records |
-| Observed canonical witness union | 12,856 |
-| Source candidates | 12,861; not the observed-object denominator |
-| Source/declaration batches | 462 official plus four existing runtime batches |
-| Separate PADDD aliases | Two; not extra encoder rows |
+| Family views | 46; overlapping views retain explicit identity |
+| AVX source rows | 3,568 / 3,568 original table rows |
+| Mixed-mode source records | 4,097 = 3,568 AVX + 529 legacy/fallback records |
+| Historical canonical witness union | 14,408; separate from all runtime forms |
+| New source witnesses | 1,262, checked with actual Go and three API O0/O2 objects |
+| New bounded source/declaration batches | 40; not a function or object count |
+| Inherited identity | All 22 old JSON snapshots byte-exact |
 
-Ownership retains first-match, shadow and terminal observations; it does not
-assert every alternative is selectable by named Go syntax or executes normally.
-The AVX percentage is neither an all-amd64 nor a five-architecture percentage.
-Legacy machine-candidate rows have a separate inventory: 1,306 on current Go,
-1,305 on minimum Go, plus 112 separate `ymovtab` fallback records.
+Complete AVX table ownership preserves original SDK rows, first-match choices,
+shadow alternatives, source modes and terminal forms. It does not establish
+all-ISA support, every named syntax alternative or native numerical execution.
+Legacy has its own denominator: 1,306 current-SDK / 1,305 minimum-SDK machine
+candidates, plus 112 separate `ymovtab` records. The 529 joined records are not
+the complete legacy inventory. Two PADDD aliases remain separate from rows.
 
-## Latest complete families
+## Current class repairs
 
-K-data owns 59 names / 87 rows / 91 witnesses in both source modes. Its single
-normalized mask-move form serves grammar, effects, result analysis and lowering.
-The mode32 GP-Q repair preserves 64-bit K/K and memory transfers. Each endpoint
-SDK independently executes 3,888 integer checks, 432 owned memory-fault processes
-and 72 complete-page canary checks. Portable host execution is separate from
-native386 and AVX512 execution.
+The remaining formats share typed source, result, mask, carrier and tuple roles.
+GP/BMI objects retain actual source selection and mode boundaries. MULX now
+preserves implicit DX and both output dependencies through observable results;
+memory, raw and physical-frame roles keep their existing proof requirements.
 
-Insert/extract owns all 82 original records: 79 selected rows / 194 ordinary
-witnesses and three fully shadowed alternatives. Twelve original-Go memory `.Z`
-forms are architectural #UD, not numerical results. They emit UD2/unreachable
-before instruction inputs, while preserving obligations of the source prefix
-and every reachable ordinary return. Signature contexts do not add physical
-forms. No general pointer, source or unsealed raw-entry authority follows.
+Gather, scatter and prefetch share one VSIB grammar through lowering and result
+analysis. Index NUM, data/merge bytes, mask state and the original pointer base
+stay independent. Active gather loads remain volatile so a dead result cannot
+erase its fault. Mode32 high data/mask banks retain separate numerical rejection;
+legacy Void-format objects do not certify hardware execution or native entry.
+The paired access grants no contiguous extent or later-read authority.
 
-The remaining-move join owns 101 records / 119 candidates: 105 selected ordinary
-witnesses and 14 shadow alternatives. Mode32's 54 low-bank rows / 58 witnesses
-are subsets of the AMD64 union. Forty-seven high-input cases retain independent
-Go acceptance/refusal, physical/grammar and numerical-input boundaries.
-Existing high-X15/Y15 Void-format objects remain format evidence.
+The ten-member / twenty-row approximation family reuses the existing native FP
+helper, removing 227 production lines. Masking, SAE and MXCSR remain owned by
+the original instruction; source operands are not eagerly read before masking.
+This is a code-size change, not a measured performance or AVX512ER runtime gain.
 
-MOVHLPS/MOVLHPS and their modern counterparts share one existing typed form
-through effects, result analysis and lowering. Modern writes clear bytes 16–63;
-legacy writes preserve them. Eight modern named/raw kernels fail with the
-controlled old lowerer. Final independent byte/canary execution passes two roots
-/ 92 children on each SDK, through three APIs and three pipelines. The move
-translator changes by net minus three lines; cold row machinery adds 348 lines.
+ADDSUB and ROUND share typed grammar, effects, result analysis and lowering.
+Their existing mathematical emitters are unchanged. Observable VEX reads retain
+the original packed or scalar tuple when results die under optimization;
+scalar 4/8-byte access widths do not become 16-byte X carriers. Legacy reads do
+not borrow that VEX native-read premise or a new alignment/fault guarantee.
+Go scalar ROUND uses Yu8 and rejects ordinary mode32 four-operand syntax;
+normalized raw physical forms keep their own identity and NUM restrictions.
 
-The final move-family scope is 24 roots / 496 children on each SDK: current Go
-inherits 22 unchanged owners and freshly runs two final owners; minimum freshly
-runs the complete scope. Full rules pass 107 / 4,328 on both SDKs. All eighteen
-old41 JSON snapshots retain every original field, byte, source and declaration.
-Five current-SDK architecture reports, Node573 and Go26 / 301 pass. Minimum's
-five-architecture script was not rerun by that component.
+ROUND RIP literals reuse the existing exact decoder, source replay, DATA and
+raw-return binding. Self-contained packed literals retain public translation.
+Bare scalar upper inputs remain Context; genuinely initialized raw and named
+counterparts retain positive objects. Edited source, DATA or read metadata
+cannot borrow the original proof. No generic raw or incoming-pointer permission
+is added. The original fixture bytes and literal tails remain observable.
 
-## Local follow-up
+## Qualification boundary
 
-The common terminal-prefix repair is committed separately as `6ffc40ab5` and
-integrated locally as `ed6ac1c34`; it is not in the published revision above.
-Eight existing terminal mechanisms retain prior source obligations before
-their final trap. Ordinary reachable returns still require their own result
-writes. The shared repair changes four production files by net plus 16 lines;
-it adds neither another opcode table nor storage permission.
+The frozen combined wide scope passes both endpoint SDKs. Go 1.27.3 records
+171 roots / 9,714 children with 9,878 passes; Go 1.20.14 records 170 roots /
+9,711 children with 9,874 passes. Each retains seven explicit host exclusions
+and no failure. The extra current-SDK x87 mode32 root is absent from the minimum
+SDK's actual built inventory. Both commands exited naturally with exact,
+unique terminal outcomes. Final five-architecture reports and policies remain
+pending. Component results do not certify the next published head's CI.
 
-Both endpoint SDKs pass 35 roots / 1,088 children, retaining one real local
-host-inapplicable native root. A separate official Linux/amd64
-[fork staging run](https://github.com/cpunion/plan9asm/actions/runs/40828444104)
-executes that root: one root / 25 children pass without skips. Sixteen original
-Go cases and 144 C cases observe the required SIGSEGV/SIGILL ordering. This
-qualifies this fault contract, not all SIMD semantics or AVX512 hardware. The
-single-use staging workflow does not belong in PR40.
+The terminal-prefix class retains all prior input obligations before UD2 and
+all reachable ordinary return obligations. Its official Linux/amd64
+[staging run](https://github.com/cpunion/plan9asm/actions/runs/40828444104)
+passed one root / 25 children without skips. Portable fault/canary execution,
+LLVM object success and actual native execution remain separate evidence.
+Original semantic REDs, fixture/setup failures and ordinary skips are retained.
 
-The qualified cold join is committed as `c17154be8` and integrated locally as
-`a2638a7b6`. It covers the complete 32-name / 76-row conversion family.
-It reuses four shared transports. Original Go selection separates 287 ordinary,
-three terminal and eight partially shadowed candidates. Both endpoint SDKs
-pass 30 modules / 60 LLVM22 O0/O2 objects, format controls and the complete
-109-root / 5,088-child rule scope. All twenty old42 snapshots remain identical.
-Both SDKs pass the five-architecture reports. Node573 and Go26 / 301 policies
-also pass on the final frozen source.
-An interrupted minimum-SDK link ran zero tests because of disk exhaustion;
-its retained setup failure is followed by the successful four-root / 372-child
-retry. These local results do not certify a future published CI revision.
+The qualified raw-prefix cleanup shares 44 identical scanners, removing 816
+production lines. Paired decoder measurements show no stable speedup and no
+allocation change. A prior result-routing candidate was withdrawn after a
+minimum-SDK regression. Complete translation needs its own paired measurement;
+neither a smaller helper nor a microbenchmark proves faster SDK compilation.
 
-The local union is **43 views / 3,752 mixed-mode source records**, including
-**3,223 / 3,568 AVX rows (90.33%)** and the same 529 legacy/fallback records.
-Observed canonical keys total **13,146 = 12,856 + 287 ordinary + three terminal**;
-the eight partially shadowed candidates add no key. Source/declaration batches
-total 472 official plus four runtime; two aliases remain separate.
+## Remaining closeout
 
-## Architecture and efficiency
-
-Scale implementation with legal format groups and semantic families, not a
-product of source opcodes, target opcodes and formats. LLVM chooses target
-instructions from portable IR. Preserve distinct operand roles, active/carrier/
-memory/result widths, encoding, masks, alias writes, FLAGS and fault behavior.
-Typed forms carry those facts through effects, result analysis and lowering.
-Source binding and memory authority remain separate from a legal grammar.
-
-Existing cleanups share packed physical formats and GP byte/FLAGS effects,
-delete unreachable legacy lowerers, and reuse original source/tool observations
-within a bounded translation. Module declarations are selected from actual
-references. Do not cache mutable source verification or introduce another opcode
-registry. Parser/allocation improvements and encoder measurements are not
-complete SDK translation or generated-program speedups.
-
-The qualified raw-prefix cleanup `8e858733f` replaces 44 identical
-FS/GS/address-size scanners with one observer, net minus 816 production lines.
-Each SDK passes all 56 existing roots / 2,500 children; 720 complete decoder
-observations retain identical instructions, metadata, lengths and exact errors.
-Independent helper checks, Node573, Go26 / 301 and both SDKs' five-architecture
-reports pass. Paired decoder benchmarks show no consistent change over 5%, and
-raw allocations remain unchanged; no acceleration is claimed.
-A previous result-routing reduction was withdrawn after minimum-SDK benchmarks
-regressed. Do not restore it or claim an unmeasured acceleration.
-
-## Remaining work, in order
-
-1. Publish a qualified batch with the integrated conversion76, terminal-prefix
-   repair and raw-prefix cleanup. Require the new head's complete CI,
-   coverage and review; keep all original failures, setup errors and skips.
-2. Finish the other 345 AVX rows in eleven semantic groups using seven transport
-   groups. The initial existing-helper test on both SDKs records 22 row passes
-   and 323 format-adapter failures, with no setup failure, panic or skip. These
-   are cold witness gaps, not evidence of ISA or translator rejection. Parallel
-   candidates cover 237 shared-vector/state rows, 28 BMI rows and 80 VSIB rows;
-   their byte/object validation remains pending. Floating arithmetic,
-   VSIB, comparison, horizontal/blend/dot/SAD, BMI, crypto, four-register, string,
-   bitshuffle-to-K, vector-to-FLAGS and state operations keep distinct semantics.
-   Complete original row ownership is separate from runtime acceptance.
-3. Measure complete translation separately from the raw-prefix decoder cleanup.
-   Preserve original bytes, source replay, mode/segment/address-size behavior,
-   negative boundaries and resource disposal. Do not reduce test scope to obtain
-   a faster result.
-4. Integrate a qualified public translator into
-   [LLGo2694](https://github.com/xgo-dev/llgo/pull/2694) through the allowed fork.
-   Its existing `b4381f2de` round is complete: 140 successful jobs and two
-   conditional publication skips across thirteen workflows, patch coverage
-   97.06%. It still pins `bebc7092d`; a new pin requires normal public module
-   verification and fresh actual compile/link/run owners. The official upstream
-   dependency review requirement remains unresolved by a fork pin.
-5. Preserve other architectures and explicit gaps: 271 ARM64 decoder forms,
-   remaining WASM control/SIMD, ARM64-to-WASM `llvm.returnaddress` object failure,
-   and native AVX512/RCP14/MXCSR acceptance. Six MMX rows retain a separate
-   machine-state contract. F32/F64 MIN/MAX NaN, signed-zero, MXCSR and fault
-   execution and BF16 optimized active-memory faults need independent owners.
-6. Keep fourteen strict-SDK entry, GC-scan and runtime/test-hook failures tracked
-   in [issue47](https://github.com/xgo-dev/plan9asm/issues/47). Runtime callbacks,
-   system-stack, arbitrary function-value, general ABI0, full SQLite and purego
-   contracts are separate integration work; object success does not prove them.
-
-External scanning, ledgers and package compatibility belong to
-[llgo-compat/plan9asm](https://github.com/llgo-compat/plan9asm). Do not run local
-inventory or restore those jobs here. Push only allowed forks, preserve draft
-status and coordinate one heavy local Go/LLVM/Node invocation at a time.
+1. Finish the five-architecture reports, paired complete-module translation
+   measurements, Node policy and Go `ci_policy`. Publish only through
+   the allowed fork after the running public round finishes; require fresh
+   complete CI, coverage and review at the new head.
+2. Continue legacy families using original literal prefixes, modes and selection
+   order. Keep source-row ownership distinct from complete semantic acceptance.
+   Do not add another opcode registry or cache mutable source verification.
+3. Integrate the accepted public translator into
+   [LLGo2694](https://github.com/xgo-dev/llgo/pull/2694) with normal public-module
+   verification and fresh compile/link/run owners. A fork pin does not resolve
+   the P1 official upstream dependency requirement.
+4. Preserve native386, AVX512/AVX512ER, RCP14/MXCSR and other explicit hardware
+   gaps. MMX state, BF16 optimized active-memory faults, floating MIN/MAX and
+   unexecuted native owners require their own acceptance evidence.
+5. Preserve ARM64, ARM, WASM and their known object/control gaps. The fourteen
+   strict-SDK failures in [issue47](https://github.com/xgo-dev/plan9asm/issues/47),
+   general ABI0/runtime callbacks and broader library compatibility remain
+   separate work. Coordinate one heavy local Go/LLVM/Node invocation at a time.
