@@ -524,6 +524,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86LoweredImplicitMultiplyNativeRead(ins, state, owned, resultOffset, arch); known {
 			return accepted // Exact volatile input, with the existing implicit outputs and CF/OF only.
 		}
+		if accepted, known := x86LoweredExplicitIMULNativeRead(ins, state, owned, resultOffset, arch); known {
+			return accepted // The same exact native reader retains two/three-operand input roles.
+		}
 		if accepted, known := x86LoweredDwordProductResultStep(ins, state, owned, arch); known {
 			return accepted
 		}

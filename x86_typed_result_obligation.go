@@ -246,6 +246,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 			effect.requiresResultProof {
 			return true // Mandatory input checks cannot be bypassed by raw syntax, Void or an absent result layout.
 		}
+		if x86GPFaultingReadNeedsProof(ins, arch) {
+			return true // A dead native read still needs its whole-source input proof.
+		}
 		if sig.Ret == Void || len(sig.Frame.Results) == 0 {
 			continue
 		}
