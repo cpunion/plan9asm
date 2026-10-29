@@ -26,6 +26,19 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86PrecisionHalfScalarConversionRows retains all ordinary precision, F16C
+// and scalar FP/GP conversions; numerical and native contracts stay separate.
+func X86PrecisionHalfScalarConversionRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VCVTPD2PS VCVTPD2PSX VCVTPD2PSY VCVTPS2PD
+  VCVTPH2PS VCVTPS2PH VCVTSD2SS VCVTSS2SD
+  VCVTSD2SI VCVTSD2SIQ VCVTSS2SI VCVTSS2SIQ
+  VCVTTSD2SI VCVTTSD2SIQ VCVTTSS2SI VCVTTSS2SIQ
+  VCVTSD2USIL VCVTSD2USIQ VCVTSS2USIL VCVTSS2USIQ
+  VCVTTSD2USIL VCVTTSD2USIQ VCVTTSS2USIL VCVTTSS2USIQ
+  VCVTSI2SDL VCVTSI2SDQ VCVTSI2SSL VCVTSI2SSQ
+  VCVTUSI2SDL VCVTUSI2SDQ VCVTUSI2SSL VCVTUSI2SSQ`)
+}
+
 // X86MoveRemainderRows retains complete scalar, half, GP/vector, sign-mask
 // and non-temporal move tables, including named-source shadow alternatives.
 func X86MoveRemainderRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -420,6 +433,9 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if x86ConversionRemainderTable(rule.Ytab) {
+		return x86ConversionRemainderRowWitnesses(rule)
+	}
 	if x86MoveRemainderTable(rule.Ytab) {
 		return x86MoveRemainderRowWitnesses(rule)
 	}

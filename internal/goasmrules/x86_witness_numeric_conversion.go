@@ -165,6 +165,10 @@ func x86PackedNumericConversionRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryW
 	if err != nil {
 		return nil, err
 	}
+	return f.witnesses(rule.Opcode), nil
+}
+
+func (f x86PackedNumericConversionFormat) witnesses(opcode string) []X86PackedBinaryWitness {
 	bank := map[int]string{128: "X", 256: "Y", 512: "Z"}
 	source, destination := bank[f.source]+"0", bank[f.result]+"2"
 	if f.encoding.kind == "evex" {
@@ -187,7 +191,7 @@ func x86PackedNumericConversionRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryW
 			p2 |= 0x80
 		}
 		witnesses = append(witnesses, X86PackedBinaryWitness{
-			Instruction: rule.Opcode + suffix + " " + operands, Generation: f.encoding.kind,
+			Instruction: opcode + suffix + " " + operands, Generation: f.encoding.kind,
 			First: first, Destination: destination, Width: f.result, Memory: first == "(AX)",
 			Masked: f.masked, Zeroing: strings.HasSuffix(suffix, ".Z"), Broadcast: strings.Contains(suffix, ".BCST"),
 			Encoding: f.encoding.bytes(0x78, p0, p2, modrm),
@@ -212,5 +216,5 @@ func x86PackedNumericConversionRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryW
 			add(source, ".SAE"+suffix, p2|0x10)
 		}
 	}
-	return witnesses, nil
+	return witnesses
 }

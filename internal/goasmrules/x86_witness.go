@@ -111,6 +111,18 @@ func x86PackedSyntaxWitnesses(rule X86AVXRule, unary bool) ([]string, error) {
 	masked := rule.ZCase == maskCase
 	evex := masked || rule.ZCase == "Zevex_rm_v_r" || store && rule.ZCase == "Zevex_r_v_rm" ||
 		extension && rule.ZCase == "Zevex_i_rm_vo" || registerImmediate && rule.ZCase == "Zevex_i_rm_r"
+	if scalar {
+		row := 0
+		if rule.Ytab == "_yvaddsd" && evex {
+			row++
+		}
+		if masked {
+			row++
+		}
+		if rule.RowIndex != row {
+			return nil, fmt.Errorf("scalar source row ordinal differs from its encoding/mask transport")
+		}
+	}
 	if rule.Ytab == "_yvprold" && (!immediate || !evex) {
 		return nil, fmt.Errorf("packed immediate rotates require an EVEX immediate format")
 	}

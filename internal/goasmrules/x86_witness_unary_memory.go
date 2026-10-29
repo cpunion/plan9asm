@@ -1,5 +1,7 @@
 package goasmrules
 
+import "fmt"
+
 // A unary vector memory alternative has independent encoded width, register
 // carrier and tuple. Direction owns operand transport, never memory authority.
 type x86PackedUnaryMemoryFormat struct {
@@ -9,8 +11,12 @@ type x86PackedUnaryMemoryFormat struct {
 }
 
 func (f x86PackedUnaryMemoryFormat) witnesses(opcode string) []X86PackedBinaryWitness {
-	source := map[int]string{128: "X16", 256: "Y16", 512: "Z16"}[f.width]
-	destination := map[int]string{16: "X18", 32: "Y18", 64: "Z18"}[f.carrier]
+	bank := 16
+	if f.encoding.kind == "vex" {
+		bank = 0
+	}
+	source := fmt.Sprint(map[int]string{128: "X", 256: "Y", 512: "Z"}[f.width], bank)
+	destination := fmt.Sprint(map[int]string{16: "X", 32: "Y", 64: "Z"}[f.carrier], bank+2)
 	var witnesses []X86PackedBinaryWitness
 	for _, memory := range []bool{false, true} {
 		first, last, modrm := source, destination, byte(0xd0)
@@ -38,7 +44,7 @@ func (f x86PackedUnaryMemoryFormat) witnesses(opcode string) []X86PackedBinaryWi
 				suffix, p2 = ".Z", p2|0x80
 			}
 			witnesses = append(witnesses, X86PackedBinaryWitness{
-				Instruction: opcode + suffix + " " + operands, Generation: "evex",
+				Instruction: opcode + suffix + " " + operands, Generation: f.encoding.kind,
 				First: first, Destination: last, Width: f.width, Memory: !f.store && memory,
 				Masked: f.masked, Zeroing: zeroing,
 				Encoding: f.encoding.bytes(0x78, p0, p2, modrm),
