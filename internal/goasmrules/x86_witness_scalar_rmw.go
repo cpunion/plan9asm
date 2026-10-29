@@ -146,6 +146,9 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		"yscond": {"Zo_m/2/Ymb"},
 		"ybtl":   {"Zibo_m/2/Yi8,Yml", "Zr_m/1/Yrl,Yml"},
 		"yml_rl": {"Zm_r/1/Yml,Yrl"},
+		"ycmpb":  {"Z_ib/1/Yal,Yi32", "Zm_ibo/2/Ymb,Yi32", "Zm_r/1/Ymb,Yrb", "Zr_m/1/Yrb,Ymb"},
+		"ycmpl":  {"Zm_ibo/2/Yml,Yi8", "Z_il/1/Yax,Yi32", "Zm_ilo/2/Yml,Yi32", "Zm_r/1/Yml,Yrl", "Zr_m/1/Yrl,Yml"},
+		"ytestl": {"Zil_/1/Yi32,Yax", "Zilo_m/2/Yi32,Yml", "Zr_m/1/Yrl,Yml", "Zm_r/1/Yml,Yrl"},
 	}
 	schema := schemas[entry.Ytab]
 	if entry.Opcode == "" {
@@ -240,18 +243,29 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 	// shadows. The late direction is witnessed by memory source instead.
 	var operands [][2]string
 	immediate := 128
+	compare := entry.Ytab == "ycmpl" || entry.Ytab == "ycmpb"
 	switch row.ZCase {
 	case "Zib_", "Zil_":
 		operands = append(operands, [2]string{"$128", accumulator})
+	case "Z_ib", "Z_il":
+		operands = append(operands, [2]string{accumulator, "$128"})
+	case "Zm_ibo", "Zm_ilo":
+		if row.Classes[1] == "Yi8" {
+			immediate = 1
+		}
+		operands = append(operands, [2]string{dst, fmt.Sprint("$", immediate)}, [2]string{"0(SI)", fmt.Sprint("$", immediate)})
 	case "Zibo_m", "Zilo_m":
 		if row.Classes[0] == "Yi8" {
 			immediate = 1
 		}
 		operands = append(operands, [2]string{fmt.Sprint("$", immediate), dst}, [2]string{fmt.Sprint("$", immediate), "0(SI)"})
 	case "Zr_m":
-		operands = append(operands, [2]string{src, dst}, [2]string{src, "0(SI)"})
+		if !compare {
+			operands = append(operands, [2]string{src, dst})
+		}
+		operands = append(operands, [2]string{src, "0(SI)"})
 	case "Zm_r":
-		if entry.Ytab == "yml_rl" {
+		if entry.Ytab == "yml_rl" || compare {
 			operands = append(operands, [2]string{src, dst})
 		}
 		operands = append(operands, [2]string{"0(SI)", dst})
@@ -281,7 +295,7 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 			code = append(code, rm|1<<3)
 		case "Zm_r":
 			code = append(code, rm|3<<3)
-		case "Zibo_m", "Zilo_m", "Zo_m":
+		case "Zibo_m", "Zilo_m", "Zm_ibo", "Zm_ilo", "Zo_m":
 			if offset+1 >= len(payload) || payload[offset+1] > 7 {
 				return nil, fmt.Errorf("scalar /digit is not a three-bit extension")
 			}
@@ -289,9 +303,9 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		case "Z_rp":
 			code[len(code)-1] += 3
 		}
-		if strings.HasPrefix(args[0], "$") {
+		if strings.HasPrefix(args[0], "$") || compare && strings.HasPrefix(args[1], "$") {
 			n := 1
-			if row.ZCase == "Zil_" || row.ZCase == "Zilo_m" {
+			if row.ZCase == "Zil_" || row.ZCase == "Zilo_m" || row.ZCase == "Z_il" || row.ZCase == "Zm_ilo" {
 				n = 4
 				if width == 'W' {
 					n = 2
