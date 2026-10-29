@@ -122,20 +122,8 @@ func TestX86ExtensionCompleteFormatsThreeAPIFiveObjects(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
 			var body strings.Builder
-			for _, operation := range x86ExtensionTestOperations {
-				if target.arch == "386" && (operation == "MOVBQSX" || operation == "MOVBQZX" ||
-					operation == "MOVWQSX" || operation == "MOVWQZX" || operation == "MOVLQSX") {
-					continue
-				}
-				for _, source := range []string{"AX", "8(BX)", "-1(BX)(SI*2)", "x+0(FP)", "@WORD(SP)", "·payload(SB)"} {
-					fmt.Fprintf(&body, "%s %s,CX\n", operation, source)
-				}
-				if strings.HasPrefix(operation, "MOVB") || operation == "MOVSWW" || operation == "MOVZWW" {
-					fmt.Fprintf(&body, "%s BL,CX\n", operation)
-					if target.arch == "386" {
-						fmt.Fprintf(&body, "%s DI,CX\n", operation)
-					}
-				}
+			for _, instruction := range x86ExtensionOriginalFormatRows(t, target.arch) {
+				body.WriteString(instruction + "\n")
 			}
 			body.WriteString("@MOV CX,ret+@WORD(FP)\nRET")
 			source, sig, pkg := x86SourceStackNumericalFixture(target.arch, body.String())
@@ -145,34 +133,188 @@ func TestX86ExtensionCompleteFormatsThreeAPIFiveObjects(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			options := x86SourceStackOptions(target.arch, target.triple, sig)
-			ir, err := Translate(file, options)
-			if err != nil {
-				t.Fatal(err)
+			// Keep the complete original mixed source. It has no producers
+			// for AX/BX/SI or its physical SP bytes; Go format acceptance
+			// alone cannot supply those inputs to any public API.
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewPackageAPI(t, source, pkg, target.arch, target.triple, api)
+				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					t.Fatal("original mixed source acquired missing entry inputs", api, err)
+				}
 			}
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM22 llc required")
 			}
-			compileLLVMToObject(t, llc, target.triple, "extension-form.ll", "extension-form.o", ir)
-			ctx := llvm.NewContext()
-			defer ctx.Dispose()
-			module, err := TranslateModuleInContext(ctx, file, options)
-			if err != nil {
-				t.Fatal(err)
+			ir := x86ScalarFormatObjectUnit(t, file, map[string]FuncSig{"Value": sig}, target.arch, target.triple, 0)
+			for _, level := range []string{"-O0", "-O2"} {
+				x86PackedStringCompileObject(t, llc, target.triple, ir, level)
 			}
-			defer module.Dispose()
-			compileLLVMToObject(t, llc, target.triple, "extension-form-module.ll", "extension-form-module.o", module.String())
-			ctx = llvm.NewContext()
-			defer ctx.Dispose()
-			translation, err := translateGoModuleInContext(ctx, pkg, []byte(source), GoModuleOptions{
-				GOARCH: target.arch, TargetTriple: target.triple,
-			})
-			if err != nil {
-				t.Fatal(err)
+		})
+	}
+}
+
+func x86ExtensionOriginalFormatRows(t *testing.T, arch string) []string {
+	t.Helper()
+	var rows []string
+	for _, operation := range x86ExtensionTestOperations {
+		if arch == "386" && (operation == "MOVBQSX" || operation == "MOVBQZX" ||
+			operation == "MOVWQSX" || operation == "MOVWQZX" || operation == "MOVLQSX") {
+			continue
+		}
+		for _, source := range []string{"AX", "8(BX)", "-1(BX)(SI*2)", "x+0(FP)", "@WORD(SP)", "·payload(SB)"} {
+			rows = append(rows, fmt.Sprintf("%s %s,CX", operation, source))
+		}
+		if strings.HasPrefix(operation, "MOVB") || operation == "MOVSWW" || operation == "MOVZWW" {
+			rows = append(rows, operation+" BL,CX")
+			if arch == "386" {
+				rows = append(rows, operation+" DI,CX")
 			}
-			defer translation.Module.Dispose()
-			compileLLVMToObject(t, llc, target.triple, "extension-form-go.ll", "extension-form-go.o", translation.Module.String())
+		}
+	}
+	want := 92
+	if arch == "386" {
+		want = 66
+	}
+	if len(rows) != want {
+		t.Fatal("complete original extension format inventory changed", arch, len(rows), want)
+	}
+	return rows
+}
+
+func TestX86ExtensionOriginalOrdinaryFormsWithRealInputs(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			word, move, typ := 8, "MOVQ", "uint64"
+			if target.arch == "386" {
+				word, move, typ = 4, "MOVL", "uint32"
+			}
+			var ordinary []string
+			physical := 0
+			for _, row := range x86ExtensionOriginalFormatRows(t, target.arch) {
+				if strings.Contains(row, "@WORD(SP)") {
+					physical++
+					continue
+				}
+				ordinary = append(ordinary, row)
+			}
+			want, wantPhysical := 78, 14
+			if target.arch == "386" {
+				want, wantPhysical = 57, 9
+			}
+			if len(ordinary) != want || physical != wantPhysical {
+				t.Fatal("original ordinary/physical source partition changed", len(ordinary), physical)
+			}
+			for start := 0; start < len(ordinary); start += 32 {
+				end := start + 32
+				if end > len(ordinary) {
+					end = len(ordinary)
+				}
+				t.Run(fmt.Sprintf("batch%d", start/32), func(t *testing.T) {
+					var source, declarations strings.Builder
+					source.WriteString("GLOBL ·payload(SB),8,$16\nDATA ·payload+0(SB)/8,$0x1122334455667788\n")
+					for ordinal, row := range ordinary[start:end] {
+						name := fmt.Sprintf("Extension%d", ordinal)
+						fmt.Fprintf(&declarations, "func %s(x %s, p *[32]byte) %s\n", name, typ, typ)
+						fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s p+%d(FP),BX\n%s x+0(FP),AX\nMOVL $1,SI\nMOVL $2,DI\n%s $0,CX\n",
+							name, 3*word, move, word, move, move)
+						if strings.Contains(row, " BL,") {
+							source.WriteString("MOVL $3,BX\n")
+						}
+						fmt.Fprintf(&source, "%s\n%s CX,ret+%d(FP)\nRET\n", row, move, 2*word)
+					}
+					x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+						if err != nil {
+							t.Fatal("original ordinary tuple with real new input producers", api, err)
+						}
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestX86ExtensionOriginalPhysicalSPWithCapturedAMD64Frame(t *testing.T) {
+	goAMD64FramePrepareOwnedToolCache(t)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		if target.arch != "amd64" {
+			continue // The AMD64 frame producer cannot certify a 386 frame.
+		}
+		t.Run(target.triple, func(t *testing.T) {
+			var source, declarations strings.Builder
+			count := 0
+			for _, row := range x86ExtensionOriginalFormatRows(t, target.arch) {
+				if !strings.Contains(row, "@WORD(SP)") {
+					continue
+				}
+				row = strings.Replace(row, "@WORD", "8", 1)
+				name := fmt.Sprintf("Physical%d", count)
+				fmt.Fprintf(&declarations, "func %s(x uint64) uint64\n", name)
+				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$32-16\nMOVQ x+0(FP),AX\nMOVQ AX,8(SP)\nMOVQ $0,CX\n%s\nMOVQ CX,ret+8(FP)\nRET\n", name, row)
+				count++
+			}
+			if count != 14 {
+				t.Fatal("complete original AMD64 physical-SP format set changed", count)
+			}
+			goos := "linux"
+			if strings.Contains(target.triple, "apple") {
+				goos = "darwin"
+			} else if strings.Contains(target.triple, "windows") {
+				goos = "windows"
+			}
+			pkg, request, _, options := fixedLocalTransportFixture(t, source.String(), declarations.String(), goos+"/amd64", target.triple)
+			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"},
+				func(t *testing.T, ir string, err error) {
+					if err != nil {
+						t.Fatal("same physical 8(SP) tuple with actual captured frame and numerical stores", err)
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+					}
+				})
+		})
+	}
+}
+
+func TestX86ExtensionOriginal386PhysicalSPStillNeedsSourceOwner(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		if target.arch != "386" {
+			continue
+		}
+		t.Run(target.triple, func(t *testing.T) {
+			count := 0
+			for _, row := range x86ExtensionOriginalFormatRows(t, target.arch) {
+				if !strings.Contains(row, "@WORD(SP)") {
+					continue
+				}
+				source, _, pkg := x86SourceStackNumericalFixture(target.arch,
+					"MOVL $0,CX\n"+row+"\n@MOV CX,ret+@WORD(FP)\nRET\n")
+				requireX86GoAssemblerResult(t, target.arch, source, true)
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewPackageAPI(t, source, pkg, target.arch, target.triple, api)
+					if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						t.Fatal("unowned physical 4(SP) bytes acquired numerical authority", row, api, err)
+					}
+				}
+				count++
+			}
+			if count != 9 {
+				t.Fatal("complete original 386 physical-SP source-role boundary changed", count)
+			}
+			t.Log("all nine original physical-SP formats retain pending public source ownership; Go/private format objects are checked separately")
 		})
 	}
 }
