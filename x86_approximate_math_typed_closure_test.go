@@ -166,6 +166,9 @@ func TestX86ApproximateMathInitializedNativeOperandsThreeAPIObjects(t *testing.T
 		body, declaration := x86PackedAbsSignInitializedInstruction(index, instruction, "amd64", [3]int{16, 17, 18})
 		// Zeroing has no old destination input; the whole output remains observable.
 		body = strings.Replace(body, "VMOVDQU64 (CX),Z18\n", "", 1)
+		// The memory instruction supplies its own active source. Do not
+		// pre-read the same address through an unused register initializer.
+		body = strings.Replace(body, "VMOVDQU64 (AX),Z16\n", "", 1)
 		source.WriteString(body)
 		declarations.WriteString(declaration + "\n")
 	}
