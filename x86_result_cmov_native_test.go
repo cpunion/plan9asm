@@ -81,13 +81,30 @@ func TestX86CMOVNativeExactByteFlagsAndSourceState(t *testing.T) {
 	}
 }
 
+// The original initialized CMOV producer is shared with official byte rows.
+// A different destination only selects a nonaliasing FLAGS observation scratch;
+// it grants no predicate, pointer or source-memory permission.
+func x86ConditionalMoveInitializedFunction(name, operation, destination, arch string) (string, string) {
+	word, suffix := goWordSize(arch), "Q"
+	if word == 4 {
+		suffix = "L"
+	}
+	scratch := "BX"
+	if destination == scratch {
+		scratch = "DX"
+	}
+	source := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\nMOV%s p+0(FP),SI\n"+
+		"MOV%s old+%d(FP),%s\nMOV%s out+%d(FP),DI\nMOV%s $11,CX\nPUSH%s flags+%d(FP)\nPOPF%s\n%s\n"+
+		"PUSHF%s\nPOP%s %s\nMOV%s %s,(DI)\nMOV%s %s,ret+%d(FP)\nRET\n", name, 5*word, suffix,
+		suffix, word, destination, suffix, 3*word, suffix, suffix, 2*word, suffix, operation, suffix, suffix, scratch, suffix, scratch, suffix, destination, 4*word)
+	declaration := fmt.Sprintf("func %s(p *byte,old,flags uintptr,out *uintptr) uintptr\n", name)
+	return source, declaration
+}
+
 func TestX86CMOVNativeCompleteFamilyFiveTargetObjects(t *testing.T) {
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
-			word, suffix := goWordSize(target.arch), "Q"
-			if word == 4 {
-				suffix = "L"
-			}
+			word := goWordSize(target.arch)
 			for _, raw := range []bool{false, true} {
 				var source, declarations strings.Builder
 				count := 0
@@ -98,11 +115,9 @@ func TestX86CMOVNativeCompleteFamilyFiveTargetObjects(t *testing.T) {
 							operation = x86RawNumericalInstruction(t, target.arch, operation)
 						}
 						function := fmt.Sprint("ConditionalRead", count)
-						fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\nMOV%s p+0(FP),SI\n"+
-							"MOV%s old+%d(FP),AX\nMOV%s out+%d(FP),DI\nMOV%s $11,CX\nPUSH%s flags+%d(FP)\nPOPF%s\n%s\n"+
-							"PUSHF%s\nPOP%s BX\nMOV%s BX,(DI)\nMOV%s AX,ret+%d(FP)\nRET\n", function, 5*word, suffix,
-							suffix, word, suffix, 3*word, suffix, suffix, 2*word, suffix, operation, suffix, suffix, suffix, suffix, 4*word)
-						fmt.Fprintf(&declarations, "func %s(p *byte,old,flags uintptr,out *uintptr) uintptr\n", function)
+						body, declaration := x86ConditionalMoveInitializedFunction(function, operation, "AX", target.arch)
+						source.WriteString(body)
+						declarations.WriteString(declaration)
 						count++
 					}
 				}

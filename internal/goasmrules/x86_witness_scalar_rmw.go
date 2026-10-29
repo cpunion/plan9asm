@@ -64,6 +64,42 @@ func X86ScalarRMWRows(catalog X86LegacyCatalog, arch string) ([]X86ScalarRMWRow,
 	return result, nil
 }
 
+// X86ConditionalMoveRows reuses the scalar syntax/byte containers and
+// transport. Conditional reads, old destinations and FLAGS remain owned by
+// the typed family; this projection supplies no numerical or storage facts.
+func X86ConditionalMoveRows(catalog X86LegacyCatalog, arch string) ([]X86ScalarRMWRow, error) {
+	if arch != "386" && arch != "amd64" {
+		return nil, fmt.Errorf("conditional move requires a Go x86 mode")
+	}
+	var result []X86ScalarRMWRow
+	seen := map[string]bool{}
+	for _, entry := range catalog.Optab {
+		if !strings.HasPrefix(entry.Opcode, "CMOV") {
+			continue
+		}
+		if seen[entry.Opcode] || len(entry.Opcode) != 7 || len(entry.Rows) != 1 {
+			return nil, fmt.Errorf("duplicate or malformed conditional-move source member")
+		}
+		seen[entry.Opcode] = true
+		operand := entry.Rows[0]
+		witnesses, err := x86ScalarRMWRowWitnesses(entry, operand, arch)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", entry.Opcode, err)
+		}
+		row := X86ScalarRMWRow{ID: fmt.Sprintf("optab/%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, operand.RowIndex), Opcode: entry.Opcode}
+		if arch == "386" && entry.Prefix == "Pw" {
+			row.ModeFiltered = "Pw requires amd64"
+		} else {
+			row.Witnesses = witnesses
+		}
+		result = append(result, row)
+	}
+	if len(seen) != 48 || len(result) != 48 {
+		return nil, fmt.Errorf("incomplete conditional-move source closure: names=%d rows=%d", len(seen), len(result))
+	}
+	return result, nil
+}
+
 func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch string) ([]X86ScalarRMWWitness, error) {
 	// These are ordered physical schemas, not opcode values. In particular,
 	// /digit immediate extension and ModRM direction have different transports.
@@ -74,11 +110,21 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		"yincq":  {"Zo_m/2/Yml"},
 		"yscond": {"Zo_m/2/Ymb"},
 		"ybtl":   {"Zibo_m/2/Yi8,Yml", "Zr_m/1/Yrl,Yml"},
+		"yml_rl": {"Zm_r/1/Yml,Yrl"},
 	}
 	schema := schemas[entry.Ytab]
 	width := entry.Opcode[len(entry.Opcode)-1]
+	conditional := strings.HasPrefix(entry.Opcode, "CMOV")
+	if conditional {
+		if len(entry.Opcode) != 7 || entry.Ytab != "yml_rl" || !strings.ContainsRune("WLQ", rune(entry.Opcode[4])) {
+			return nil, fmt.Errorf("unmodeled conditional-move source shape")
+		}
+		width = entry.Opcode[4]
+	} else if entry.Ytab == "yml_rl" {
+		return nil, fmt.Errorf("scalar source family does not own this table")
+	}
 	expectedPrefix := map[byte]string{'B': "Pb", 'W': "Pe", 'L': "Px", 'Q': "Pw"}[width]
-	if entry.Ytab == "ybtl" && width != 'Q' {
+	if (entry.Ytab == "ybtl" || conditional) && width != 'Q' {
 		expectedPrefix = map[byte]string{'W': "Pq", 'L': "Pm"}[width]
 	} else if entry.Ytab == "yincl" {
 		expectedPrefix = "Px1"
@@ -147,6 +193,9 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 	case "Zr_m":
 		operands = append(operands, [2]string{src, dst}, [2]string{src, "0(SI)"})
 	case "Zm_r":
+		if conditional {
+			operands = append(operands, [2]string{src, dst})
+		}
 		operands = append(operands, [2]string{"0(SI)", dst})
 	case "Z_rp":
 		operands = append(operands, [2]string{"", dst})
@@ -165,6 +214,9 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 			rm = 6
 		} else {
 			rm |= 0xc0
+			if row.ZCase == "Zm_r" {
+				rm = 0xc1
+			} // CX source, BX destination.
 		}
 		switch row.ZCase {
 		case "Zr_m":
