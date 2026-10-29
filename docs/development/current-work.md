@@ -8,9 +8,17 @@ this page records the current candidate and its limits.
 
 ## Publication and review
 
-PR40 remains draft. Published `1426b8a6d` adds the qualified K and insert/extract
+PR40 remains draft. The 42-view candidate adds the complete remaining-move
+join to the K, insert/extract and CI-consumer repairs below. Its code snapshot
+is `f464a5d0a`, identical to the qualified author snapshot except two documents.
+It needs its own complete CI, coverage and external review after publication.
+
+Preceding `1426b8a6d` adds the qualified K and insert/extract
 batch below. Its [own CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40809159475)
-is still running and has failures. Actual ordinary, coverage and race artifacts
+finished naturally: **291 successful / 34 failed**, all 325 job names and
+check IDs accounted for, with no cancellation or pending jobs. The failures are
+eleven extract expectations, eleven mask-seed expectations, one Windows artifact
+upload timeout and eleven dependent aggregate failures. Actual artifacts
 identify two stale consumer expectations: a Go-encodable terminal extract and
 a mode32 GP-to-K mask seed. Local test-only commits `60c89e454` and `dd065ab8d`
 retain all original inputs and correct those expectations. Both SDKs pass the
@@ -19,7 +27,36 @@ and Go26 / 301 policies. The first scope preserves raw memory-zero rejection;
 the second preserves unknown/partial inputs and true 64-bit K/memory controls.
 They do not change translator code or establish current-head cloud acceptance.
 A Windows partition also failed artifact upload after its tests passed; missing
-artifacts remain a formal failure. Let this round finish before a batched push.
+artifacts remain a formal failure. That round establishes no complete coverage,
+race or Windows union acceptance.
+
+The move join owns **101 original rows / 119 source candidates**. Actual Go
+and three-API O0/O2 objects cover 93 selected AMD64 rows / 105 witnesses;
+the 54 low-bank386 rows / 58 witnesses are a subset, not extra canonical keys.
+Fourteen shadow candidates retain earlier-row byte observations without being
+counted as later-encoding objects. The source union is **42 views / 3,676 records**,
+including **3,147 / 3,568 AVX rows (88.20%)** and 529 separate legacy/fallback
+records. Observed canonical keys total **12,856**, distinct from 12,861 source
+candidates. Source/declaration batches total 462 official plus four runtime;
+preflight and identity generators do not add object batches.
+
+Four HLPS/LHPS forms share the existing typed form, effects, result analysis and
+lowering. Modern writes now zero upper aliases while legacy writes preserve
+them; independent named/raw byte and canary execution covers sixteen kernels
+through nine API/pipeline combinations. Both SDKs pass the final two runtime
+roots / 92 children. Controlled old-lowerer execution reproduces all eight
+modern failures. This is portable execution, not native386 or AVX512 acceptance.
+The translator shrinks by three lines; cold row machinery adds 348 lines.
+
+Final family qualification is 24 roots / 496 children per SDK: current inherits
+22 unchanged owners and reruns two final owners, while minimum freshly runs the
+complete scope. Full rules pass 107 / 4,328 on each SDK. All eighteen old41
+snapshot files retain every field, byte, case, source, declaration and alias.
+Current-SDK five-architecture reports, Node573 and Go26 / 301 pass; minimum's
+five-architecture script was not rerun by this component. Forty-seven high386
+cases retain separate Go acceptance/refusal, physical/grammar and defined-NUM
+boundaries. Existing high-X15/Y15 Void-format objects remain format evidence.
+Neither those cases nor unavailable native owners are numerical passes.
 
 The preceding published `5831e71bc` completes its
 [own CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40782298561):
@@ -39,7 +76,7 @@ rows and double-shift fallback records are not an amd64 percentage. Preceding
 `bebc7092d` had 34 views / 2,927 rows / 11,010 witnesses and its own successful
 325-job / 88.1% round, retaining 276 Windows root skips.
 
-The current published batch has **41 views / 3,575 source records** and
+The `1426b8a6d` inventory has **41 views / 3,575 source records** and
 **12,751 observed canonical witnesses**. Its AVX source-row ownership is
 **3,046 / 3,568 (85.37%)**. This retains the previous source-row denominator;
 it is not a new claim that every row has a directly selectable named encoding.
@@ -80,7 +117,7 @@ The final integrated `adb136c05` source also passes both KMOV runtime roots
 (2 / 38 per SDK), Node573 and Go26 / 301 on frozen source/tools/driver. Component
 evidence is inherited only through exact file/function/tool identity. The two
 test-only identity overlays are recorded separately from ordinary binaries.
-Its current cloud round is not accepted; the local test repairs require their
+Its completed cloud round is not accepted; the local test repairs require their
 own complete cloud round after publication.
 
 The preceding `4aeffe806` round also completed 325/325 with 88.1% coverage;
@@ -683,7 +720,9 @@ Neither file is cropped or substituted with an instruction-only fixture.
 | Published mixed-mode union (39 views) | **3,406** | **12,454** |
 | Local K-data, both modes | 87 | 91 |
 | Local insert/extract source ownership | 82 | 194 selected ordinary + 12 terminal |
-| Local mixed-mode source union (41 views) | **3,575** | **12,751 observed** |
+| Preceding mixed-mode source union (41 views) | **3,575** | **12,751 observed** |
+| Remaining-move source ownership | 101 | 105 selected ordinary |
+| Local mixed-mode source union (42 views) | **3,676** | **12,856 observed** |
 
 Three insert/extract source rows are fully shadowed: their alternative physical
 encodings are not among the 194 selected ordinary witnesses. Terminal contexts
