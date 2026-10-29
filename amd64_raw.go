@@ -3023,26 +3023,7 @@ func decodedX86MaskMoveInstruction(code []byte, mode int) (instruction Instr, le
 }
 
 func decodedX86MaskMoveInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -3217,26 +3198,7 @@ func decodedX86EVEXPackedIntegerMoveInstructionWithMemory(code []byte, mode int,
 type decodedX86EVEXMoveMatcher func(pp byte, width64 bool, opcode byte) (op Op, store bool, ok bool)
 
 func decodedX86EVEXPackedMoveInstruction(code []byte, mode int, memory x86RawMemoryDecoder, family string, match decodedX86EVEXMoveMatcher) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto evex
-		}
-	}
-
-evex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -3339,26 +3301,7 @@ func decodedX86VMOVQInstruction(code []byte, mode int) (instruction Instr, lengt
 }
 
 func decodedX86VMOVQInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -3667,26 +3610,7 @@ func decodedX86VINSERT128Instruction(code []byte, mode int) (instruction Instr, 
 }
 
 func decodedX86VINSERT128InstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) < i+5 || code[i] != 0xc4 || code[i+1]&0x1f != 3 {
 		return Instr{}, 0, false, nil
 	}
@@ -3753,26 +3677,7 @@ func decodedX86EVEXPackedInsertInstructionWithMemory(code []byte, mode int, memo
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto evex
-		}
-	}
-
-evex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) < i+5 || code[i] != 0x62 {
 		return Instr{}, 0, false, nil
 	}
@@ -3882,26 +3787,7 @@ func decodedX86VEXPackedBroadcastInstructionWithMemory(code []byte, mode int, me
 	if instruction, length, ok, err = decodedX86VBROADCAST128InstructionWithMemory(code, mode, memory); ok || err != nil {
 		return
 	}
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) > i && code[i] == 0x62 {
 		return decodedX86EVEXPackedBroadcastInstructionWithMemory(code, i, mode, segment, addressOverride, memory)
 	}
@@ -4413,26 +4299,7 @@ func decodedX86InsertPSInstruction(code []byte, mode int) (instruction Instr, le
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto encoding
-		}
-	}
-
-encoding:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) <= i {
 		return Instr{}, 0, false, nil
 	}
@@ -4576,26 +4443,7 @@ func decodedX86PackedScalarExtractInstructionWithMemory(code []byte, mode int, m
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto prefix
-		}
-	}
-
-prefix:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) <= i {
 		return Instr{}, 0, false, nil
 	}
@@ -4730,26 +4578,7 @@ prefix:
 // before consulting the generic decoder. EVEX forms are decoded correctly by
 // x/arch and continue through the ordinary path.
 func decodedX86VPERMQInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) < i+4 || code[i] != 0xc4 || code[i+1]&0x1f != 3 || code[i+3] != 0x00 {
 		return Instr{}, 0, false, nil
 	}
@@ -4803,26 +4632,7 @@ func decodedX86ScalarPrecisionConvertInstruction(code []byte, mode int) (instruc
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto encoding
-		}
-	}
-
-encoding:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) <= i {
 		return Instr{}, 0, false, nil
 	}
@@ -5029,26 +4839,7 @@ func decodedX86DuplicateMoveInstruction(code []byte, mode int) (instruction Inst
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto encoding
-		}
-	}
-
-encoding:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) <= i {
 		return Instr{}, 0, false, nil
 	}
@@ -5257,26 +5048,7 @@ func decodedX86InLaneFloatingPermuteInstruction(code []byte, mode int) (instruct
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto encoding
-		}
-	}
-
-encoding:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) <= i {
 		return Instr{}, 0, false, nil
 	}
@@ -5458,26 +5230,7 @@ func decodedX86ImmediatePackedBlendInstructionWithMemory(code []byte, mode int, 
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto encoding
-		}
-	}
-
-encoding:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) <= i {
 		return Instr{}, 0, false, nil
 	}
@@ -5603,26 +5356,7 @@ func decodedX86FloatingUnpackInstruction(code []byte, mode int) (instruction Ins
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto encoding
-		}
-	}
-
-encoding:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) <= i {
 		return Instr{}, 0, false, nil
 	}
@@ -5830,26 +5564,7 @@ func decodedX86VEXPackedFloatLogicalInstruction(code []byte, mode int) (instruct
 }
 
 func decodedX86VEXPackedFloatLogicalInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -5981,26 +5696,7 @@ func decodedX86VEXPackedIntegerLogicalInstruction(code []byte, mode int) (instru
 }
 
 func decodedX86VEXPackedIntegerLogicalInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -6078,26 +5774,7 @@ func decodedX86EVEXPackedLogicalInstructionWithMemory(code []byte, mode int, mem
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto evex
-		}
-	}
-
-evex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) < i+5 || code[i] != 0x62 {
 		return Instr{}, 0, false, nil
 	}
@@ -6197,26 +5874,7 @@ func decodedX86VEXPackedMADDInstruction(code []byte, mode int) (instruction Inst
 }
 
 func decodedX86VEXPackedMADDInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -6297,26 +5955,7 @@ func decodedX86VEXBinaryFloatInstruction(code []byte, mode int) (instruction Ins
 }
 
 func decodedX86VEXBinaryFloatInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -6542,26 +6181,7 @@ func decodedX86EVEXBinaryFloatInstructionWithMemory(code []byte, i, mode int, se
 // the four signed forms; EVEX additionally supports unsigned forms, ignored
 // scalar L'L encodings, and register-only embedded rounding where enabled.
 func decodedX86ScalarIntegerFloatInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto prefix
-		}
-	}
-
-prefix:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -6718,26 +6338,7 @@ func scalarIntegerFloatRawOperation(unsigned bool, pp byte, width64 bool) Op {
 // EVEX VCMPPD/PS/SD/SS family. VEX writes X/Y vector results. EVEX writes K
 // results and adds an optional K write mask, packed broadcast, and SAE.
 func decodedX86VectorFloatCompareInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto prefix
-		}
-	}
-
-prefix:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -6920,26 +6521,7 @@ func vectorFloatCompareRawOperation(pp byte) Op {
 // VEX.W is ignored. Recover every register and ModRM/SIB memory form before
 // the generic decoder, which can misdecode these bytes as relative branches.
 func decodedX86VEXHorizontalFloatInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -7073,26 +6655,7 @@ func decodedX86VEXFMA3Instruction(code []byte, mode int) (instruction Instr, len
 }
 
 func decodedX86VEXFMA3InstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -7274,26 +6837,7 @@ func decodedX86VEXTRACT128Instruction(code []byte, mode int) (instruction Instr,
 }
 
 func decodedX86VEXTRACT128InstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -7470,26 +7014,7 @@ func decodedX86EVEXTRACTInstructionWithMemory(code []byte, i, mode int, segment 
 // VSHUFPS/VSHUFPD operand table. x/arch v0.14 rejects some extended VEX
 // encodings and all EVEX forms used by generated ecosystem assembly.
 func decodedX86VSHUFPSInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -7653,26 +7178,7 @@ func decodedX86PackedShuffleInstruction(code []byte, mode int) (instruction Inst
 }
 
 func decodedX86PackedShuffleInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vectorPrefix
-		}
-	}
-
-vectorPrefix:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -7830,26 +7336,7 @@ func decodedX86EVEXPackedShuffleInstruction(code []byte, i, mode int, segment Re
 // VSHUFI64X2. x/arch v0.14 rejects these raw encodings, including the
 // VSHUFF64X2 sequence in github.com/minio/sha256-simd.
 func decodedX86Shuffle128BitBlocksInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto evex
-		}
-	}
-
-evex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -7944,26 +7431,7 @@ func decodedX86VPSHUFBInstruction(code []byte, mode int) (instruction Instr, len
 }
 
 func decodedX86VPSHUFBInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vectorPrefix
-		}
-	}
-
-vectorPrefix:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -8101,26 +7569,7 @@ func decodedX86PackedExtendOpcode(opcode byte) (decodedX86PackedExtendProperties
 // writemasks, zeroing, and compressed displacements. EVEX.b is deliberately
 // rejected because no broadcast form exists in the Go operand tables.
 func decodedX86PackedExtendInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vectorPrefix
-		}
-	}
-
-vectorPrefix:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -8312,26 +7761,7 @@ func decodedX86PackedUniformShiftInstruction(code []byte, mode int) (instruction
 }
 
 func decodedX86PackedUniformShiftInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vectorPrefix
-		}
-	}
-
-vectorPrefix:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -8578,26 +8008,7 @@ func decodedX86VectorAlignInstruction(code []byte, mode int) (instruction Instr,
 // funnel-shift family: immediate/variable, left/right, and W/D/Q lanes.
 // x/arch v0.14 rejects all of these EVEX encodings.
 func decodedX86FunnelShiftInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto evex
-		}
-	}
-
-evex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -8739,26 +8150,7 @@ func decodedX86EVEXImmediateThreeVectorInstructionWithMemory(code []byte, mode i
 }
 
 func decodedX86EVEXImmediateThreeVectorPhysical(code []byte, mode int, opcode byte, dwordOp, qwordOp Op, family string, memory x86RawMemoryDecoder, physicalMode32 bool) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto evex
-		}
-	}
-
-evex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -8846,26 +8238,7 @@ evex:
 // immediate rotates in Go 1.27's _yvprold table. x/arch v0.14 rejects these
 // raw encodings, including VPRORD in github.com/minio/sha256-simd.
 func decodedX86PackedImmediateRotateInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto evex
-		}
-	}
-
-evex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -8996,26 +8369,7 @@ func decodedX86PackedIntegerArithmeticInstruction(code []byte, mode int) (instru
 }
 
 func decodedX86PackedIntegerArithmeticInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vectorPrefix
-		}
-	}
-
-vectorPrefix:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -9165,26 +8519,7 @@ vectorPrefix:
 // decodedX86IndexedPermuteInstruction recognizes the complete EVEX-only
 // VPERMI2 and VPERMT2 families behind Go 1.27's shared _yvblendmpd table.
 func decodedX86IndexedPermuteInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto evex
-		}
-	}
-
-evex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -9316,26 +8651,7 @@ func decodedX86PackedExpandInstruction(code []byte, mode int) (Instr, int, bool,
 }
 
 func decodedX86PackedCompactInstruction(code []byte, mode int, store bool) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto evex
-		}
-	}
-
-evex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -9471,26 +8787,7 @@ func decodedX86VPINSRInstruction(code []byte, mode int) (instruction Instr, leng
 }
 
 func decodedX86VPINSRInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -9579,26 +8876,7 @@ vex:
 // register and ModRM/SIB memory form before the generic decoder. EVEX forms
 // use the separate decodedX86EVEXPackedUnpackInstruction grammar.
 func decodedX86VPUNPCKInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -9698,26 +8976,7 @@ func decodedX86VNNIInstruction(code []byte, mode int) (instruction Instr, length
 // memory source before consulting the generic decoder. EVEX forms continue
 // through x/arch.
 func decodedX86VariableDwordPermuteInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -9777,26 +9036,7 @@ vex:
 // decodedX86EVEXVariableDwordPermuteInstruction covers the Y/Z EVEX forms of
 // Go 1.27's shared VPERMD/VPERMPS _yvpermd table.
 func decodedX86EVEXVariableDwordPermuteInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto evex
-		}
-	}
-
-evex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -9949,26 +9189,7 @@ func decodedX86VBROADCAST128Instruction(code []byte, mode int) (instruction Inst
 }
 
 func decodedX86VBROADCAST128InstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	// VEX.256.66.0F38.W0 1A/5A /r. The unused encoded vvvv field must be
 	// 1111, so the complete third VEX byte is 0x7d.
 	if len(code) < i+5 || code[i] != 0xc4 || code[i+1]&0x1f != 2 || code[i+2] != 0x7d ||
@@ -10021,26 +9242,7 @@ func decodedX86SHAInstructionWithMemory(code []byte, mode int, memory x86RawMemo
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto rex
-		}
-	}
-
-rex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	rexPrefix := byte(0)
 	if mode == 64 && i < len(code) && code[i]&0xf0 == 0x40 {
 		rexPrefix = code[i]
@@ -10126,26 +9328,7 @@ func decodedX86BLSInstruction(code []byte, mode int) (instruction Instr, length 
 }
 
 func decodedX86BLSInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) < i+5 || code[i] != 0xc4 || code[i+1]&0x1f != 2 || code[i+2]&0x07 != 0 || code[i+3] != 0xf3 {
 		return Instr{}, 0, false, nil
 	}
@@ -10205,26 +9388,7 @@ func decodedX86MULXInstruction(code []byte, mode int) (instruction Instr, length
 }
 
 func decodedX86MULXInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
-	i := 0
-	segment := Reg("")
-	addressOverride := false
-	for i < len(code) {
-		switch code[i] {
-		case 0x64:
-			segment = FS
-			i++
-		case 0x65:
-			segment = GS
-			i++
-		case 0x67:
-			addressOverride = true
-			i++
-		default:
-			goto vex
-		}
-	}
-
-vex:
+	i, segment, addressOverride := x86RawSegmentPrefixes(code)
 	if len(code) < i+5 || code[i] != 0xc4 || code[i+1]&0x1f != 2 || code[i+2]&0x07 != 3 || code[i+3] != 0xf6 {
 		return Instr{}, 0, false, nil
 	}
