@@ -155,7 +155,8 @@ func runX86StaticReadNumericOracle(t *testing.T, arch, triple string, compiler, 
 }
 
 func TestX86RawReturnStaticReadNumericOracle(t *testing.T) {
-	if runtime.GOARCH != "amd64" && !(runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") {
+	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
+	if runtime.GOARCH != "amd64" && !crossRosetta {
 		t.Skip("host-inapplicable: x86 scalar oracle runs in the required Linux/amd64 cross-runtime gate")
 	}
 	clang := findLLVM22Tool("clang")
