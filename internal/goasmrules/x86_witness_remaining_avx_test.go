@@ -13,8 +13,8 @@ import (
 // a public translated function, an LLVM object or executed semantics.
 func TestX86RemainingAVXSemanticClosuresExistingWitnesses(t *testing.T) {
 	groups := []struct {
-		name string
-		rows int
+		name    string
+		rows    int
 		members string
 	}{
 		{"FP-unary-scaled-rounding", 90, `
@@ -89,7 +89,7 @@ func TestX86RemainingAVXSemanticClosuresExistingWitnesses(t *testing.T) {
 		t.Fatal(err)
 	}
 	type originalRow struct {
-		id string
+		id   string
 		rule X86AVXRule
 	}
 	rows := make([][]originalRow, len(groups))

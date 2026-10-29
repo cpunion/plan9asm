@@ -8,16 +8,18 @@ Original qualification, failures and host exclusions remain in their reports.
 
 ## Published and local revisions
 
-[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The public
-baseline `5616f67d8` completed its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40851464196)
-with 325/325 successful jobs. Those results certify that baseline, not this
-local follow-up. Every newly published head needs its own complete CI,
-coverage and external review.
+[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The published
+batch `fad14e2e1` has its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40872759334)
+in progress. Its formatting failure is repaired locally while the remaining
+jobs finish. The public baseline `5616f67d8` completed its
+[own round](https://github.com/xgo-dev/plan9asm/actions/runs/40851464196)
+with 325/325 successful jobs. Those results certify that baseline. Every newly
+published head needs its own complete CI, coverage and external review.
 The previous `18492758d` [round](https://github.com/xgo-dev/plan9asm/actions/runs/40820775107)
 passed 325/325 jobs with 88.1% statement coverage; those results belong to that
 previous head. External review remains outstanding.
 
-The local batch through `862099524` has the following source-table ownership:
+The published batch has the following source-table ownership:
 
 | Local inventory | Count and meaning |
 |---|---|
@@ -72,17 +74,19 @@ is added. The original fixture bytes and literal tails remain observable.
 
 ## Qualification boundary
 
-The frozen combined wide scope passes both endpoint SDKs. Go 1.27.3 records
-171 roots / 9,714 children with 9,878 passes; Go 1.20.14 records 170 roots /
-9,711 children with 9,874 passes. Each retains seven explicit host exclusions
+The frozen combined wide scope passes both endpoint SDKs at `fad14e2e1`.
+Go 1.27.3 records 172 roots / 9,734 children with 9,899 passes; Go 1.20.14
+records 171 roots / 9,731 children with 9,895 passes. Each retains seven explicit host exclusions
 and no failure. The extra current-SDK x87 mode32 root is absent from the minimum
 SDK's actual built inventory. Both commands exited naturally with exact,
 unique terminal outcomes. Six legacy members plus four typed-FP counterparts
 also pass five targets / three APIs / O0/O2: one root / 20 children per SDK.
 Both complete five-architecture validators pass after reviewing the 57 amd64
 classification changes. The eight profiles retain their actual fingerprints;
-no encoder or runtime counts are promoted. Node573 and Go26 / 301 policies and
-paired translation measurements remain required on every final snapshot.
+no encoder or runtime counts are promoted. Node573 and Go26 / 301 policies pass.
+The paired translation measurements cover 29 cases in three ABBA blocks per
+SDK; no case has a sustained regression of at least 5%. This does not establish
+a general SDK or native-runtime speedup.
 Component results do not certify the next published head's CI.
 
 The terminal-prefix class retains all prior input obligations before UD2 and
@@ -100,10 +104,11 @@ neither a smaller helper nor a microbenchmark proves faster SDK compilation.
 
 ## Remaining closeout
 
-1. Finish the five-architecture reports, paired complete-module translation
-   measurements, Node policy and Go `ci_policy`. Publish only through
-   the allowed fork after the running public round finishes; require fresh
-   complete CI, coverage and review at the new head.
+1. Finish the current public CI round and repair its observed failures. The
+   local five-architecture reports, paired translation measurements and policy
+   checks are complete. Publish repairs only through the allowed fork after
+   the running round finishes; require fresh complete CI, coverage and review
+   at the new head.
 2. Continue legacy families using original literal prefixes, modes and selection
    order. Keep source-row ownership distinct from complete semantic acceptance.
    Do not add another opcode registry or cache mutable source verification.

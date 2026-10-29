@@ -243,7 +243,7 @@ The committed `go1.27` snapshot in
 | GOARCH | official names | encoder forms | observed ops | observed forms | supported | context | unsupported | runtime verified | parse failures |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 386 | 1600 shared x86 names | 4997 shared x86 forms | 21 | 57 | 28 | 29 | 0 | 0 | 0 |
-| amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6736 | 2072 | 4664 | 0 | 51 | 0 |
+| amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6736 | 1722 | 5014 | 0 | 51 | 0 |
 | arm | 137 | 528 | 135 | 499 | 455 | 44 | 0 | 0 | 0 |
 | arm64 | 1342 including SVE | 2964 | 1281 | 2048 | 1979 | 69 | 0 | 64 | 0 |
 | wasm | 463 | 463 opcode-only rows | 72 | 121 | 0 | 121 | 0 | 0 | 0 |
