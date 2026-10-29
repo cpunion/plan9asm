@@ -1,7 +1,6 @@
 package plan9asm
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -55,8 +54,8 @@ func TestX86PackedBroadcastGoFrameScalarWidths(t *testing.T) {
 				requireX86GoAssemblerResult(t, arch, source.String(), true)
 				sourceText := source.String()
 				if arch == "386" {
-					// The mask is one in both modes. MOVL defines only a
-					// 32-bit GP input; it cannot supply KMOVQ's 64 input bits.
+					// KMOVQ's W bit is ignored for a GP transfer in mode32.
+					// Keep KMOVD as a reference and compile the original below.
 					sourceText = strings.ReplaceAll(sourceText, "KMOVQ AX,", "KMOVD AX,")
 					requireX86GoAssemblerResult(t, arch, sourceText, true)
 				}
@@ -77,11 +76,18 @@ func TestX86PackedBroadcastGoFrameScalarWidths(t *testing.T) {
 							if err != nil {
 								t.Fatal(err)
 							}
+							originalSigs, err := goSigsForAsmFile(pkg, original, resolve, arch, nil, nil, nil)
+							if err != nil {
+								t.Fatal(err)
+							}
 							ir, err := Translate(original, Options{
-								Goarch: arch, TargetTriple: triple, Sigs: sigs, ResolveSym: resolve,
+								Goarch: arch, TargetTriple: triple, Sigs: originalSigs, ResolveSym: resolve,
 							})
-							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-								t.Fatal("original 32-bit seed supplied an unknown 64-bit mask", err)
+							if err != nil || ir == "" {
+								t.Fatal("original mode32 KMOVQ must consume GP32 and zero-extend the mask", err)
+							}
+							for _, level := range []string{"-O0", "-O2"} {
+								x86PackedStringCompileObject(t, llc, triple, ir, level)
 							}
 						}
 						ctx := llvm.NewContext()
