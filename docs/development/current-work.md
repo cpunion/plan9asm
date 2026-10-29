@@ -8,9 +8,11 @@ Original qualification, failures and host exclusions remain in their reports.
 
 ## Published and local revisions
 
-[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft at published
-`5616f67d8`. Its current CI round is still running. Final CI, coverage and external review
-remain pending; the local batch below has not been published.
+[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The public
+baseline `5616f67d8` completed its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40851464196)
+with 325/325 successful jobs. Those results certify that baseline, not this
+local follow-up. Every newly published head needs its own complete CI,
+coverage and external review.
 The previous `18492758d` [round](https://github.com/xgo-dev/plan9asm/actions/runs/40820775107)
 passed 325/325 jobs with 88.1% statement coverage; those results belong to that
 previous head. External review remains outstanding.
@@ -75,8 +77,13 @@ The frozen combined wide scope passes both endpoint SDKs. Go 1.27.3 records
 9,711 children with 9,874 passes. Each retains seven explicit host exclusions
 and no failure. The extra current-SDK x87 mode32 root is absent from the minimum
 SDK's actual built inventory. Both commands exited naturally with exact,
-unique terminal outcomes. Final five-architecture reports and policies remain
-pending. Component results do not certify the next published head's CI.
+unique terminal outcomes. Six legacy members plus four typed-FP counterparts
+also pass five targets / three APIs / O0/O2: one root / 20 children per SDK.
+Both complete five-architecture validators pass after reviewing the 57 amd64
+classification changes. The eight profiles retain their actual fingerprints;
+no encoder or runtime counts are promoted. Node573 and Go26 / 301 policies and
+paired translation measurements remain required on every final snapshot.
+Component results do not certify the next published head's CI.
 
 The terminal-prefix class retains all prior input obligations before UD2 and
 all reachable ordinary return obligations. Its official Linux/amd64
