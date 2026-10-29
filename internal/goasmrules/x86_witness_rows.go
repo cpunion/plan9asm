@@ -26,6 +26,14 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86GPBMIRows retains the complete scalar BMI/bit-field VEX row grammar.
+// Shared transport does not merge FLAGS, implicit DX or dual-output semantics.
+func X86GPBMIRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `ANDNL ANDNQ BEXTRL BEXTRQ
+		BLSIL BLSIQ BLSMSKL BLSMSKQ BLSRL BLSRQ BZHIL BZHIQ MULXL MULXQ
+		PDEPL PDEPQ PEXTL PEXTQ RORXL RORXQ SARXL SARXQ SHLXL SHLXQ SHRXL SHRXQ`)
+}
+
 // X86PrecisionHalfScalarConversionRows retains all ordinary precision, F16C
 // and scalar FP/GP conversions; numerical and native contracts stay separate.
 func X86PrecisionHalfScalarConversionRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -433,6 +441,15 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if x86GPBMITab(rule.Ytab) {
+		return x86GPBMIRowWitnesses(rule)
+	}
+	if x86VSIBTable(rule.Ytab) {
+		return x86VSIBRowWitnesses(rule)
+	}
+	if x86SpecialVectorStateRoute(rule) {
+		return x86SpecialVectorStateRowWitnesses(rule)
+	}
 	if x86ConversionRemainderTable(rule.Ytab) {
 		return x86ConversionRemainderRowWitnesses(rule)
 	}
@@ -754,6 +771,11 @@ func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error)
 		witnesses = append(witnesses, witness)
 	}
 	return witnesses, nil
+}
+
+// X86SpecialVectorStateRows retains the nine complete non-GP/non-VSIB closures.
+func X86SpecialVectorStateRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, x86SpecialVectorStateNames)
 }
 
 func x86PackedEncodingAtoms(expression string, required, optional []string) (map[string]bool, error) {

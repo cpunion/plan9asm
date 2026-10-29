@@ -11,6 +11,7 @@ import (
 type x86VectorResultFormat struct {
 	width                         int
 	unary, masked, broadcast, sae bool
+	rounding, maskResult          bool
 	encoding                      x86PackedAVXOpcode
 }
 
@@ -134,52 +135,68 @@ func (f x86VectorResultFormat) witnessesWithControl(opcode string, immediate boo
 	if f.unary {
 		second = ""
 	}
+	destinations := []struct {
+		name string
+		reg  byte
+	}{{destination, 2}}
+	if f.maskResult {
+		destinations = []struct {
+			name string
+			reg  byte
+		}{{"K2", 2}, {"K0", 0}}
+	}
 	var witnesses []X86PackedBinaryWitness
-	for _, source := range []string{first, "(AX)"} {
-		for _, control := range []string{"", "BCST", "SAE"} {
-			broadcast, sae := control == "BCST", control == "SAE"
-			if broadcast && (source != "(AX)" || !f.broadcast) {
-				continue
-			}
-			if sae && (source == "(AX)" || !f.sae) {
-				continue
-			}
-			for _, zeroing := range []bool{false, true} {
-				if zeroing && !f.masked {
+	// K2 then K0 stays outside the source/control loops, preserving prior owners.
+	for _, target := range destinations {
+		for _, source := range []string{first, "(AX)"} {
+			for _, control := range []string{"", "BCST", "SAE", "RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE"} {
+				broadcast, sae := control == "BCST", control == "SAE"
+				rounding := strings.HasSuffix(control, "_SAE")
+				if broadcast && (source != "(AX)" || !f.broadcast) || sae && (source == "(AX)" || !f.sae) || rounding && (source == "(AX)" || !f.rounding) {
 					continue
 				}
-				operands, suffix, vvvv := source, "", byte(0x70)
-				if immediate {
-					operands = fmt.Sprintf("$%d,%s", selector, source)
+				for _, zeroing := range []bool{false, true} {
+					if zeroing && (!f.masked || f.maskResult) {
+						continue
+					}
+					operands, suffix, vvvv := source, "", byte(0x70)
+					if immediate {
+						operands = fmt.Sprintf("$%d,%s", selector, source)
+					}
+					p0, p2, modrm := byte(0xa0), f.encoding.length<<5, byte(0xc0)|target.reg<<3
+					if f.maskResult {
+						p0 |= 0x10
+					}
+					if f.unary {
+						vvvv, p2 = 0x78, p2|8
+					} else {
+						operands += "," + second
+					}
+					if source == "(AX)" {
+						p0, modrm = p0|0x40, target.reg<<3
+					}
+					if f.masked {
+						operands, p2 = operands+",K1", p2|1
+					}
+					if control != "" {
+						suffix, p2 = "."+control, p2|0x10
+					}
+					if rounding {
+						p2 = p2&^0x60 | map[string]byte{"RN_SAE": 0, "RD_SAE": 1, "RU_SAE": 2, "RZ_SAE": 3}[control]<<5
+					}
+					if zeroing {
+						suffix, p2 = suffix+".Z", p2|0x80
+					}
+					encoding := f.encoding.bytes(vvvv, p0, p2, modrm)
+					if immediate {
+						encoding = append(encoding, byte(selector))
+					}
+					witnesses = append(witnesses, X86PackedBinaryWitness{
+						Instruction: opcode + suffix + " " + operands + "," + target.name, Generation: f.encoding.kind,
+						First: source, Second: second, Destination: target.name, Width: f.width, Memory: source == "(AX)",
+						Masked: f.masked, Zeroing: zeroing, Broadcast: broadcast, MaskResult: f.maskResult, Encoding: encoding,
+					})
 				}
-				p0, p2, modrm := byte(0xa0), f.encoding.length<<5, byte(0xd0)
-				if f.unary {
-					vvvv, p2 = 0x78, p2|8 // Reserved vvvv and V', independent of rm.
-				} else {
-					operands += "," + second
-				}
-				if source == "(AX)" {
-					p0, modrm = 0xe0, 0x10
-				}
-				if f.masked {
-					operands, p2 = operands+",K1", p2|1
-				}
-				if control != "" {
-					suffix, p2 = "."+control, p2|0x10
-				}
-				if zeroing {
-					suffix, p2 = suffix+".Z", p2|0x80
-				}
-				encoding := f.encoding.bytes(vvvv, p0, p2, modrm)
-				if immediate {
-					encoding = append(encoding, byte(selector))
-				}
-				witnesses = append(witnesses, X86PackedBinaryWitness{
-					Instruction: opcode + suffix + " " + operands + "," + destination, Generation: f.encoding.kind,
-					First: source, Second: second, Destination: destination, Width: f.width,
-					Memory: source == "(AX)", Masked: f.masked, Zeroing: zeroing, Broadcast: broadcast,
-					Encoding: encoding,
-				})
 			}
 		}
 	}

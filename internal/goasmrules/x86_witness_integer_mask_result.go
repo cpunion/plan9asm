@@ -108,41 +108,6 @@ func x86IntegerMaskResultRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness
 	if err != nil {
 		return nil, err
 	}
-	bank := map[int]string{128: "X", 256: "Y", 512: "Z"}[f.width]
-	var witnesses []X86PackedBinaryWitness
-	add := func(first string, destination byte, broadcast bool) {
-		result, suffix := "K"+strconv.Itoa(int(destination)), ""
-		operands, p0, p2, modrm := first+","+bank+"17", byte(0xb0), f.encoding.length<<5, byte(0xc0)|destination<<3
-		if f.immediate {
-			operands = "$7," + operands
-		}
-		if first == "(AX)" {
-			p0, modrm = 0xf0, destination<<3
-		}
-		if f.masked {
-			operands, p2 = operands+",K1", p2|1
-		}
-		if broadcast {
-			suffix, p2 = ".BCST", p2|0x10
-		}
-		encoding := f.encoding.bytes(0x70, p0, p2, modrm)
-		if f.immediate {
-			encoding = append(encoding, 7)
-		}
-		witnesses = append(witnesses, X86PackedBinaryWitness{
-			Instruction: rule.Opcode + suffix + " " + operands + "," + result, Generation: "evex",
-			First: first, Second: bank + "17", Destination: result, Width: f.width,
-			Memory: first == "(AX)", Masked: f.masked, Broadcast: broadcast, MaskResult: true,
-			Encoding: encoding,
-		})
-	}
-	// K0 is legal data output, independently of the nonzero-only writemask.
-	for _, destination := range []byte{2, 0} {
-		add(bank+"16", destination, false)
-		add("(AX)", destination, false)
-		if f.broadcast != 0 {
-			add("(AX)", destination, true)
-		}
-	}
-	return witnesses, nil
+	physical := x86VectorResultFormat{width: f.width, masked: f.masked, broadcast: f.broadcast != 0, maskResult: true, encoding: f.encoding}
+	return physical.witnessesWithControl(rule.Opcode, f.immediate, 7), nil
 }
