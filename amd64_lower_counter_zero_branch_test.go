@@ -27,25 +27,28 @@ func TestTranslateX86CounterZeroBranchCompleteGoAssemblerForms(t *testing.T) {
 				"\tJCXZQ width64\n" +
 				"width64:\n" +
 				"\tRET\n"
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
+			// Preserve the exact original source as a Go-format and missing-CX
+			// control; a bare register read does not establish its input bytes.
+			x86UnboundVoidFormatSources(t, source, target.goarch, target.triple)
+			move := "MOVQ"
+			if target.goarch == "386" {
+				move = "MOVL"
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"counterzerobranchforms": {Name: "counterzerobranchforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			initialized := strings.Replace(source, "\tJCXZW", "\t"+move+" $1,CX\n\tJCXZW", 1)
+			x86LEAActualTargetGoObject(t, target.goarch, target.triple, "#include \"textflag.h\"\n"+initialized)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
 			}
-			compileLLVMToObject(t, llc, target.triple, "counter-zero-branch-"+target.name+".ll", "counter-zero-branch-"+target.name+".o", ll)
+			for _, api := range []string{"text", "module", "Go"} {
+				ll, err := x86ScalarFPBitViewAPI(t, initialized, "func counterzerobranchforms()", target.goarch, target.triple, api)
+				if err != nil {
+					t.Fatal("same original branches with actual numerical CX", api, err)
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, ll, level)
+				}
+			}
 		})
 	}
 }
@@ -69,20 +72,20 @@ func TestTranslateX86CounterZeroBranchMatchesGoAssemblerAddressWidths(t *testing
 		for op, width := range target.widths {
 			t.Run(target.name+"_"+op, func(t *testing.T) {
 				source := fmt.Sprintf("TEXT counterzero(SB),NOSPLIT,$0-0\n\t%s zero\n\tRET\nzero:\n\tRET\n", op)
-				file, err := Parse(ArchAMD64, source)
-				if err != nil {
-					t.Fatal(err)
+				x86UnboundVoidFormatSources(t, source, target.goarch, target.triple)
+				move := "MOVQ"
+				if target.goarch == "386" {
+					move = "MOVL"
 				}
-				ll, err := Translate(file, Options{
-					TargetTriple: target.triple,
-					Goarch:       target.goarch,
-					Sigs:         map[string]FuncSig{"counterzero": {Name: "counterzero", Ret: Void}},
-				})
-				if err != nil {
-					t.Fatal(err)
-				}
-				if !strings.Contains(ll, "icmp eq "+width) {
-					t.Fatalf("%s/%s did not test the Go assembler's %s counter width:\n%s", target.goarch, op, width, ll)
+				initialized := strings.Replace(source, "\t"+op, "\t"+move+" $1,CX\n\t"+op, 1)
+				for _, api := range []string{"text", "module", "Go"} {
+					ll, err := x86ScalarFPBitViewAPI(t, initialized, "func counterzero()", target.goarch, target.triple, api)
+					if err != nil {
+						t.Fatal("same original branch with actual numerical CX", api, err)
+					}
+					if !strings.Contains(ll, "icmp eq "+width) {
+						t.Fatalf("%s/%s/%s did not test Go's %s counter width:\n%s", target.goarch, op, api, width, ll)
+					}
 				}
 			})
 		}

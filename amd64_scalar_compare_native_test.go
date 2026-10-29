@@ -130,11 +130,21 @@ func TestX86ScalarCompareIncomingPointerDoesNotGrantOtherEffects(t *testing.T) {
 				{"no-reusable-backing-credit", "", "(DX)", "$1", "MOVL (DX),DX\nMOVL (DX),AX\n"},
 				{"no-write-data-credit", "", "(DX)", "$1", "MOVL BX,(DX)\n"},
 				{"no-segment-credit", "", "(FS)", "$1", ""},
+				{"unknown-segment-offset", "", "8(CX)(FS*2)", "$1", ""},
+				{"opaque-segment-offset", move + " p+0(FP),CX\n", "8(CX)(FS*2)", "$1", ""},
 			} {
 				source := x86ScalarComparePointerSource(target.arch, "view", row.setup,
 					x86ScalarCompareInstruction(op, row.address, row.partner), row.tail)
 				for _, api := range []string{"text", "module", "Go"} {
-					_, err := x86ScalarFPBitViewAPI(t, source, "func view(p *byte) uint32", target.arch, target.triple, api)
+					ir, err := x86ScalarFPBitViewAPI(t, source, "func view(p *byte) uint32", target.arch, target.triple, api)
+					if row.name == "no-segment-credit" {
+						// Keep the original tuple. Its absolute hardware base
+						// needs no incoming GP numerical or pointer authority.
+						if err != nil || !strings.Contains(ir, "ptr addrspace(257)") || !strings.Contains(ir, "load volatile") {
+							t.Fatalf("original hardware-segment read was lost %s/%s/%s: %v", target.triple, op, api, err)
+						}
+						continue
+					}
 					if !errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatalf("conditional read expanded authority %s/%s/%s/%s: %v", target.triple, op, row.name, api, err)
 					}
