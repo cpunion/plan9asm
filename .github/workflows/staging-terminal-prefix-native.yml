@@ -1,0 +1,163 @@
+name: Staging terminal prefix native acceptance
+
+# Staging-only fork evidence. Do not merge this workflow into the contribution.
+on:
+  push:
+    branches:
+      - codex/staging-terminal-prefix-native-20261029
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  terminal-prefix-native:
+    name: Terminal prefix native fault order (Linux AMD64)
+    if: github.repository == 'cpunion/plan9asm'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
+      GOENV: 'off'
+      GOFLAGS: ''
+      GOMAXPROCS: '4'
+
+    steps:
+      - name: Checkout staging source
+        uses: actions/checkout@v7
+        timeout-minutes: 5
+        with:
+          fetch-depth: 2
+
+      - name: Record exact staging inputs
+        timeout-minutes: 2
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          out = pathlib.Path('_out/staging-terminal-prefix-native')
+          out.mkdir(parents=True, exist_ok=True)
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+          common = '6ffc40ab53f93eeed134d2ce03c500451808d0ec'
+          workflow = '.github/workflows/staging-terminal-prefix-native.yml'
+          data = {'head': git('rev-parse', 'HEAD'), 'common': common,
+                  'tree': git('rev-parse', 'HEAD^{tree}'), 'ref': os.environ['GITHUB_REF'],
+                  'run_id': os.environ['GITHUB_RUN_ID'], 'attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+                  'changed': git('diff', '--name-only', common, 'HEAD').splitlines(),
+                  'source': {p: hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()
+                             for p in ('x86_terminal_prefix_runtime_unix_test.go',
+                                       'x86_terminal_prefix_objects_test.go',
+                                       'x86_terminal_prefix_obligation_test.go', 'go.mod', 'go.sum', workflow)}}
+          (out / 'inputs.json').write_text(json.dumps(data, indent=2) + '\n')
+          assert data['head'] == os.environ['GITHUB_SHA']
+          assert git('rev-parse', 'HEAD^') == common
+          assert data['changed'] == [workflow], data['changed']
+          PY
+
+      - name: Install LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+
+      - name: Setup Go
+        timeout-minutes: 10
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.2'
+          cache: true
+
+      - name: Setup verified policy runtime
+        timeout-minutes: 10
+        uses: ./.github/actions/setup-node22
+
+      - name: Complete Node policy
+        timeout-minutes: 5
+        run: node --test .github/scripts/priority-*.test.cjs
+
+      - name: Exact Go CI policy
+        timeout-minutes: 5
+        run: go test . -p=1 -run '^(TestCI|TestFixedLocal|TestGoAMD64FixedLocalPackedRuntimeOwnership|TestRuntimeOracleCommand(ConsumersRetainOwnedExecution|AuditDistinguishesTestingRun)$)' -count=1
+
+      - name: Execute the one native terminal prefix owner
+        timeout-minutes: 22
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, platform, shutil, subprocess, sys
+          out = pathlib.Path('_out/staging-terminal-prefix-native')
+          root = 'TestCrossLinuxRuntimeMatrixX86TerminalPrefixReadFaultOrder'
+          command = ['go', 'test', '-json', '-p=1', '-count=1', '-timeout=20m', '.', '-run', '^' + root + '$']
+          tools = {name: str(pathlib.Path(shutil.which(name)).resolve())
+                   for name in ('go', 'llc', 'clang', 'llvm-config', 'opt', 'node')}
+          def sha(path):
+              return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+          observation = {'root': root, 'command': command, 'inputs_sha256': sha(out / 'inputs.json'),
+                         'system': platform.system(), 'machine': platform.machine(),
+                         'go': subprocess.check_output(['go', 'version'], text=True).strip(),
+                         'target': subprocess.check_output(['go', 'env', 'GOOS', 'GOARCH'], text=True).splitlines(),
+                         'llvm': subprocess.check_output(['llvm-config', '--version'], text=True).strip(),
+                         'node': subprocess.check_output(['node', '--version'], text=True).strip(),
+                         'tools': {name: {'path': path, 'sha256': sha(path)} for name, path in tools.items()},
+                         'environment': {name: os.environ.get(name, '') for name in
+                                         ('GOTOOLCHAIN', 'GOWORK', 'GOENV', 'GOFLAGS', 'GOMAXPROCS', 'LLVM_CONFIG')},
+                         'native_requirement': 'GPR read followed by exact UD2; baseline AMD64/SSE2, no AVX512 gate'}
+          (out / 'observation.json').write_text(json.dumps(observation, indent=2) + '\n')
+          assert observation['system'] == 'Linux' and observation['machine'] == 'x86_64'
+          assert observation['target'] == ['linux', 'amd64']
+          assert observation['go'].startswith('go version go1.27.2 ')
+          assert observation['llvm'].startswith('22.') and observation['node'] == 'v22.23.4'
+          with (out / 'go.jsonl').open('wb') as stdout, (out / 'go.stderr').open('wb') as stderr:
+              result = subprocess.run(command, stdout=stdout, stderr=stderr)
+          observation['exit'] = result.returncode
+          observation['tools_frozen'] = all(sha(data['path']) == data['sha256'] for data in observation['tools'].values())
+          observation['source_clean'] = subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=no'], text=True) == ''
+          observation['stdout_sha256'], observation['stderr_sha256'] = sha(out / 'go.jsonl'), sha(out / 'go.stderr')
+          (out / 'observation.json').write_text(json.dumps(observation, indent=2) + '\n')
+          sys.exit(result.returncode if observation['tools_frozen'] and observation['source_clean'] else 1)
+          PY
+
+      - name: Verify complete native root and all original subcases
+        if: always()
+        timeout-minutes: 2
+        run: |
+          python3 - <<'PY'
+          import collections, hashlib, json, os, pathlib
+          out = pathlib.Path('_out/staging-terminal-prefix-native')
+          observation = json.loads((out / 'observation.json').read_text())
+          inputs = json.loads((out / 'inputs.json').read_text())
+          root = 'TestCrossLinuxRuntimeMatrixX86TerminalPrefixReadFaultOrder'
+          expected = {root}
+          expected.update(root + '/original/' + str(i) + '/' + address for i in range(8) for address in ('null', 'valid'))
+          expected.update(root + '/' + api + '/' + pipeline for api in ('text', 'module', 'Go')
+                          for pipeline in ('backend-O0', 'backend-O2', 'IR-O2-backend-O2'))
+          events = [json.loads(line) for line in (out / 'go.jsonl').read_text().splitlines() if line]
+          tests = [event for event in events if event.get('Test')]
+          runs = collections.Counter(event['Test'] for event in tests if event['Action'] == 'run')
+          passes = collections.Counter(event['Test'] for event in tests if event['Action'] == 'pass')
+          packages = [event for event in events if not event.get('Test') and event['Action'] == 'pass']
+          forbidden = [event for event in events if event['Action'] in ('fail', 'skip', 'build-fail')]
+          assert inputs['head'] == os.environ['GITHUB_SHA'] and inputs['common'] == '6ffc40ab53f93eeed134d2ce03c500451808d0ec'
+          for name, field in (('inputs.json', 'inputs_sha256'), ('go.jsonl', 'stdout_sha256'), ('go.stderr', 'stderr_sha256')):
+              assert hashlib.sha256((out / name).read_bytes()).hexdigest() == observation[field], name
+          assert observation.get('exit') == 0 and observation.get('tools_frozen') and observation.get('source_clean'), observation
+          assert observation['root'] == root and {event['Test'] for event in tests} == expected
+          assert runs == passes == collections.Counter({name: 1 for name in expected}), (runs, passes)
+          assert not forbidden and all(event.get('Package') == 'github.com/xgo-dev/plan9asm' for event in tests), forbidden
+          assert len(packages) == 1 and packages[0]['Package'] == 'github.com/xgo-dev/plan9asm', packages
+          result = {'roots': 1, 'children': 25, 'RUN': 26, 'PASS': 26, 'skip': 0, 'fail': 0,
+                    'original_Go_signal_observations': 16, 'three_API_pipeline_fault_observations': 144,
+                    'package_PASS': True, 'expected_names': sorted(expected)}
+          (out / 'verified.json').write_text(json.dumps(result, indent=2) + '\n')
+          print(json.dumps(result))
+          PY
+
+      - name: Preserve raw native evidence
+        if: always()
+        timeout-minutes: 5
+        uses: actions/upload-artifact@v6
+        with:
+          name: terminal-prefix-native-${{ github.run_id }}-${{ github.run_attempt }}
+          path: _out/staging-terminal-prefix-native
+          if-no-files-found: error
