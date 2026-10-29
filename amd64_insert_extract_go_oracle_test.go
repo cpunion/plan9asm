@@ -182,7 +182,7 @@ func TestX86InsertExtractNativeMaskedStorePhysicalObjects(t *testing.T) {
 	}
 }
 
-func x86InsertExtractReservedZeroMaskGoObservation(t *testing.T, source string) {
+func x86InsertExtractReservedZeroMaskGoObservation(t *testing.T, source string, expectedCode ...byte) {
 	t.Helper()
 	dir := t.TempDir()
 	asm, object := filepath.Join(dir, "reserved.s"), filepath.Join(dir, "reserved.o")
@@ -205,6 +205,9 @@ func x86InsertExtractReservedZeroMaskGoObservation(t *testing.T, source string) 
 	if strings.Contains(source, "VINSERT") {
 		code = []byte{0x62, 0xf3, 0xfd, 0xc8, 0x3a, 0xc8, 0}
 		decode = decodedX86EVEXPackedInsertInstruction
+	}
+	if len(expectedCode) != 0 {
+		code = expectedCode
 	}
 	var listing strings.Builder
 	for _, value := range code {

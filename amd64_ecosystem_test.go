@@ -3049,17 +3049,37 @@ func TestTranslateAMD64VectorLaneExtractRejectsFormsOutsideGoAssemblerTable(t *t
 	} {
 		t.Run(strings.ReplaceAll(instruction, " ", "_"), func(t *testing.T) {
 			src := "TEXT invalidvectorlaneextract(SB),NOSPLIT,$0-0\n\t" + instruction + "\n\tRET\n"
+			// Go encodes EVEX.z memory extracts, although Intel specifies #UD.
+			// Retain this control alongside the eight translator refusals.
+			terminal := instruction == "VEXTRACTI64X2.Z $1, Z1, K1, (AX)"
+			goSource := strings.Replace(src, "NOSPLIT", "4", 1)
+			if instruction == "VEXTRACTF32X4.Z $1, Y1, X2" {
+				// Old Go could encode z=1/aaa=0; retain that observation
+				// without granting the reserved form translation semantics.
+				x86InsertExtractReservedZeroMaskGoObservation(t, goSource,
+					0x62, 0xf3, 0x7d, 0xa8, 0x19, 0xca, 0x01)
+			} else {
+				x86ScalarLiteralExpectedGoListing(t, "amd64", goSource, terminal)
+			}
 			file, err := Parse(ArchAMD64, src)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := Translate(file, Options{
+			ll, err := Translate(file, Options{
 				TargetTriple: "x86_64-unknown-linux-gnu",
 				Goarch:       "amd64",
 				Sigs: map[string]FuncSig{
 					"invalidvectorlaneextract": {Name: "invalidvectorlaneextract", Ret: Void},
 				},
-			}); err == nil {
+			})
+			if terminal {
+				if err != nil {
+					t.Fatal("Go-encodable memory zeroing must terminate before reading its inputs", err)
+				}
+				if _, err := x86OfficialMoveFaultBody(ll, "invalidvectorlaneextract"); err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil {
 				t.Fatalf("Translate accepted %q, which is absent from Go 1.27's vector-lane extract tables", instruction)
 			}
 		})
