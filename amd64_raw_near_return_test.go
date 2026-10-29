@@ -174,11 +174,10 @@ func TestX86RawUnprovedReturnFormProbePreservesInstructions(t *testing.T) {
 						t.Fatalf("changed operand-form byte %d: %+v, want %#x", index, ins, want[index])
 					}
 				}
-				ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple,
-					Sigs: map[string]FuncSig{"form": {Name: "form", Ret: Void}}})
-				if err != nil {
-					t.Fatal(err)
-				}
+				// Replacing the unproved return with UD2 does not initialize
+				// AX/CX or authorize the preceding native load/store. Retain
+				// the public Context controls and private operand-format object.
+				ir := x86UnboundVoidRawProbeObject(t, file, target.arch, target.triple)
 				if !strings.Contains(ir, `asm sideeffect "ud2"`) || !strings.Contains(ir, "unreachable") {
 					t.Fatal("compile-only form probe invented an ordinary caller return")
 				}

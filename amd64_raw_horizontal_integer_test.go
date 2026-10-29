@@ -200,11 +200,53 @@ func TestX86RawHorizontalIntegerGoEncoderForms(t *testing.T) {
 				if (arch == "386") != strings.HasPrefix(triple, "i") {
 					continue
 				}
-				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"horizontal": {Name: "horizontal", Ret: Void}}})
-				if err != nil {
-					t.Fatal(err)
-				}
+				// A terminal UD2 removes only the return obligation. It does
+				// not initialize the preceding MMX/vector/address inputs.
+				// Keep all original formats as private objects, independently
+				// of the three public APIs' required Context observations.
+				ir := x86UnboundVoidRawProbeObject(t, file, arch, triple)
 				compileLLVMToObject(t, llc, triple, "raw-horizontal.ll", "raw-horizontal.o", ir)
+			}
+		})
+	}
+}
+
+func TestX86HorizontalIntegerInitializedMMXRegionKeepsRawBoundary(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	const declaration = "func horizontalMMX(a,b uint64) uint64\n"
+	const source = "TEXT ·horizontalMMX(SB),4,$0-24\nMOVQ a+0(FP),M0\nMOVQ b+8(FP),M7\nPHADDD M0,M7\nMOVQ M7,ret+16(FP)\nEMMS\nRET\n"
+	for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			arch := "amd64"
+			if strings.HasPrefix(triple, "i") {
+				arch = "386"
+			}
+			x86LEAActualTargetGoObject(t, arch, triple, source)
+			code := assembleX87ControlBytes(t, arch, "TEXT row(SB),4,$0-0\nPHADDD M0,M7\nRET\n")
+			if !reflect.DeepEqual(code, []byte{0x0f, 0x38, 0x02, 0xf8, 0xc3}) {
+				t.Fatal("initialized counterpart lost the original MMX row identity", code)
+			}
+			var bytes strings.Builder
+			for _, value := range code[:len(code)-1] {
+				fmt.Fprintf(&bytes, "BYTE $0x%02x\n", value)
+			}
+			raw := strings.Replace(source, "PHADDD M0,M7\n", bytes.String(), 1)
+			x86LEAActualTargetGoObject(t, arch, triple, raw)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api)
+				if err != nil {
+					t.Fatal("complete named MMX region lost its bounded inputs/EMMS", api, err)
+				}
+				if !strings.Contains(ir, "phaddd") || !strings.Contains(ir, "emms") {
+					t.Fatal("initialized counterpart lost the physical MMX operation/tag closure", api)
+				}
+				compileLLVMToObject(t, llc, triple, "initialized-horizontal-mmx-"+api+".ll", "initialized-horizontal-mmx-"+api+".o", ir)
+				if ir, err := x86ScalarFPBitViewAPI(t, raw, declaration, arch, triple, api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("typed values and EMMS invented an authenticated raw MMX region", api, err)
+				}
 			}
 		})
 	}

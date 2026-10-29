@@ -137,13 +137,10 @@ func TestTranslateX86RawScatterLLVM22AllTargets(t *testing.T) {
 			source := x86RawScatterGoForms(target.goarch)
 			code := assembleX87ControlBytes(t, target.goarch, source)
 			file := x86RawUnprovedReturnFormProbeFile(t, target.goarch, "rawScatterForms", code)
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawScatterForms": {Name: "rawScatterForms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Bare encoder rows have no index, data, mask or address producers.
+			// Retain their three public Context controls and actual Go bytes,
+			// then compile every unchanged row through the private format owner.
+			ir := x86UnboundVoidRawProbeObject(t, file, target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "raw-scatter.ll", "raw-scatter.o", ir)
 		})
 	}

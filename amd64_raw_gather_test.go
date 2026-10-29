@@ -204,14 +204,9 @@ func TestTranslateX86RawGatherLLVM22AllTargets(t *testing.T) {
 				t.Run(target.triple, func(t *testing.T) {
 					code := assembleX87ControlBytes(t, target.goarch, form.source)
 					file := x86RawUnprovedReturnFormProbeFile(t, target.goarch, "rawgather", code)
-					ir, err := Translate(file, Options{
-						Goarch:       target.goarch,
-						TargetTriple: target.triple,
-						Sigs:         map[string]FuncSig{"rawgather": {Name: "rawgather", Ret: Void}},
-					})
-					if err != nil {
-						t.Fatal(err)
-					}
+					// A terminal byte cannot supply the preceding gather's
+					// index, mask, merge input or native-memory authority.
+					ir := x86UnboundVoidRawProbeObject(t, file, target.goarch, target.triple)
 					compileLLVMToObject(t, llc, target.triple, "raw-gather.ll", "raw-gather.o", ir)
 				})
 			}

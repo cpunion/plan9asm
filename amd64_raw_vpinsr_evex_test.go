@@ -109,13 +109,9 @@ func TestTranslateX86RawEVEXVPINSRLLVM22Objects(t *testing.T) {
 			source := x86RawEVEXVPINSRGoForms()
 			code := assembleX87ControlBytes(t, "amd64", source)
 			file := x86RawUnprovedReturnFormProbeFile(t, "amd64", "rawVPINSR", code)
-			ir, err := Translate(file, Options{
-				Goarch: "amd64", TargetTriple: triple,
-				Sigs: map[string]FuncSig{"rawVPINSR": {Name: "rawVPINSR", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// The original rows omit their GP/vector/address inputs. Their
+			// public Context and independent physical objects are separate gates.
+			ir := x86UnboundVoidRawProbeObject(t, file, "amd64", triple)
 			compileLLVMToObject(t, llc, triple, "raw-vpinsr.ll", "raw-vpinsr.o", ir)
 		})
 	}
