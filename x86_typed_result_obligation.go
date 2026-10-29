@@ -27,6 +27,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if _, terminal, err := x86UndefinedTrapProperties(ins.Op, ins, arch); terminal && err == nil {
+			return true // Only this instruction has no inputs; earlier effects still need complete proof.
+		}
 		if form, known, err := x86NamedHalfProperties(ins.Op, ins, arch); known && err == nil && !form.undefinedOpcode() {
 			return true // Void still consumes active source, merge, mask and native address inputs.
 		}
