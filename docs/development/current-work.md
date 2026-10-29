@@ -123,9 +123,13 @@ references. Do not cache mutable source verification or introduce another opcode
 registry. Parser/allocation improvements and encoder measurements are not
 complete SDK translation or generated-program speedups.
 
-A prepared raw-prefix cleanup would replace 44 identical FS/GS/address-size
-scanners with one observer, net minus 816 lines. It is only statically reviewed:
-baseline decoder tests, candidate qualification and paired measurements remain.
+The qualified raw-prefix cleanup `8e858733f` replaces 44 identical
+FS/GS/address-size scanners with one observer, net minus 816 production lines.
+Each SDK passes all 56 existing roots / 2,500 children; 720 complete decoder
+observations retain identical instructions, metadata, lengths and exact errors.
+Independent helper checks, Node573, Go26 / 301 and both SDKs' five-architecture
+reports pass. Paired decoder benchmarks show no consistent change over 5%, and
+raw allocations remain unchanged; no acceleration is claimed.
 A previous result-routing reduction was withdrawn after minimum-SDK benchmarks
 regressed. Do not restore it or claim an unmeasured acceleration.
 
@@ -135,11 +139,15 @@ regressed. Do not restore it or claim an unmeasured acceleration.
    repair and raw-prefix cleanup. Require the new head's complete CI,
    coverage and review; keep all original failures, setup errors and skips.
 2. Finish the other 345 AVX rows in eleven semantic groups using seven transport
-   groups. The existing-helper tests-first draft is unrun. Floating arithmetic,
+   groups. The initial existing-helper test on both SDKs records 22 row passes
+   and 323 format-adapter failures, with no setup failure, panic or skip. These
+   are cold witness gaps, not evidence of ISA or translator rejection. Parallel
+   candidates cover 237 shared-vector/state rows, 28 BMI rows and 80 VSIB rows;
+   their byte/object validation remains pending. Floating arithmetic,
    VSIB, comparison, horizontal/blend/dot/SAD, BMI, crypto, four-register, string,
    bitshuffle-to-K, vector-to-FLAGS and state operations keep distinct semantics.
    Complete original row ownership is separate from runtime acceptance.
-3. Qualify the raw-prefix cleanup and measure complete translation separately.
+3. Measure complete translation separately from the raw-prefix decoder cleanup.
    Preserve original bytes, source replay, mode/segment/address-size behavior,
    negative boundaries and resource disposal. Do not reduce test scope to obtain
    a faster result.
