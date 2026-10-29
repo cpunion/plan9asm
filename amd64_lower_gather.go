@@ -68,85 +68,19 @@ var amd64VSIBPrefetchSpecs = map[Op]amd64VSIBPrefetchSpec{
 }
 
 func (c *amd64Ctx) lowerGather(op Op, ins Instr) error {
-	if prefetch, ok := amd64VSIBPrefetchSpecs[op]; ok {
-		return c.lowerVSIBPrefetch(op, prefetch, ins)
+	local := ins
+	local.Op = op
+	form, known, err := x86VSIBProperties(local, c.goarch)
+	if err != nil {
+		return err
 	}
-	spec := amd64GatherSpecs[op]
-	if len(ins.Args) != 3 {
-		return fmt.Errorf("amd64 %s expects exactly three operands from its Go 1.27 gather table: %q", op, ins.Raw)
+	if !known || form.scatter && !form.prefetch {
+		return fmt.Errorf("amd64 %s is not a gather or VSIB prefetch: %q", op, ins.Raw)
 	}
-
-	var memory Operand
-	var mask Operand
-	var destination Operand
-	evex := false
-	if ins.Args[0].Kind == OpMem {
-		evex = true
-		memory, mask, destination = ins.Args[0], ins.Args[1], ins.Args[2]
-	} else {
-		mask, memory, destination = ins.Args[0], ins.Args[1], ins.Args[2]
+	if form.prefetch {
+		return nil
 	}
-	if memory.Kind != OpMem || destination.Kind != OpReg {
-		return fmt.Errorf("amd64 %s expects vector-mask,memory,vector or memory,K-mask,vector: %q", op, ins.Raw)
-	}
-	destinationBytes := amd64VectorByteWidth(destination.Reg)
-	indexBytes := amd64VectorByteWidth(memory.Mem.Index)
-	if destinationBytes == 0 || indexBytes == 0 || !amd64GatherTableAllows(spec.table, evex, destinationBytes, indexBytes) {
-		return fmt.Errorf("amd64 %s vector widths are outside its Go 1.27 gather table: %q", op, ins.Raw)
-	}
-	if err := c.validateGatherMemory(memory.Mem, indexBytes, evex); err != nil {
-		return fmt.Errorf("amd64 %s invalid VSIB memory: %q: %w", op, ins.Raw, err)
-	}
-	destinationIndex, ok := amd64GatherRegisterIndex(destination.Reg, destinationBytes, evex, c.goarch, false)
-	if !ok {
-		return fmt.Errorf("amd64 %s destination is outside its Go 1.27 register class: %q", op, ins.Raw)
-	}
-	indexIndex, ok := amd64GatherRegisterIndex(memory.Mem.Index, indexBytes, evex, c.goarch, true)
-	if !ok {
-		return fmt.Errorf("amd64 %s VSIB index is outside its Go 1.27 register class: %q", op, ins.Raw)
-	}
-	if destinationIndex == indexIndex {
-		return fmt.Errorf("amd64 %s index and destination registers must be distinct: %q", op, ins.Raw)
-	}
-
-	if evex {
-		maskIndex, ok := amd64ParseKReg(mask.Reg)
-		if mask.Kind != OpReg || !ok || maskIndex == 0 {
-			return fmt.Errorf("amd64 %s EVEX form requires K1..K7: %q", op, ins.Raw)
-		}
-	} else {
-		maskBytes := amd64VectorByteWidth(mask.Reg)
-		maskIndex, ok := amd64GatherRegisterIndex(mask.Reg, destinationBytes, false, c.goarch, false)
-		if mask.Kind != OpReg || !ok || maskBytes != destinationBytes {
-			return fmt.Errorf("amd64 %s VEX form requires a destination-width vector mask: %q", op, ins.Raw)
-		}
-		if maskIndex == indexIndex || maskIndex == destinationIndex {
-			return fmt.Errorf("amd64 %s mask, index, and destination registers must be distinct: %q", op, ins.Raw)
-		}
-	}
-
-	return c.emitGather(spec, memory.Mem, mask, destination.Reg, destinationBytes, indexBytes, evex)
-}
-
-func (c *amd64Ctx) lowerVSIBPrefetch(op Op, spec amd64VSIBPrefetchSpec, ins Instr) error {
-	if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpMem {
-		return fmt.Errorf("amd64 %s expects K1..K7 and VSIB memory: %q", op, ins.Raw)
-	}
-	maskIndex, ok := amd64ParseKReg(ins.Args[0].Reg)
-	if !ok || maskIndex == 0 {
-		return fmt.Errorf("amd64 %s requires K1..K7: %q", op, ins.Raw)
-	}
-	indexBytes := spec.indexBytes
-	if amd64VectorByteWidth(ins.Args[1].Mem.Index) != indexBytes {
-		return fmt.Errorf("amd64 %s has the wrong VSIB index width: %q", op, ins.Raw)
-	}
-	if err := c.validateGatherMemory(ins.Args[1].Mem, indexBytes, true); err != nil {
-		return fmt.Errorf("amd64 %s invalid VSIB memory: %q: %w", op, ins.Raw, err)
-	}
-	if _, ok := amd64GatherRegisterIndex(ins.Args[1].Mem.Index, indexBytes, true, c.goarch, true); !ok {
-		return fmt.Errorf("amd64 %s VSIB index is outside its Go 1.27 register class: %q", op, ins.Raw)
-	}
-	return nil
+	return c.emitGather(form.spec, form.memory.Mem, form.mask, form.data.Reg, form.dataBytes, form.indexBytes, form.evex)
 }
 
 func amd64GatherTableAllows(table amd64GatherTable, evex bool, destinationBytes, indexBytes int) bool {
@@ -171,29 +105,6 @@ func amd64GatherTableAllows(table amd64GatherTable, evex bool, destinationBytes,
 		return destinationBytes != 64
 	}
 	return true
-}
-
-func (c *amd64Ctx) validateGatherMemory(memory MemRef, indexBytes int, evex bool) error {
-	if memory.Index == "" || amd64VectorByteWidth(memory.Index) != indexBytes {
-		return fmt.Errorf("expected a VSIB vector index")
-	}
-	if memory.Scale == 0 {
-		memory.Scale = 1
-	}
-	if memory.Scale != 1 && memory.Scale != 2 && memory.Scale != 4 && memory.Scale != 8 {
-		return fmt.Errorf("VSIB scale must be 1, 2, 4, or 8")
-	}
-	if memory.Sym != "" {
-		return fmt.Errorf("Go's x86 assembler does not accept an SB base with VSIB")
-	}
-	if memory.Base != "" && !isX86YrlRegisterForArch(memory.Base, c.goarch) {
-		return fmt.Errorf("VSIB base is not a GP register for %s", c.goarch)
-	}
-	if memory.Segment != "" && memory.Segment != FS && memory.Segment != GS {
-		return fmt.Errorf("unsupported VSIB segment %s", memory.Segment)
-	}
-	_ = evex
-	return nil
 }
 
 func amd64GatherRegisterIndex(register Reg, byteWidth int, evex bool, goarch string, index bool) (int, bool) {
@@ -313,7 +224,9 @@ func (c *amd64Ctx) emitGather(spec amd64GatherSpec, memory MemRef, mask Operand,
 		selected := c.newTmp()
 		fmt.Fprintf(c.b, "  br i1 %s, label %%%s, label %%%s\n", condition, loadLabel, skipLabel)
 		fmt.Fprintf(c.b, "%s:\n", loadLabel)
-		fmt.Fprintf(c.b, "  %%%s = load i%d, %s %s, align 1\n", loaded, spec.elemBits, pointerType, pointer)
+		// An active architectural access still faults when its result is dead.
+		// Keep the access inside its lane predicate so inactive lanes stay suppressed.
+		fmt.Fprintf(c.b, "  %%%s = load volatile i%d, %s %s, align 1\n", loaded, spec.elemBits, pointerType, pointer)
 		fmt.Fprintf(c.b, "  br label %%%s\n", joinLabel)
 		fmt.Fprintf(c.b, "%s:\n", skipLabel)
 		fmt.Fprintf(c.b, "  br label %%%s\n", joinLabel)

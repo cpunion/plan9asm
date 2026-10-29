@@ -20,42 +20,17 @@ var amd64ScatterSpecs = map[string]amd64GatherSpec{
 // spellings. Values are kept as integer bit patterns, which is exact for the
 // floating variants as well.
 func (c *amd64Ctx) lowerScatter(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	if strings.Contains(rawOp, ".") {
-		baseOp := strings.SplitN(rawOp, ".", 2)[0]
-		if _, known := amd64ScatterSpecs[baseOp]; known {
-			return true, false, fmt.Errorf("amd64 %s has no suffixes in its Go 1.27 table: %q", baseOp, ins.Raw)
-		}
+	name, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, known := amd64ScatterSpecs[name]; !known {
 		return false, false, nil
 	}
-	spec, ok := amd64ScatterSpecs[rawOp]
-	if !ok {
-		return false, false, nil
+	local := ins
+	local.Op = op
+	form, _, err := x86VSIBProperties(local, c.goarch)
+	if err != nil {
+		return true, false, err
 	}
-	if len(ins.Args) != 3 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg || ins.Args[2].Kind != OpMem {
-		return true, false, fmt.Errorf("amd64 %s expects data vector, K1-K7, VSIB memory: %q", rawOp, ins.Raw)
-	}
-	data, mask, memory := ins.Args[0], ins.Args[1], ins.Args[2].Mem
-	maskIndex, validMask := amd64ParseKReg(mask.Reg)
-	if !validMask || maskIndex == 0 {
-		return true, false, fmt.Errorf("amd64 %s requires K1-K7: %q", rawOp, ins.Raw)
-	}
-
-	dataBytes := amd64VectorByteWidth(data.Reg)
-	indexBytes := amd64VectorByteWidth(memory.Index)
-	if dataBytes == 0 || indexBytes == 0 || !amd64GatherTableAllows(spec.table, true, dataBytes, indexBytes) {
-		return true, false, fmt.Errorf("amd64 %s data/index widths are outside its Go 1.27 table: %q", rawOp, ins.Raw)
-	}
-	if err := c.validateGatherMemory(memory, indexBytes, true); err != nil {
-		return true, false, fmt.Errorf("amd64 %s invalid VSIB memory: %q: %w", rawOp, ins.Raw, err)
-	}
-	if _, ok := amd64GatherRegisterIndex(data.Reg, dataBytes, true, c.goarch, false); !ok {
-		return true, false, fmt.Errorf("amd64 %s data register is outside its Go 1.27 class: %q", rawOp, ins.Raw)
-	}
-	if _, ok := amd64GatherRegisterIndex(memory.Index, indexBytes, true, c.goarch, true); !ok {
-		return true, false, fmt.Errorf("amd64 %s VSIB index is outside its Go 1.27 class: %q", rawOp, ins.Raw)
-	}
-	return true, false, c.emitScatter(spec, memory, mask.Reg, data.Reg, dataBytes, indexBytes)
+	return true, false, c.emitScatter(form.spec, form.memory.Mem, form.mask.Reg, form.data.Reg, form.dataBytes, form.indexBytes)
 }
 
 func (c *amd64Ctx) emitScatter(spec amd64GatherSpec, memory MemRef, mask, data Reg, dataBytes, indexBytes int) error {
