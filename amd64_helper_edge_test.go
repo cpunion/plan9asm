@@ -708,7 +708,33 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 	mustLower("NOTQ", Instr{Raw: "NOTQ 20(BX)", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: BX, Off: 20}}}})
 	mustLower("BSWAPL", Instr{Raw: "BSWAPL AX", Args: []Operand{{Kind: OpReg, Reg: AX}}})
 	mustLower("MULQ", Instr{Raw: "MULQ CX", Args: []Operand{{Kind: OpReg, Reg: CX}}})
+	// MULX consumes a complete source proof. This broad fragment context has
+	// Void plus synthetic result slots, so give only MULX its own real source
+	// and matching signature. Do not lend that proof to the remaining table.
+	mulxSource, err := Parse(ArchAMD64, `TEXT mulxfragment(SB),4,$0-0
+MOVQ $7,BX
+MOVQ $3,DX
+MULXQ BX, CX, DI
+RET
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mulxContext, mulxOutput := newAMD64CtxWithFuncForTest(t, mulxSource.Funcs[0],
+		FuncSig{Name: "example.mulxfragment", Ret: Void}, nil)
+	if err := mulxContext.storeReg(BX, "7"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mulxContext.storeReg(DX, "3"); err != nil {
+		t.Fatal(err)
+	}
+	fragmentContext := c
+	c = mulxContext
 	mustLower("MULXQ", Instr{Raw: "MULXQ BX, CX, DI", Args: []Operand{{Kind: OpReg, Reg: BX}, {Kind: OpReg, Reg: CX}, {Kind: OpReg, Reg: DI}}})
+	c = fragmentContext
+	if !strings.Contains(mulxOutput.String(), "mul i128") || !strings.Contains(mulxOutput.String(), "lshr i128") {
+		t.Fatal("complete MULX fragment lost either product half")
+	}
 	mustLower("MULL", Instr{Raw: "MULL CX", Args: []Operand{{Kind: OpReg, Reg: CX}}})
 	// This direct emitter fragment has no public entry/NUM certificate. Its
 	// trapping DIV still requires an explicit physical instruction target;
