@@ -95,7 +95,8 @@ It reuses four shared transports. Original Go selection separates 287 ordinary,
 three terminal and eight partially shadowed candidates. Both endpoint SDKs
 pass 30 modules / 60 LLVM22 O0/O2 objects, format controls and the complete
 109-root / 5,088-child rule scope. All twenty old42 snapshots remain identical.
-Both SDKs pass five-architecture reports, Node573 and Go26 / 301 policies.
+Both SDKs pass the five-architecture reports. Node573 and Go26 / 301 policies
+also pass on the final frozen source.
 An interrupted minimum-SDK link ran zero tests because of disk exhaustion;
 its retained setup failure is followed by the successful four-root / 372-child
 retry. These local results do not certify a future published CI revision.
@@ -130,8 +131,8 @@ regressed. Do not restore it or claim an unmeasured acceleration.
 
 ## Remaining work, in order
 
-1. Qualify the raw-prefix cleanup and publish a batch with the integrated
-   conversion76 and terminal-prefix repairs. Require the new head's complete CI,
+1. Publish a qualified batch with the integrated conversion76, terminal-prefix
+   repair and raw-prefix cleanup. Require the new head's complete CI,
    coverage and review; keep all original failures, setup errors and skips.
 2. Finish the other 345 AVX rows in eleven semantic groups using seven transport
    groups. The existing-helper tests-first draft is unrun. Floating arithmetic,
