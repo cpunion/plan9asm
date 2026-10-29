@@ -192,6 +192,25 @@ func (facts x86CallerCountedNumbers) clone() x86CallerCountedNumbers {
 // unknown; only a real readonly local-length load supplies the partition source.
 func (facts *x86CallerCountedNumbers) step(pc, residue int, ins Instr, before x86SourceStackState, proof *x86GoCallerRegionProof) {
 	op := Op(normalizeInstructionOpcode(x86GoMOVQSourceInstruction(ins).Op))
+	if effect, known, err := x86TypedCounterControlByteEffect(ins.Op, ins, "amd64"); known {
+		if err != nil {
+			for register := range facts.regs {
+				delete(facts.regs, register)
+			}
+			facts.flags = x86CallerCountedFlags{}
+			facts.sequence++
+			return
+		}
+		for _, operand := range effect.operands {
+			if operand.write && operand.operand.Kind == OpReg {
+				facts.sequence++
+				if register, valid := x86CallerGP(operand.operand.Reg); valid {
+					delete(facts.regs, register)
+				}
+			}
+		}
+		return // Preserve actual FLAGS, but never retain a decremented exact value/version.
+	}
 	if op == OpTEXT || op == OpRET || op == OpJMP || isAMD64ConditionalBranch(op) {
 		return
 	}

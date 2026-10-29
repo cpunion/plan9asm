@@ -186,7 +186,8 @@ func (graph *x86DirectTailGraph) root(root int, byName map[string]int, limit int
 // operand on another instruction supplies no physical native-PC authority.
 func x86DirectTailBranchArgs(ins Instr) []Operand {
 	args := ins.Args
-	if isAMD64ConditionalBranch(ins.Op) && !isAMD64CounterZeroBranch(ins.Op) && len(args) == 2 &&
+	_, counter := x86CounterControlPropertiesForOpcode(ins.Op)
+	if isAMD64ConditionalBranch(ins.Op) && !counter && len(args) == 2 &&
 		args[0].Kind == OpImm && args[0].ImmRaw == "" && !args[0].ImmIsFloat &&
 		(args[0].Imm == 0 || args[0].Imm == 1) {
 		return args[1:]

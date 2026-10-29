@@ -148,6 +148,17 @@ func x86RegisterCanonicalBytesAfter(original Instr, before [16]uint8, arch strin
 		} // Only FLAGS are written.
 		return [16]uint8{}
 	}
+	if effect, known, err := x86TypedCounterControlByteEffect(ins.Op, ins, arch); known {
+		if err != nil {
+			return [16]uint8{}
+		}
+		for _, operand := range effect.operands {
+			if operand.write && operand.operand.Kind == OpReg {
+				write(operand.operand.Reg, operand.width, 0)
+			}
+		}
+		return next // A decrement supplies NUM, never a newly canonical count.
+	}
 	if ins.Op == "NOP" || ins.Op == OpJMP || isAMD64ConditionalBranch(ins.Op) {
 		return next
 	}

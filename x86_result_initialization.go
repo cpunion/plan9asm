@@ -1336,6 +1336,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if ins.Op == OpJMP {
 		return true // The CFG checks its complete target independently.
 	}
+	if accepted, known := x86ResultCounterControlStep(ins, state, owned, arch); known {
+		return accepted
+	}
 	if isAMD64ConditionalBranch(ins.Op) {
 		required := x86ByteBranchFlags(ins.Op)
 		return required != 0 && state.flags&required == required

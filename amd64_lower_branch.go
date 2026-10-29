@@ -67,6 +67,10 @@ func (c *amd64Ctx) lowerBranch(bi int, ii int, op Op, ins Instr, emitBr amd64Emi
 			return false, false, nil
 		}
 	}
+	counter, counterKnown, counterErr := x86CounterControlProperties(op, ins, c.goarch)
+	if counterKnown && counterErr != nil {
+		return true, false, counterErr
+	}
 	// The Go assembler accepts a legacy x86 branch-hint operand such as
 	// JEQ $1, target. It is not part of the encoded instruction on current
 	// toolchains. Share its complete resolved-integer grammar with the source
@@ -204,66 +208,9 @@ func (c *amd64Ctx) lowerBranch(bi int, ii int, op Op, ins Instr, emitBr amd64Emi
 	}
 	fall := c.blocks[bi+1].name
 	cond := ""
-	switch op {
-	case "LOOP":
-		counter, err := c.loadReg(CX)
-		if err != nil {
-			return true, false, err
-		}
-		if c.goarch == "386" {
-			old32 := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", old32, counter)
-			next32 := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = sub i32 %%%s, 1\n", next32, old32)
-			next64 := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", next64, next32)
-			if err := c.storeReg(CX, "%"+next64); err != nil {
-				return true, false, err
-			}
-			test := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = icmp ne i32 %%%s, 0\n", test, next32)
-			cond = "%" + test
-		} else {
-			next := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = sub i64 %s, 1\n", next, counter)
-			if err := c.storeReg(CX, "%"+next); err != nil {
-				return true, false, err
-			}
-			test := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = icmp ne i64 %%%s, 0\n", test, next)
-			cond = "%" + test
-		}
-	case "JCXZW", "JCXZL", "JCXZQ":
-		// cmd/internal/obj/x86 emits an address-size override only for
-		// JCXZL. Therefore Go's historical spellings test these widths:
-		//
-		//             JCXZW  JCXZL  JCXZQ
-		//   amd64       RCX    ECX    RCX
-		//   386         ECX     CX    ECX
-		//
-		// Preserve that behavior instead of inferring the width from the
-		// mnemonic suffix.
-		counter, err := c.loadReg(CX)
-		if err != nil {
-			return true, false, err
-		}
-		bits := 64
-		if c.goarch == "386" {
-			bits = 32
-		}
-		if op == "JCXZL" {
-			bits /= 2
-		}
-		value := counter
-		if bits != 64 {
-			truncated := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i%d\n", truncated, counter, bits)
-			value = "%" + truncated
-		}
-		test := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = icmp eq i%d %s, 0\n", test, bits, value)
-		cond = "%" + test
-	default:
+	if counterKnown {
+		cond, err = c.counterControlCondition(counter)
+	} else {
 		condition := x86BranchCondition(op)
 		if condition == "" {
 			return true, false, fmt.Errorf("amd64: unsupported branch %s", op)

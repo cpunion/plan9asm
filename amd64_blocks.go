@@ -13,8 +13,7 @@ type amd64Block struct {
 
 func isAMD64ConditionalBranch(op Op) bool {
 	op = Op(strings.ToUpper(string(op)))
-	switch op {
-	case "JCXZW", "JCXZL", "JCXZQ":
+	if _, known := x86CounterControlPropertiesForOpcode(op); known {
 		return true
 	}
 	return x86BranchCondition(op) != ""
@@ -61,12 +60,8 @@ func x86BranchCondition(op Op) string {
 }
 
 func isAMD64CounterZeroBranch(op Op) bool {
-	switch Op(strings.ToUpper(string(op))) {
-	case "JCXZW", "JCXZL", "JCXZQ":
-		return true
-	default:
-		return false
-	}
+	spec, known := x86CounterControlPropertiesForOpcode(op)
+	return known && !spec.decrement
 }
 
 func amd64SplitBlocks(fn Func) []amd64Block {

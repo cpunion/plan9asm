@@ -571,6 +571,9 @@ func x86SourceStackScalarType(typ LLVMType) bool {
 }
 
 func x86SourceStackInstructionKnown(ins Instr, nativeMove Op, suffix, arch string) bool {
+	if _, known, err := x86CounterControlProperties(ins.Op, ins, arch); known {
+		return err == nil // Original raw/address metadata cannot borrow named count semantics.
+	}
 	if _, known, err := x86ExplicitIMULProperties(ins.Op, ins, arch); known {
 		return err == nil
 	}
@@ -791,6 +794,14 @@ func x86SourceStackFlagsStepForArch(ins Instr, state *x86SourceStackState, arch 
 	op := Op(normalizeInstructionOpcode(ins.Op))
 	if condition, conditionalSet := x86ConditionalSetConditions[op]; conditionalSet {
 		return x86SourceStackNumericFlagsRead(state, x86ByteConditionFlags(condition)) // SETcc preserves flags.
+	}
+	if effect, known, err := x86TypedCounterControlByteEffect(ins.Op, ins, arch); known {
+		if err != nil || state.callers == nil && state.scalarResult == nil {
+			return false // A physical stack identity alone proves no numerical counter.
+		}
+		// The existing caller or scalar-result transfer owns every NUM read/write.
+		// Zero FLAGS reads require no producer; no status bit is defined here.
+		return x86SourceStackNumericFlagMask(state)&effect.flagsRead == effect.flagsRead
 	}
 	if isAMD64ConditionalBranch(op) {
 		return isAMD64CounterZeroBranch(op) || x86SourceStackNumericFlagsRead(state, x86ByteBranchFlags(op))

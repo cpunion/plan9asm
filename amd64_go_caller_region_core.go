@@ -267,6 +267,24 @@ func x86CallerScalarStep(ins *Instr, state *x86SourceStackState, proof *x86GoCal
 		return false, err == nil
 	}
 	op := Op(normalizeInstructionOpcode(x86GoMOVQSourceInstruction(*ins).Op))
+	if effect, known, err := x86TypedCounterControlByteEffect(ins.Op, *ins, "amd64"); known {
+		if err != nil {
+			return false, false
+		}
+		// The already registered caller supplies NUM; the descriptor grants no role.
+		for _, operand := range effect.operands {
+			if operand.read && !x86CallerNumericRead(operand.operand, operand.width, state) {
+				return false, false
+			}
+		}
+		for _, operand := range effect.operands {
+			if operand.write && (operand.operand.Kind != OpReg ||
+				!x86CallerNumericWrite(operand.operand.Reg, operand.width, state)) {
+				return false, false
+			}
+		}
+		return false, true // The source-stack FLAGS consumer separately checks flagsRead.
+	}
 	if op == OpTEXT || op == OpLABEL || op == OpRET || op == OpJMP || isAMD64ConditionalBranch(op) {
 		return false, !isAMD64CounterZeroBranch(op) || x86CallerNumericRead(Operand{Kind: OpReg, Reg: CX}, 8, state)
 	}

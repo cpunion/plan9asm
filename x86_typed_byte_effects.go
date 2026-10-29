@@ -141,6 +141,9 @@ func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bo
 	if effect, known, err := x86TypedCarryControlByteEffect(op, ins, arch); known {
 		return effect, known, err
 	}
+	if effect, known, err := x86TypedCounterControlByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if effect, known, err := x86TypedByteSwapEffect(op, ins, arch); known {
 		return effect, known, err
 	}
@@ -269,5 +272,8 @@ func x86ByteConditionFlags(condition string) uint8 {
 }
 
 func x86ByteBranchFlags(op Op) uint8 {
+	if spec, counter := x86CounterControlPropertiesForOpcode(op); counter {
+		return x86ByteConditionFlags(spec.condition)
+	}
 	return x86ByteConditionFlags(x86BranchCondition(op))
 }

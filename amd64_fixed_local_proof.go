@@ -997,6 +997,9 @@ func fixedLocalStepWithGP(ins *Instr, state *x86FixedLocalState, sig FuncSig, pr
 		}
 		return nil
 	}
+	if _, counter := x86CounterControlPropertiesForOpcode(ins.Op); counter {
+		return fail() // This storage owner supplies no numerical counter domain.
+	}
 	if isAMD64ConditionalBranch(ins.Op) {
 		needed := x86ByteBranchFlags(ins.Op)
 		if needed == 0 || state.flags&needed != needed {

@@ -37,6 +37,10 @@ func x86ResultPredicateAfter(ins Instr, before x86ResultPredicate, arch string) 
 		return before // No input, write or FLAGS change revokes the existing relation.
 	}
 	if isAMD64ConditionalBranch(ins.Op) {
+		if spec, counter := x86CounterControlPropertiesForOpcode(ins.Op); counter && spec.decrement &&
+			before.kind == x86ResultNonzeroMaskGP && before.register == 1 {
+			return x86ResultPredicate{} // The old numerical CX relation does not survive a decrement.
+		}
 		return before // The CFG refines each successor independently.
 	}
 	if form, known, err := x86PackedIntegerCompareProperties(ins.Op, ins, arch); known && err == nil && !form.mmx && !form.maskResult {
@@ -70,6 +74,9 @@ func x86ResultPredicateAfter(ins Instr, before x86ResultPredicate, arch string) 
 
 func x86ResultPredicateEdge(state x86ResultState, ins Instr, edge int) x86ResultState {
 	state = x86ResultBitScanEdge(state, ins, edge)
+	if _, counter := x86CounterControlPropertiesForOpcode(ins.Op); counter {
+		return state // Count branches do not establish the ordinary JE/JNE vector-mask relation.
+	}
 	if state.predicate.kind != x86ResultTestComparisonBytes || !isAMD64ConditionalBranch(ins.Op) {
 		return state
 	}
