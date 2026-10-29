@@ -486,6 +486,7 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 	}
 	top.flags = x86ByteFlagsAll
 	edges := make([][]int, len(instructions))
+	terminals := make([]bool, len(instructions))
 	hasRepeat := false
 	for pc, ins := range instructions {
 		hasRepeat = hasRepeat || ins.Op == "REP" || ins.Op == "REPN"
@@ -496,14 +497,16 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 			}
 			continue
 		}
+		if _, terminal, err := x86UndefinedTrapProperties(ins.Op, ins, goarch); !control && terminal && err == nil {
+			terminals[pc] = true
+			continue // A complete architectural trap has no input effects or normal successor.
+		}
 		shape := top.clone()
 		if !control && !transfer(ordinals[pc], ins, &shape, owned, resultOffset, goarch) {
 			return fail(fmt.Sprintf("unclosed source effect at instruction %d: %s", pc, ins.Raw))
 		}
 		next := []int{pc + 1}
-		if _, known, err := x86UndefinedTrapProperties(ins.Op, ins, goarch); trapOnly && known && err == nil {
-			next = nil // The paired exact architectural trap has no normal successor.
-		} else if fn.x86DirectTailRoot != nil {
+		if fn.x86DirectTailRoot != nil {
 			next = fn.x86DirectTailRoot.edges[pc]
 		} else if fn.x86ContinuationFlow != nil {
 			next = fn.x86ContinuationFlow.edges[pc]
@@ -634,6 +637,10 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 			returned = true
 			continue // Check results after the complete fixed point, never early.
 		}
+		if terminals[pc] {
+			trapped = true
+			continue // Earlier reachable instructions have already consumed their original state.
+		}
 		if control {
 			// Real registers/FLAGS flow through the original helper body. These
 			// source-adjacency observations cannot cross CALL or its private RET.
@@ -642,9 +649,6 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 			state.nativeLEAAddressBits = x86NativeLEAAddressBits{}
 		} else if !transfer(ordinals[pc], ins, &state, owned, resultOffset, goarch) {
 			return fail(fmt.Sprintf("unknown effect or undefined input at instruction %d: %s", pc, ins.Raw))
-		}
-		if _, known, err := x86UndefinedTrapProperties(ins.Op, ins, goarch); trapOnly && known && err == nil {
-			trapped = true
 		}
 		for edge, target := range edges[pc] {
 			nextState := x86ResultPredicateEdge(state, ins, edge)
@@ -667,7 +671,7 @@ func checkX86ResultSourceFlowWithTrapOnly(fn Func, initial x86ResultState, owned
 	if trapOnly && !x86ResultAllPathsTerminateInTrap(instructions, edges, states, goarch) {
 		return fail("trap-only logical shadow has a reachable non-trap continuation or cycle")
 	}
-	if !returned && !(trapOnly && trapped) {
+	if !returned && !trapped {
 		return fail("no ordinary reachable RET")
 	}
 	for pc, state := range states {

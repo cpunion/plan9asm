@@ -32,6 +32,12 @@ func x86UndefinedTrapProperties(op Op, ins Instr, arch string) (x86UndefinedTrap
 			if form, transfer, err := x86InsertExtractProperties(local, arch); transfer && err == nil && form.undefinedOpcode() {
 				return x86UndefinedTrapSpec{native: "ud2"}, true, nil
 			}
+			if form, move, err := amd64PackedVectorMoveProperties(local, arch); move && err == nil && form.undefinedOpcode() {
+				return x86UndefinedTrapSpec{native: "ud2"}, true, nil
+			}
+			if form, compact, err := x86PackedCompactProperties(op, local, arch); compact && err == nil && form.undefinedOpcode() {
+				return x86UndefinedTrapSpec{native: "ud2"}, true, nil
+			}
 		}
 		if form, narrow, err := x86SingleSourceNarrowProperties(op, ins, arch); narrow && err == nil && form.undefinedOpcode() {
 			return x86UndefinedTrapSpec{native: "ud2"}, true, nil
