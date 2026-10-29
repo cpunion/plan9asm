@@ -1,6 +1,6 @@
 # PR40 closeout
 
-Updated 2026-10-29. Finish amd64 correctness, shared typed families and
+Updated 2026-10-30. Finish amd64 correctness, shared typed families and
 translation efficiency while preserving all five architecture gates.
 Start with [architecture](architecture.md), [family development](instructions.md),
 [x86 convergence](x86-convergence.md) and [validation](validation.md).
@@ -8,8 +8,15 @@ Original qualification, failures and host exclusions remain in their reports.
 
 ## Published and local revisions
 
-[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The published
-batch `fad14e2e1` completed its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40872759334)
+[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. Published
+`137945fdf` has its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40904358535).
+Its two failing source-test owners mutate private access-certificate widths
+but expect normalization to accept the edited sealed snapshot. The local
+tests-only repair retains rejection and adds fresh original-source capture
+and LLVM-object positives. Both SDKs pass five roots / 75 children without
+skips. New contribution heads require their own complete CI and review.
+
+The preceding batch `fad14e2e1` completed its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40872759334)
 with 280 successful and 45 failed jobs. The failures comprise formatting,
 eleven jobs each for private MULX context, bare raw ADDSUB and legacy ROUND
 memory, plus eleven derived collectors. Local repairs require their own CI.
@@ -122,13 +129,17 @@ through three targets and three APIs at O0/O2. The original assembly, native
 guard and C driver remain byte-identical. This is source/object evidence;
 actual native execution retains its existing independent runtime owner.
 
-The complete cold rule package passes 119 roots / 10,699 children per SDK.
-The original candidate five-architecture validators fail on the new VSIB
-classification until its independently audited 24 baseline fields are updated.
-All original failures remain retained. Run the merged broad scope, normative
-five-architecture checks, Node and Go policies, whole-source regression and
-paired translation measurements before publishing. Component results certify
-neither the next head's CI nor its unexecuted hardware.
+The complete cold rule package passes 122 roots / 10,755 children per SDK.
+The scalar family scope passes 1,877 nodes across 53 roots / 1,825 children,
+with one existing host-inapplicable runtime skip. All 24 preceding identity
+snapshots remain byte-exact. Twelve bare BSF/BSR probe forms change from IR
+acceptance to Context: all eight source profiles retain the same 48 original
+statements, now rejected for undefined inputs. Initialized counterparts retain
+three-API, five-target objects. The reviewed baseline changes only the support,
+context and fingerprint fields; unsupported and runtime counts do not change.
+Retain the original failing reports and rerun the normative five-architecture
+checks and policies on the integrated head. Component results certify neither
+that head's CI nor its unexecuted hardware.
 
 The terminal-prefix class retains all prior input obligations before UD2 and
 all reachable ordinary return obligations. Its official Linux/amd64
@@ -158,7 +169,9 @@ neither a smaller helper nor a microbenchmark proves faster SDK compilation.
 4. Preserve native386, AVX512/AVX512ER, RCP14/MXCSR and other explicit hardware
    gaps. MMX state, BF16 optimized active-memory faults, floating MIN/MAX and
    unexecuted native owners require their own acceptance evidence.
-5. Preserve ARM64, ARM, WASM and their known object/control gaps. The fourteen
-   strict-SDK failures in [issue47](https://github.com/xgo-dev/plan9asm/issues/47),
-   general ABI0/runtime callbacks and broader library compatibility remain
-   separate work. Coordinate one heavy local Go/LLVM/Node invocation at a time.
+5. Preserve ARM64, ARM, WASM and their known object/control gaps. Classify the
+   fourteen strict-SDK failures in [issue47](https://github.com/xgo-dev/plan9asm/issues/47)
+   individually: source-inventory limits, DATA/TEXT merging and generic ABI
+   forms include repository-owned gaps, alongside special runtime contracts.
+   Broader callbacks and library compatibility retain independent execution
+   owners. Coordinate one heavy local Go/LLVM/Node invocation at a time.
