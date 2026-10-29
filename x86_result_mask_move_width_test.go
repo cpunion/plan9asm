@@ -30,7 +30,7 @@ func TestX86MaskMoveGPResultFullWordDefinedness(t *testing.T) {
 							state.gp[3], state.pointerGP[3] = uint8(seed), true
 							before := state.clone()
 							accepted := x86ScalarFPResultTransfer(instruction, &state, nil, 0, arch)
-							want := initialized && !(arch == "386" && row.bits == 64)
+							want := initialized
 							if accepted != want {
 								t.Fatal("mask move acquired a missing input or physical width", seed, initialized, accepted, want)
 							}
@@ -62,9 +62,6 @@ func x86ResultMaskMoveWidthFixture(arch string) (string, string, []string) {
 	var source, declarations strings.Builder
 	var names []string
 	for _, row := range x86ResultMaskMoveWidthOracle {
-		if arch == "386" && row.bits == 64 {
-			continue // Its unchanged physical-Q boundary is checked above.
-		}
 		for _, destination := range registers {
 			for _, mask := range []string{"K0", "K7"} {
 				input := "DX"
@@ -95,7 +92,7 @@ func TestX86MaskMoveGPResultFiveTargetsThreeAPIs(t *testing.T) {
 			source, declarations, names := x86ResultMaskMoveWidthFixture(target.arch)
 			want := 64
 			if target.arch == "386" {
-				want = 36
+				want = 48
 			}
 			if len(names) != want {
 				t.Fatal("complete mask/width/register denominator changed", len(names), want)

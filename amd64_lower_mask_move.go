@@ -15,11 +15,59 @@ var amd64MaskMoveSpecs = map[Op]int{
 	"KMOVQ": 64,
 }
 
-func (c *amd64Ctx) lowerMaskMove(op Op, ins Instr) error {
-	bits, recognized := amd64MaskMoveSpecs[op]
-	if !recognized {
-		return fmt.Errorf("amd64 unknown mask-move opcode %q", op)
+type x86MaskMoveOperandKind uint8
+
+const (
+	x86MaskMoveK x86MaskMoveOperandKind = iota
+	x86MaskMoveGP
+	x86MaskMoveMemory
+)
+
+type x86MaskMoveForm struct {
+	bits                int
+	source, destination x86MaskMoveOperandKind
+}
+
+// Only a GP operand binds the mode-effective word width: VEX.W is ignored
+// for GP transfers in mode32. K/K and K/memory keep the original native width.
+func x86MaskMoveProperties(op Op, ins Instr, arch string) (x86MaskMoveForm, bool, error) {
+	bits, known := amd64MaskMoveSpecs[op]
+	form := x86MaskMoveForm{bits: bits}
+	if !known {
+		return form, false, nil
 	}
+	fail := func() (x86MaskMoveForm, bool, error) {
+		return form, true, fmt.Errorf("%s %s operands are outside Go's _ykmovb table: %q", arch, op, ins.Raw)
+	}
+	if arch != "386" && arch != "amd64" || !strings.EqualFold(string(ins.Op), string(op)) || len(ins.Args) != 2 {
+		return fail()
+	}
+	kind := func(operand Operand) (x86MaskMoveOperandKind, bool) {
+		switch {
+		case amd64IsKOperand(operand):
+			return x86MaskMoveK, true
+		case amd64IsYrlOperand(operand, arch):
+			return x86MaskMoveGP, true
+		case isAMD64MemoryOperand(operand):
+			return x86MaskMoveMemory, true
+		}
+		return 0, false
+	}
+	var sourceOK, destinationOK bool
+	form.source, sourceOK = kind(ins.Args[0])
+	form.destination, destinationOK = kind(ins.Args[1])
+	if !sourceOK || !destinationOK || form.source != x86MaskMoveK && form.destination != x86MaskMoveK {
+		return fail()
+	}
+	if form.source == x86MaskMoveGP || form.destination == x86MaskMoveGP {
+		if word := int(x86ResultPointerWord(arch) * 8); form.bits > word {
+			form.bits = word
+		}
+	}
+	return form, true, nil
+}
+
+func (c *amd64Ctx) lowerMaskMove(op Op, ins Instr) error {
 	if ins.Op != "" && Op(strings.ToUpper(string(ins.Op))) != op {
 		return fmt.Errorf("amd64 mask-move dispatch %q disagrees with instruction %q", op, ins.Op)
 	}
@@ -27,63 +75,54 @@ func (c *amd64Ctx) lowerMaskMove(op Op, ins Instr) error {
 	// callers without Instr.Op. Bind a local copy before the shared validator;
 	// source/caller proofs still require their original complete instruction.
 	ins.Op = op
-	if len(ins.Args) != 2 {
-		return fmt.Errorf("amd64 %s expects two operands from Go 1.27's _ykmovb table: %q", op, ins.Raw)
+	arch := c.goarch
+	if arch == "" {
+		arch = "amd64"
 	}
-	src, dst := ins.Args[0], ins.Args[1]
-	srcK := amd64IsKOperand(src)
-	dstK := amd64IsKOperand(dst)
-	dstGP := amd64IsYrlOperand(dst, c.goarch)
-	dstMem := isAMD64MemoryOperand(dst)
-
-	if !amd64MaskMoveOperandsValid(ins, c.goarch) {
-		return fmt.Errorf("amd64 %s operands are outside Go 1.27's _ykmovb table: %q", op, ins.Raw)
+	form, known, err := x86MaskMoveProperties(op, ins, arch)
+	if !known {
+		return fmt.Errorf("amd64 unknown mask-move opcode %q", op)
 	}
-
-	value, err := c.loadMaskMoveValue(src, bits, srcK)
 	if err != nil {
 		return err
 	}
-	switch {
-	case dstK:
+	src, dst := ins.Args[0], ins.Args[1]
+	value, err := c.loadMaskMoveValue(src, form.bits, form.source == x86MaskMoveK)
+	if err != nil {
+		return err
+	}
+	switch form.destination {
+	case x86MaskMoveK:
 		return c.storeK(dst.Reg, value)
-	case dstGP:
+	case x86MaskMoveGP:
 		// The GP-destination encodings zero-extend B/W/D results. Store the
 		// already-masked value as the complete modeled register value.
 		base, _ := amd64FullRegBase(dst.Reg)
 		return c.storeReg(base, value)
-	case dstMem:
-		return c.storeMaskMoveMemory(dst, bits, value)
+	case x86MaskMoveMemory:
+		return c.storeMaskMoveMemory(dst, form.bits, value)
 	default:
 		return fmt.Errorf("amd64 %s has unsupported destination: %q", op, ins.Raw)
 	}
 }
 
 func amd64MaskMoveOperandsValid(ins Instr, goarch string) bool {
-	if _, recognized := amd64MaskMoveSpecs[ins.Op]; !recognized || len(ins.Args) != 2 {
-		return false
-	}
-	src, dst := ins.Args[0], ins.Args[1]
-	sourceK, destinationK := amd64IsKOperand(src), amd64IsKOperand(dst)
-	return sourceK && (destinationK || amd64IsYrlOperand(dst, goarch) || isAMD64MemoryOperand(dst)) ||
-		(amd64IsYrlOperand(src, goarch) || isAMD64MemoryOperand(src)) && destinationK
+	_, known, err := x86MaskMoveProperties(ins.Op, ins, goarch)
+	return known && err == nil
 }
 
 func x86TypedMaskMoveByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
-	bits, known := amd64MaskMoveSpecs[op]
+	form, known, err := x86MaskMoveProperties(op, ins, arch)
 	if !known {
 		return x86TypedByteEffect{}, false, nil
 	}
-	if arch != "386" && arch != "amd64" || ins.Op != op || !amd64MaskMoveOperandsValid(ins, arch) {
-		return x86TypedByteEffect{}, true, fmt.Errorf("%s %s has no complete mask-move byte effect: %q", arch, op, ins.Raw)
+	if err != nil {
+		return x86TypedByteEffect{}, true, err
 	}
-	width := int64(bits / 8)
+	width := int64(form.bits / 8)
 	first, last := ins.Args[0], ins.Args[1]
-	if arch == "386" && bits == 64 && (amd64IsYrlOperand(first, arch) || amd64IsYrlOperand(last, arch)) {
-		return x86TypedByteEffect{}, true, numericalSBContext("mode32 mask-move GP qword needs its physical register contract")
-	}
 	writeWidth := width
-	if amd64IsYrlOperand(last, arch) && writeWidth < x86ResultPointerWord(arch) {
+	if form.destination == x86MaskMoveGP && writeWidth < x86ResultPointerWord(arch) {
 		writeWidth = x86ResultPointerWord(arch) // GP B/W/D writes zero-extend; memory stays exact-width.
 	}
 	return x86TypedByteEffect{requiresResultProof: true, operands: []x86TypedByteOperand{

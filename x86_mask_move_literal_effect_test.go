@@ -8,11 +8,11 @@ import (
 
 func TestX86MaskMoveLiteralProofExactReadWriteRoles(t *testing.T) {
 	forms := []struct {
-		operands string
-		gpWrite  bool
+		operands        string
+		gpRead, gpWrite bool
 	}{
-		{"AX,K1", false}, {"K1,K7", false}, {"K1,BX", true},
-		{"(DX),K1", false}, {"K1,(DX)", false},
+		{"AX,K1", true, false}, {"K1,K7", false, false}, {"K1,BX", false, true},
+		{"(DX),K1", false, false}, {"K1,(DX)", false, false},
 	}
 	for _, arch := range []string{"386", "amd64"} {
 		for _, row := range x86ResultMaskMoveWidthOracle {
@@ -20,15 +20,10 @@ func TestX86MaskMoveLiteralProofExactReadWriteRoles(t *testing.T) {
 				t.Run(arch+"/"+row.op+"/"+form.operands, func(t *testing.T) {
 					ins := x86ScalarLaneInstruction(t, row.op+" "+form.operands)
 					effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch)
-					physicalQ := arch == "386" && row.bits == 64 &&
-						(amd64IsYrlOperand(ins.Args[0], arch) || amd64IsYrlOperand(ins.Args[1], arch))
-					if physicalQ {
-						if !known || err == nil {
-							t.Fatal("mode32 physical qword role lost", known, err)
-						}
-						return
-					}
 					width := int64(row.bits / 8)
+					if (form.gpRead || form.gpWrite) && width > x86ResultPointerWord(arch) {
+						width = x86ResultPointerWord(arch) // GP WIG; K/memory retain native width.
+					}
 					writeWidth := width
 					if form.gpWrite && writeWidth < x86ResultPointerWord(arch) {
 						writeWidth = x86ResultPointerWord(arch)
@@ -60,9 +55,6 @@ func TestX86MaskMoveLiteralProofExactReadWriteRoles(t *testing.T) {
 func TestX86MaskMoveLiteralCannotEscapeOrPreserveOverwrittenRange(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, row := range x86ResultMaskMoveWidthOracle {
-			if arch == "386" && row.bits == 64 {
-				continue // The independent effect test retains the rejected GP-qword boundary.
-			}
 			t.Run(arch+"/"+row.op, func(t *testing.T) {
 				state := x86SDKLiteralState{}
 				state.gp[0] = x86SDKLiteralValue{symbol: "table<>"}

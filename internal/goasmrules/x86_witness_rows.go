@@ -400,6 +400,9 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 }
 
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
+	if x86KDataTable(rule.Opcode) != "" {
+		return x86KDataRowWitnesses(rule)
+	}
 	if rule.Ytab == "_yvpermilpd" || rule.Ytab == "_yvpermq" || rule.Ytab == "_yvpermd" ||
 		rule.Ytab == "_yvperm2f128" || rule.Ytab == "_yvshuff32x4" {
 		return x86PermutationShuffleRowWitnesses(rule)

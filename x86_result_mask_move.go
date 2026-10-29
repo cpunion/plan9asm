@@ -18,17 +18,18 @@ func x86RawMaskMoveSource(ins Instr, arch string) bool {
 // storage contracts; an incoming pointer never asserts backing or bounds.
 func x86MaskMoveResultStep(ins Instr, state *x86ResultState, owned []bool,
 	resultOffset int64, arch string, native bool) (bool, bool) {
-	if !amd64MaskMoveOperandsValid(ins, arch) {
+	form, known, err := x86MaskMoveProperties(ins.Op, ins, arch)
+	if !known || err != nil {
 		return false, false
 	}
-	width := int64(amd64MaskMoveSpecs[ins.Op] / 8)
+	width := int64(form.bits / 8)
 	first, last := ins.Args[0], ins.Args[1]
 	// Whole-source replay is checked before the paired lowering consumer.
 	// Exact raw identity shares only the named emitter's volatile access;
 	// original source/provenance and all numerical inputs remain unchanged.
 	pairedNative := native && ins.x86NumericalRead == nil &&
 		(x86ResultNamedPredicateInstruction(ins) || x86RawMaskMoveSource(ins, arch))
-	if amd64IsKOperand(first) {
+	if form.source == x86MaskMoveK {
 		index, _ := amd64ParseKReg(first.Reg)
 		if !state.masks[index] {
 			return false, true
@@ -39,7 +40,7 @@ func x86MaskMoveResultStep(ins Instr, state *x86ResultState, owned []bool,
 			return false, true
 		}
 	}
-	if amd64IsKOperand(last) {
+	if form.destination == x86MaskMoveK {
 		index, _ := amd64ParseKReg(last.Reg)
 		state.masks[index] = true
 		return true, true
@@ -50,7 +51,6 @@ func x86MaskMoveResultStep(ins Instr, state *x86ResultState, owned []bool,
 	}
 	if last.Kind == OpReg {
 		// KMOV's GP encoding zero-extends B/W/D, unlike partial MOVB/W.
-		// Preserve the existing mode32 GP-Q boundary, not a new grant.
 		word := x86ResultPointerWord(arch)
 		if width < word {
 			width = word

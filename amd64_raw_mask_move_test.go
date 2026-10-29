@@ -97,16 +97,12 @@ func TestX86RawMaskMoveCompleteGo127Family(t *testing.T) {
 						name, extent, setup, x86RawDisplacementDirectives(test.code))
 					declaration := fmt.Sprintf("func %s(%s)", name, arguments)
 					x86LEAActualTargetGoObject(t, target.goarch, target.triple, source)
-					physicalQ := target.goarch == "386" && (test.name == "q k to gp" || test.name == "q gp to k")
+					// GP transfers ignore encoded W in 32-bit mode: these
+					// original KMOVQ bytes transfer 32 bits. K/memory Q
+					// transfers retain their independent 64-bit width.
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(api, func(t *testing.T) {
 							ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.goarch, target.triple, api)
-							if physicalQ {
-								if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
-									t.Fatal("mode32 physical GP-qword boundary disappeared", ir != "", err)
-								}
-								return
-							}
 							if err != nil || ir == "" {
 								t.Fatal("independently initialized original raw mask-move rejected", err)
 							}
