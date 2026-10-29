@@ -46,6 +46,12 @@ type x86InsertExtractForm struct {
 	zeroing, memoryWrite                    bool
 }
 
+func (form x86InsertExtractForm) undefinedOpcode() bool {
+	// Go emits EVEX.z for a memory destination, but the ISA makes that
+	// encoding terminal #UD rather than a zeroing store.
+	return form.zeroing && form.memoryWrite
+}
+
 // Block transfers read the inserted/selected chunk and, for insertion, only
 // the retained base bytes. This describes numerical inputs, not memory extent.
 func (form x86InsertExtractForm) blockInputBytes() (source, base uint64) {
@@ -188,9 +194,6 @@ func x86InsertExtractProperties(ins Instr, goarch string) (x86InsertExtractForm,
 			return fail()
 		}
 	}
-	if f.zeroing && f.memoryWrite {
-		return fail()
-	}
 	if highMode32 != "" {
 		// Go can encode named VEX/EVEX high SIMD registers in mode32.
 		// Its syntax/object acceptance does not supply physical register
@@ -210,7 +213,7 @@ func (c *amd64Ctx) bindInsertExtractForm(op Op, ins Instr) (Instr, x86InsertExtr
 	}
 	ins.Op = op
 	f, known, err := x86InsertExtractProperties(ins, c.goarch)
-	if err == nil && f.memory >= 0 && ins.Args[f.memory].Kind == OpFP {
+	if err == nil && !f.undefinedOpcode() && f.memory >= 0 && ins.Args[f.memory].Kind == OpFP {
 		err = c.validateFPVectorSpan(ins.Args[f.memory].FPOffset, f.spec.chunk)
 	}
 	return ins, f, known, err

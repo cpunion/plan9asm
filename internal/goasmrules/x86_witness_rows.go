@@ -26,6 +26,17 @@ type X86PackedBinaryWitness struct {
 	Encoding                   []byte
 }
 
+// X86InsertExtractRows retains all original rows, including alternate physical
+// encodings shadowed by earlier named-source rows. Selection needs its observer.
+func X86InsertExtractRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
+	return x86PackedBinaryRows(legacy, avx, `VEXTRACTF128 VEXTRACTI128
+		VEXTRACTF32X4 VEXTRACTF64X2 VEXTRACTI32X4 VEXTRACTI64X2
+		VEXTRACTF32X8 VEXTRACTF64X4 VEXTRACTI32X8 VEXTRACTI64X4
+		VEXTRACTPS VPEXTRB VPEXTRW VPEXTRD VPEXTRQ
+		VINSERTF128 VINSERTI128 VINSERTF32X4 VINSERTF64X2 VINSERTI32X4 VINSERTI64X2
+		VINSERTF32X8 VINSERTF64X4 VINSERTI32X8 VINSERTI64X4 VINSERTPS VPINSRB VPINSRW VPINSRD VPINSRQ`)
+}
+
 // X86PermutationShuffleRows retains complete in-lane, whole-vector and block
 // permutations. Existing I2/T2 and B/W indexed rows keep their original owner.
 func X86PermutationShuffleRows(legacy X86LegacyCatalog, avx []X86AVXRule) ([]X86PackedBinaryRow, error) {
@@ -402,6 +413,10 @@ func x86PackedBinaryRows(legacy X86LegacyCatalog, avx []X86AVXRule, names string
 func x86PackedAVXRowWitnesses(rule X86AVXRule) ([]X86PackedBinaryWitness, error) {
 	if x86KDataTable(rule.Opcode) != "" {
 		return x86KDataRowWitnesses(rule)
+	}
+	if strings.HasPrefix(rule.Ytab, "_yvextract") || strings.HasPrefix(rule.Ytab, "_yvinsert") ||
+		rule.Ytab == "_yvpextrw" || rule.Ytab == "_yvpinsrb" {
+		return x86InsertExtractRowWitnesses(rule)
 	}
 	if rule.Ytab == "_yvpermilpd" || rule.Ytab == "_yvpermq" || rule.Ytab == "_yvpermd" ||
 		rule.Ytab == "_yvperm2f128" || rule.Ytab == "_yvshuff32x4" {

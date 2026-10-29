@@ -13,7 +13,7 @@ func x86ResultBlockTransfer(ins Instr, form x86InsertExtractForm, state *x86Resu
 // reads only; stores establish no memory facts or raw/caller permission.
 func x86LoweredBlockNativeMemory(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) (bool, bool) {
 	form, recognized, err := x86InsertExtractProperties(ins, arch)
-	if !recognized || err != nil || form.spec.scalar || form.memory < 0 {
+	if !recognized || err != nil || form.undefinedOpcode() || form.spec.scalar || form.memory < 0 {
 		return false, false
 	}
 	memory := ins.Args[form.memory]
@@ -32,7 +32,7 @@ func x86LoweredBlockNativeMemory(ins Instr, state *x86ResultState, owned []bool,
 
 func x86ResultBlockTransferWithNativeMemory(ins Instr, form x86InsertExtractForm, state *x86ResultState,
 	owned []bool, resultOffset int64, arch string, nativeMemory bool) bool {
-	if form.spec.scalar || form.memory >= 0 && (ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride) {
+	if form.undefinedOpcode() || form.spec.scalar || form.memory >= 0 && (ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride) {
 		return false
 	}
 	if form.mask >= 0 {

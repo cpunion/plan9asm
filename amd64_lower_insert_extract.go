@@ -10,6 +10,9 @@ func (c *amd64Ctx) lowerInsertExtractFamily(op Op, ins Instr) (bool, bool, error
 	if !known || err != nil {
 		return known, false, err
 	}
+	if f.undefinedOpcode() {
+		return c.lowerX86UndefinedTrap(op, ins)
+	}
 	if f.mask >= 0 && f.memoryWrite {
 		return true, false, c.lowerNativeMaskedExtract(ins, f)
 	}

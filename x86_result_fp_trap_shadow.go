@@ -32,16 +32,20 @@ func x86TrapOnlyLogicalFPSourceRole(fn Func, sig FuncSig, arch string) bool {
 		if _, stack, _ := x86StackWidthProperties(ins, arch); stack {
 			return false // This new role does not supplement independent stack storage.
 		}
+		if _, known, err := x86UndefinedTrapProperties(ins.Op, ins, arch); known {
+			if err != nil {
+				return false
+			}
+			// A terminal encoding does not access its written memory operand.
+			// Earlier ordinary instructions retain their independent checks.
+			trap = true
+			continue
+		}
 		for _, operand := range ins.Args {
 			if operand.Kind == OpMem || operand.Kind == OpFPAddr {
 				return false
 			}
 		}
-		_, known, err := x86UndefinedTrapProperties(ins.Op, ins, arch)
-		if known && err != nil {
-			return false
-		}
-		trap = trap || known
 	}
 	return trap
 }

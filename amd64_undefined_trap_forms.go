@@ -24,6 +24,15 @@ func x86UndefinedTrapProperties(op Op, ins Instr, arch string) (x86UndefinedTrap
 	}
 	spec, known := x86UndefinedTrapSpecs[Op(canonical)]
 	if !known {
+		local := ins
+		if local.Op == "" {
+			local.Op = op
+		}
+		if strings.EqualFold(string(local.Op), string(op)) {
+			if form, transfer, err := x86InsertExtractProperties(local, arch); transfer && err == nil && form.undefinedOpcode() {
+				return x86UndefinedTrapSpec{native: "ud2"}, true, nil
+			}
+		}
 		if form, narrow, err := x86SingleSourceNarrowProperties(op, ins, arch); narrow && err == nil && form.undefinedOpcode() {
 			return x86UndefinedTrapSpec{native: "ud2"}, true, nil
 		}
