@@ -29,8 +29,8 @@ func x86LoweredExchangeResultStep(ins Instr, state *x86ResultState, owned []bool
 			return false, true
 		}
 		outputs = append(outputs, form.other)
-	} else if !x86ResultIncomingPointerAddressIdentity(form.other, state, arch) {
-		return false, true // No FP/AUTO, SB, segment or numerical base witness.
+	} else if !x86ResultNativeRMWAddress(ins, form.other, state, owned, arch) {
+		return false, true // No FP/AUTO, SB or numerical base witness.
 	}
 	for _, operand := range outputs {
 		if _, _, valid := x86ResultGP(operand.Reg, width, arch); !valid {

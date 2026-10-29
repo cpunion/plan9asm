@@ -35,8 +35,7 @@ func (c *amd64Ctx) scalarCompareNativeResultTransfer(ins Instr, state *x86Result
 			}
 			continue
 		}
-		if !x86ResultRead(operand, int64(form.bits/8), state, owned, arch) &&
-			!c.scalarCompareNativeAddress(operand, state, arch) {
+		if !x86ResultReadWithNativeGPContinuation(ins, operand, int64(form.bits/8), state, owned, arch) {
 			return false, true
 		}
 	}

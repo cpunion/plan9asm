@@ -74,6 +74,12 @@ func parseAMD64ExchangeForm(goarch string, op Op, spec amd64ExchangeSpec, ins In
 	if spec.kind == amd64ExchangeSwap && isAMD64MemoryOperand(first) {
 		first, second = second, first
 	}
+	if projected, segment, err := x86NamedSegmentMemorySource(ins, second, goarch); segment {
+		if err != nil {
+			return amd64ExchangeForm{}, err
+		}
+		second = projected
+	}
 	registerAllowed := func(reg Reg) bool {
 		if spec.bits == 8 {
 			return isGoYmbRegisterForArch(reg, goarch)

@@ -43,15 +43,18 @@ func TestX86AtomicExchangeMemoryNeedsNoRuntimeHelpers(t *testing.T) {
 				}
 			}
 			source.WriteString("RET\n")
-			requireX86GoAssemblerResult(t, target.arch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"exchange": {Name: "exchange", Ret: Void}}})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Preserve every uninitialized original instruction and its Go
+			// object/public Context. This private emitter proves formats and
+			// absence of invented runtime helpers, not initialized execution.
+			file, signatures := x86UnboundVoidFormatSource(t, source.String(), "exchange", target.arch, target.triple)
+			ir := x86InstructionFormatObjectUnit(t, file, signatures, target.arch, target.triple, 0,
+				func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
+					spec, known := amd64ExchangeSpecs[instruction.Op]
+					if !known {
+						return false, false, fmt.Errorf("original exchange fixture changed family: %s", instruction.Raw)
+					}
+					return c.lowerExchange(instruction.Op, spec, instruction)
+				})
 			dir := t.TempDir()
 			input := filepath.Join(dir, "exchange.ll")
 			if err := os.WriteFile(input, []byte(ir), 0600); err != nil {
@@ -73,7 +76,27 @@ func TestX86AtomicExchangeMemoryNeedsNoRuntimeHelpers(t *testing.T) {
 					t.Fatalf("atomic memory operand retained %d/%d %s overrides:\n%s", got, want, segment, asm)
 				}
 			}
-			compileLLVMToObject(t, llc, target.triple, "exchange.ll", "exchange.o", ir)
+			for _, level := range []string{"-O0", "-O2"} {
+				x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+			}
+			// The complete original instruction tail is byte-exact. Only
+			// actual typed-pointer and numerical entry producers are added.
+			_, original, found := strings.Cut(source.String(), "\n")
+			if !found {
+				t.Fatal("original exchange fixture lost its TEXT header")
+			}
+			move, word := "MOVQ", 8
+			if target.arch == "386" {
+				move, word = "MOVL", 4
+			}
+			initialized := fmt.Sprintf("TEXT exchange(SB),4,$0-%d\n%s p+0(FP),BX\n%s $5,DX\n%s",
+				word, move, move, original)
+			if !strings.HasSuffix(initialized, original) {
+				t.Fatal("initialized exchange changed an original instruction or direction")
+			}
+			x86OriginalGPInitializedFormatObjects(t, []x86OriginalGPInitializedFormat{{
+				source: initialized, declaration: "func exchange(p *[32]byte)",
+			}}, target.arch, target.triple)
 		})
 	}
 }

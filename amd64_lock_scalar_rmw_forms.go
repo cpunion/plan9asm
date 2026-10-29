@@ -111,6 +111,12 @@ func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMW
 	}
 	if !spec.unary {
 		form.source = ins.Args[0]
+		if projected, segment, err := x86NamedSegmentMemorySource(ins, form.source, arch); segment {
+			if err != nil {
+				return form, true, err
+			}
+			form.source = projected
+		}
 	}
 	if spec.unary {
 		if form.destination.Kind == OpReg {

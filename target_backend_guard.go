@@ -63,7 +63,7 @@ func validateTranslatedBackend(file *File, options Options, module llvm.Module) 
 			}
 		}
 	}
-	if err := validateTranslatedInlineAsmBackend(file, goarch, triple, module); err != nil {
+	if err := validateTranslatedNativeBackend(file, goarch, triple, module); err != nil {
 		return err
 	}
 	if architecture == "wasm32" || architecture == "wasm64" {
@@ -114,7 +114,7 @@ func validateTranslatedBackend(file *File, options Options, module llvm.Module) 
 	return nil
 }
 
-func validateTranslatedInlineAsmBackend(file *File, goarch, triple string, module llvm.Module) error {
+func validateTranslatedNativeBackend(file *File, goarch, triple string, module llvm.Module) error {
 	if file != nil {
 		// Normal native requests need no instruction walk. Reuse the same
 		// source-mode and endian boundaries as the typed family validators.
@@ -142,9 +142,17 @@ func validateTranslatedInlineAsmBackend(file *File, goarch, triple string, modul
 		return fmt.Errorf("%w: used module assembly requires its matching source LLVM target, got %q",
 			ErrProbeNeedsContext, module.Target())
 	}
+	var scalableVectorKind llvm.TypeKind
+	if file != nil && file.Arch == ArchAMD64 {
+		scalableVectorKind = llvmScalableVectorKind(module.Context())
+	}
 	for function := module.FirstFunction(); !function.IsNil(); function = llvm.NextFunction(function) {
 		for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
 			for instruction := block.FirstInstruction(); !instruction.IsNil(); instruction = llvm.NextInstruction(instruction) {
+				if file != nil && file.Arch == ArchAMD64 && x86InstructionUsesSegmentMemory(instruction, scalableVectorKind) {
+					return fmt.Errorf("%w: used x86 FS/GS segment memory in %q requires its matching source-mode LLVM target, got %q",
+						ErrProbeNeedsContext, function.Name(), module.Target())
+				}
 				for index := 0; index < instruction.OperandsCount(); index++ {
 					assembly := instruction.Operand(index).IsAInlineAsm()
 					if assembly.IsNil() {
@@ -166,4 +174,49 @@ func validateTranslatedInlineAsmBackend(file *File, goarch, triple string, modul
 		}
 	}
 	return nil
+}
+
+// Inspect memory address roles, not pointer-valued results, stored values,
+// declarations, unused constants or address calculations. Native requests
+// return before this walk. Calls with unknown effects conservatively consume
+// their pointer arguments; explicit LLVM memory(none) transport does not.
+func x86InstructionUsesSegmentMemory(instruction llvm.Value, scalableVectorKind llvm.TypeKind) bool {
+	first, end := 0, 1
+	switch instruction.InstructionOpcode() {
+	case llvm.Load, llvm.VAArg:
+	case llvm.Store:
+		first, end = 1, 2
+	case llvm.Call, llvm.Invoke:
+		kind := llvm.AttributeKindID("memory")
+		if attribute := instruction.GetCallSiteEnumAttribute(-1, kind); !attribute.IsNil() && attribute.GetEnumValue() == 0 {
+			return false
+		}
+		if callee := instruction.CalledValue().IsAFunction(); !callee.IsNil() {
+			if attribute := callee.GetEnumFunctionAttribute(kind); !attribute.IsNil() && attribute.GetEnumValue() == 0 {
+				return false
+			}
+		}
+		end = llvmCallArgumentCount(instruction)
+		if end > 2 && !instruction.IsAMemIntrinsic().IsNil() {
+			if length := instruction.Operand(2).IsAConstantInt(); !length.IsNil() && length.IsNull() {
+				return false // A constant-zero transfer performs no source or destination access.
+			}
+		}
+	default:
+		if !llvmInstructionIsAtomicMemory(instruction) {
+			return false
+		}
+	}
+	for index := first; index < end; index++ {
+		typ := instruction.Operand(index).Type()
+		if typ.TypeKind() == llvm.VectorTypeKind || typ.TypeKind() == scalableVectorKind {
+			typ = typ.ElementType()
+		}
+		if typ.TypeKind() == llvm.PointerTypeKind {
+			if space := typ.PointerAddressSpace(); space == 256 || space == 257 {
+				return true
+			}
+		}
+	}
+	return false
 }

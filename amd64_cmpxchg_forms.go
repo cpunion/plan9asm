@@ -57,6 +57,14 @@ func x86CompareExchangeProperties(op Op, ins Instr, arch string) (x86CompareExch
 		return invalid("does not have its complete ordered operand count")
 	}
 	form := x86CompareExchangeForm{spec: spec, destination: ins.Args[count-1]}
+	if !spec.pair {
+		if projected, segment, err := x86NamedSegmentMemorySource(ins, form.destination, arch); segment {
+			if err != nil {
+				return form, true, err
+			}
+			form.destination = projected
+		}
+	}
 	registerAllowed := func(reg Reg) bool {
 		if spec.pair || spec.bits == 8 {
 			return isGoYmbRegisterForArch(reg, arch)

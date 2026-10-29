@@ -58,6 +58,12 @@ func x86ScalarExtensionProperties(op Op, ins Instr, arch string) (x86ScalarExten
 		spec.destinationBits = 32
 	}
 	source, destination := ins.Args[0], ins.Args[1]
+	if projected, segment, err := x86NamedSegmentMemorySource(ins, source, arch); segment {
+		if err != nil {
+			return x86ScalarExtensionForm{}, true, err
+		}
+		source = projected
+	}
 	if destination.Kind != OpReg || !isX86YrlRegisterForArch(destination.Reg, arch) {
 		return fail("expects a Yrl destination register")
 	}

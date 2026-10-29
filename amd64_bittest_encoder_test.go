@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -109,7 +110,10 @@ func TestX86BitTestCompleteFormsFiveTargetsThreeAPIs(t *testing.T) {
 	}
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
-			var source, declarations strings.Builder
+			var source, deadRegisters strings.Builder
+			var initialized, unknownMemory []x86OriginalGPInitializedFormat
+			var deadDeclarations strings.Builder
+			privateOnly := 0
 			count := 0
 			for _, op := range x86BitTestOracleNames(target.arch) {
 				rows := []string{"$-128,AX", "$127,CX", "CX,AX", "AX,AX", "SP,BP", "CX,SP",
@@ -130,25 +134,222 @@ func TestX86BitTestCompleteFormsFiveTargetsThreeAPIs(t *testing.T) {
 				for _, row := range rows {
 					body := op + " " + row
 					ins := x86PureGPUnknownInstruction(t, body)
-					if _, known, err := x86BitTestProperties(ins.Op, ins, target.arch); !known || err != nil {
+					form, known, err := x86BitTestProperties(ins.Op, ins, target.arch)
+					if !known || err != nil {
 						t.Fatalf("typed shape %s: %v", body, err)
 					}
-					fmt.Fprintf(&source, "TEXT ·form%d(SB),4,$0-0\n%s\nRET\n", count, body)
-					fmt.Fprintf(&declarations, "func form%d()\n", count)
+					name := fmt.Sprintf("form%d", count)
+					original := fmt.Sprintf("TEXT ·%s(SB),4,$0-0\n%s\nRET\n", name, body)
+					source.WriteString(original)
+					hardwareOnly := form.destination.Kind == OpMem && form.destination.Mem.Segment != "" &&
+						form.destination.Mem.Base == "" && form.destination.Mem.Index == "" && form.index.Kind == OpImm
+					if form.destination.Kind != OpReg && !hardwareOnly {
+						unknownMemory = append(unknownMemory, x86OriginalGPInitializedFormat{
+							source: original, declaration: "func " + name + "()",
+						})
+					}
+					ordinaryScratch := form.destination.Kind == OpReg &&
+						!x86OriginalGPPhysicalRegister(form.destination.Reg, target.arch) &&
+						(form.index.Kind != OpReg || !x86OriginalGPPhysicalRegister(form.index.Reg, target.arch))
+					if ordinaryScratch {
+						// A dead ordinary register scratch is still a valid
+						// public source; do not invent NUM to retain that domain.
+						deadRegisters.WriteString(original)
+						fmt.Fprintf(&deadDeclarations, "func %s()\n", name)
+					}
+					fixture, reason := x86BitTestOriginalInitializedFormat(target.arch, name, body, form)
+					if reason == "" {
+						initialized = append(initialized, fixture)
+					} else {
+						privateOnly++
+						t.Logf("original row %d retains format/public-role boundary: %s: %s", count, body, reason)
+					}
 					count++
 				}
 			}
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
-			for _, api := range []string{"text", "module", "Go"} {
-				t.Run(api, func(t *testing.T) {
-					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
-					if err != nil {
-						t.Fatal(err)
+			want := map[string]int{"amd64": 780, "386": 336}[target.arch]
+			if count != want {
+				t.Fatal("original ordered bit-test inventory changed", count, want)
+			}
+			wantInitialized := map[string]int{"amd64": 636, "386": 248}[target.arch]
+			if len(initialized) != wantInitialized || privateOnly != want-wantInitialized {
+				t.Fatal("original bit-test input partition changed", len(initialized), privateOnly, wantInitialized)
+			}
+			// The complete unchanged source retains actual Go objects and
+			// three public Context observations. Emit every original row
+			// through the same typed family, with no public input claim.
+			file, signatures := x86UnboundVoidFormatSources(t, source.String(), target.arch, target.triple)
+			formats := *file
+			formats.Funcs = nil
+			physicalWrites := 0
+			for _, function := range file.Funcs {
+				instruction := function.Instrs[1]
+				form, _, _ := x86BitTestProperties(instruction.Op, instruction, target.arch)
+				if target.arch != "386" || form.stem == "BT" || form.destination.Kind != OpReg || form.destination.Reg != SP {
+					formats.Funcs = append(formats.Funcs, function)
+					continue
+				}
+				// Go encodes these original physical ESP writes, but the
+				// ordinary emitter requires a modeled stack/return contract.
+				// Preserve its actual rejection rather than fabricate an object.
+				var partial strings.Builder
+				resolve := func(name string) string { return strings.TrimPrefix(name, "·") }
+				consumer := newX86Ctx(&partial, function, signatures[resolve(function.Sym)], resolve,
+					signatures, target.arch, target.triple, false)
+				if err := consumer.emitEntryAllocas(); err != nil {
+					t.Fatal(err)
+				}
+				known, terminal, err := consumer.lowerBitTestFamily(instruction.Op, instruction)
+				if !known || terminal || err == nil || !strings.Contains(err.Error(), "386 direct SP write is unsupported") {
+					t.Fatal("original physical ESP row lost its independent emitter boundary", instruction.Raw, err)
+				}
+				physicalWrites++
+			}
+			if want := map[string]int{"amd64": 0, "386": 18}[target.arch]; physicalWrites != want {
+				t.Fatal("original physical ESP write inventory changed", physicalWrites, want)
+			}
+			ir := x86SingleInstructionFormatObjectUnits(t, &formats, signatures, target.arch, target.triple,
+				func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return c.lowerBitTestFamily(instruction.Op, instruction)
+				})
+			for _, level := range []string{"-O0", "-O2"} {
+				x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+			}
+			for row, fixture := range unknownMemory {
+				t.Run(fmt.Sprintf("unbound-memory/row%d", row), func(t *testing.T) {
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, fixture.source, fixture.declaration, target.arch, target.triple, api)
+						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+							t.Fatal("unbound original memory format invented inputs", api, err)
+						}
 					}
-					compileLLVMToObject(t, llc, target.triple, "bittest.ll", "bittest.o", ir)
 				})
 			}
-			t.Logf("%d actual Go witnesses, three LLVM API object consumers", count)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run("dead-registers/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, deadRegisters.String(), deadDeclarations.String(), target.arch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("original pure dead-register domain changed", err)
+					}
+				})
+			}
+			x86OriginalGPInitializedFormatObjects(t, initialized, target.arch, target.triple)
+			t.Logf("%d original Go formats; %d private LLVM formats; %d explicit physical-emitter rejections; %d exact-row initialized counterparts; %d independent physical/static/address roles",
+				count, len(formats.Funcs), physicalWrites, len(initialized), privateOnly)
+		})
+	}
+}
+
+// These test-only inputs name complete Go sources; they carry no product
+// permission and are never substituted into the original format inventory.
+type x86OriginalGPInitializedFormat struct {
+	source, declaration string
+}
+
+// Keep original row identity, exact displacement, segment and operand order.
+// A real NUM producer is separate from an opaque incoming pointer identity.
+func x86BitTestOriginalInitializedFormat(arch, name, body string, form x86BitTestForm) (x86OriginalGPInitializedFormat, string) {
+	var numerical []Reg
+	if form.index.Kind == OpReg {
+		numerical = append(numerical, form.index.Reg)
+	}
+	pointer := Reg("")
+	switch form.destination.Kind {
+	case OpReg:
+		numerical = append(numerical, form.destination.Reg)
+	case OpMem:
+		memory := form.destination.Mem
+		if memory.Sym != "" {
+			return x86OriginalGPInitializedFormat{}, "static bit string needs its independently bound source/storage role"
+		}
+		if memory.Segment != "" {
+			// The hardware base is implicit; an explicit GP is its NUM
+			// offset, never an opaque incoming-pointer identity.
+			if memory.Base != "" {
+				numerical = append(numerical, memory.Base)
+			}
+		} else {
+			if memory.Base == "" {
+				return x86OriginalGPInitializedFormat{}, "absolute numerical address has no ordinary opaque-pointer entry role"
+			}
+			pointer = memory.Base
+		}
+		if memory.Index != "" {
+			numerical = append(numerical, memory.Index)
+		}
+	default:
+		return x86OriginalGPInitializedFormat{}, "absolute/SB operand keeps its independent source-bound address role"
+	}
+	if pointer != "" && x86OriginalGPPhysicalRegister(pointer, arch) {
+		return x86OriginalGPInitializedFormat{}, "physical source frame register needs an independent registered entry"
+	}
+	for _, register := range numerical {
+		if x86OriginalGPPhysicalRegister(register, arch) {
+			return x86OriginalGPInitializedFormat{}, "physical source frame register cannot be fabricated as ordinary NUM"
+		}
+		if register == pointer {
+			return x86OriginalGPInitializedFormat{}, "one opaque address identity cannot also provide numerical source/index bytes"
+		}
+	}
+	move, word := "MOVQ", 8
+	if arch == "386" {
+		move, word = "MOVL", 4
+	}
+	var prefix strings.Builder
+	arguments, declaration := 0, "func "+name+"()"
+	if pointer != "" {
+		arguments = word
+		declaration = "func " + name + "(p *[64]byte)"
+		fmt.Fprintf(&prefix, "%s p+0(FP),%s\n", move, pointer)
+	}
+	seen := make(map[Reg]bool)
+	for _, register := range numerical {
+		if !seen[register] {
+			fmt.Fprintf(&prefix, "%s $1,%s\n", move, register)
+			seen[register] = true
+		}
+	}
+	source := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\n%s%s\nRET\n", name, arguments, prefix.String(), body)
+	return x86OriginalGPInitializedFormat{source, declaration}, ""
+}
+
+// This ordinary source observer has no physical SP/amd64BP entry role.
+// BP remains an ordinary GP in Go's mode32 source contract.
+func x86OriginalGPPhysicalRegister(register Reg, arch string) bool {
+	return register == SP || arch == "amd64" && register == BP
+}
+
+// Batch complete original-format counterparts, never one LLVM process per
+// row. All original bytes and private objects remain independently owned.
+func x86OriginalGPInitializedFormatObjects(t *testing.T, fixtures []x86OriginalGPInitializedFormat, arch, triple string) {
+	t.Helper()
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for start := 0; start < len(fixtures); start += 32 {
+		end := start + 32
+		if end > len(fixtures) {
+			end = len(fixtures)
+		}
+		t.Run(fmt.Sprintf("initialized/batch%02d", start/32), func(t *testing.T) {
+			var source, declarations strings.Builder
+			for _, fixture := range fixtures[start:end] {
+				source.WriteString(fixture.source)
+				declarations.WriteString(fixture.declaration + "\n")
+			}
+			x86LEAActualTargetGoObject(t, arch, triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), arch, triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("same original instruction with complete ordinary inputs", err)
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, triple, ir, level)
+					}
+				})
+			}
 		})
 	}
 }

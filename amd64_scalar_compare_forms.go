@@ -47,6 +47,12 @@ func x86ScalarCompareProperties(op Op, ins Instr, arch string) (x86ScalarCompare
 	registers, immediates := 0, 0
 	needsTLS := false
 	for index, operand := range form.args {
+		if projected, segment, err := x86NamedSegmentMemorySource(ins, operand, arch); segment && !x86SourceTLSMemoryRole(operand, arch) {
+			if err != nil {
+				return fail("has an invalid named segment memory operand")
+			}
+			operand, form.args[index] = projected, projected
+		}
 		switch operand.Kind {
 		case OpImm:
 			if index != immediatePosition || operand.ImmIsFloat || operand.ImmRaw != "" ||

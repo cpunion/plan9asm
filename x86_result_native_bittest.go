@@ -23,19 +23,28 @@ func x86LoweredNativeBitTest(ins Instr, state *x86ResultState, owned []bool, arc
 // A named GP offset still needs full numerical bytes; ordinary RMW addresses
 // keep their stricter incoming-pointer-base rule and cannot commute operands.
 func x86ResultNativeRMWAddress(ins Instr, address Operand, state *x86ResultState, owned []bool, arch string) bool {
+	if accepted, segment := x86ResultNativeSegmentAddress(ins, address, state, owned, arch); segment {
+		return accepted
+	}
+	return x86ResultIncomingPointerAddressIdentity(address, state, arch)
+}
+
+// Named hardware segments supply an actual base independently of numerical
+// GP address roles. Only an explicit offset consumes NUM; no storage follows.
+func x86ResultNativeSegmentAddress(ins Instr, address Operand, state *x86ResultState, owned []bool, arch string) (bool, bool) {
 	projected, segment, err := x86NamedSegmentMemorySource(ins, address, arch)
 	if !segment {
-		return x86ResultIncomingPointerAddressIdentity(address, state, arch)
+		return false, false
 	}
 	if err != nil || !x86OrdinaryNativeMemoryOperand(projected, arch) {
-		return false
+		return false, true
 	}
 	base := projected.Mem.Base
 	if base == "" {
-		return true
+		return true, true
 	}
 	word := x86ResultPointerWord(arch)
 	index, _, valid := x86ResultGP(base, word, arch)
 	return valid && (state.shapeOnly || !state.pointerGP[index]) &&
-		x86ResultRead(Operand{Kind: OpReg, Reg: base}, word, state, owned, arch)
+		x86ResultRead(Operand{Kind: OpReg, Reg: base}, word, state, owned, arch), true
 }

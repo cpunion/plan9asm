@@ -81,6 +81,17 @@ func x86ExplicitIMULProperties(op Op, ins Instr, arch string) (x86ExplicitIMULFo
 		three && len(ins.Args) != 3 || !three && len(ins.Args) != 2 {
 		return fail("has an unbound mode, dispatch identity or operand count")
 	}
+	sourceIndex := 0
+	if three {
+		sourceIndex = 1
+	}
+	if projected, segment, err := x86NamedSegmentMemorySource(ins, ins.Args[sourceIndex], arch); segment {
+		if err != nil {
+			return x86ExplicitIMULForm{}, true, err
+		}
+		ins.Args = append([]Operand(nil), ins.Args...)
+		ins.Args[sourceIndex] = projected
+	}
 	if err := validateX86ExplicitIMUL(arch, name, bits, ins, three); err != nil {
 		return x86ExplicitIMULForm{}, true, err
 	}

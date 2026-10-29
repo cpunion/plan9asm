@@ -295,7 +295,7 @@ func x86LoweredExplicitIMULNativeRead(ins Instr, state *x86ResultState, owned []
 				return false, true
 			}
 		}
-		if !x86ResultReadWithNativeContinuation(ins, operand.operand, operand.width, state, owned, arch, true) {
+		if !x86ResultReadWithNativeGPContinuation(ins, operand.operand, operand.width, state, owned, arch) {
 			return false, true
 		}
 	}

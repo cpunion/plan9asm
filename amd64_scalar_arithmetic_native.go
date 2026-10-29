@@ -62,7 +62,7 @@ func x86LoweredScalarArithmeticNativeRead(ins Instr, state *x86ResultState, owne
 	if !valid || state.pointerGP[index] ||
 		form.spec.carryInput && state.flags&x86ByteFlagCF == 0 ||
 		!x86ResultRead(form.destination, width, state, owned, arch) ||
-		!x86ResultReadWithNativeContinuation(ins, form.source, width, state, owned, arch, true) {
+		!x86ResultReadWithNativeGPContinuation(ins, form.source, width, state, owned, arch) {
 		return false, true
 	}
 	if !x86ResultStore(form.destination, width, state, owned, resultOffset, arch) {

@@ -873,11 +873,29 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 // Family-specific lane/zero/alias effects remain independent. This grants no
 // validity, bounds, write, frame, caller or raw-entry permission.
 func x86ResultReadWithNativeContinuation(ins Instr, source Operand, width int64, state *x86ResultState, owned []bool, arch string, conditionalNativeRead bool) bool {
+	return x86ResultReadWithNativeAddress(ins, source, width, state, owned, arch, conditionalNativeRead, false)
+}
+
+// Scalar GP forms independently normalize named segment syntax. Vector and
+// raw consumers keep their existing continuation and source domains.
+func x86ResultReadWithNativeGPContinuation(ins Instr, source Operand, width int64, state *x86ResultState, owned []bool, arch string) bool {
+	return x86ResultReadWithNativeAddress(ins, source, width, state, owned, arch, true, true)
+}
+
+func x86ResultReadWithNativeAddress(ins Instr, source Operand, width int64, state *x86ResultState, owned []bool, arch string, conditionalNativeRead, segmentRead bool) bool {
 	if x86ResultRead(source, width, state, owned, arch) {
 		return true
 	}
-	return conditionalNativeRead && source.Kind == OpMem && source.Mem.Sym == "" &&
+	if !(conditionalNativeRead && source.Kind == OpMem && source.Mem.Sym == "" &&
 		ins.x86NumericalRead == nil && !ins.x86Encoded && ins.x86SourceRaw == nil && ins.x86RawNearReturn == nil &&
 		ins.x86AddressBits == 0 && !ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0 &&
-		x86OrdinaryNativeMemoryOperand(source, arch) && x86ResultIncomingPointerReadAddressIdentity(source, state, arch)
+		x86OrdinaryNativeMemoryOperand(source, arch)) {
+		return false
+	}
+	if segmentRead {
+		if accepted, segment := x86ResultNativeSegmentAddress(ins, source, state, owned, arch); segment {
+			return accepted
+		}
+	}
+	return x86ResultIncomingPointerReadAddressIdentity(source, state, arch)
 }

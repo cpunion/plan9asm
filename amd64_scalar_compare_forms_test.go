@@ -81,33 +81,117 @@ func TestX86ScalarCompareCompleteGoForms(t *testing.T) {
 	}
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
-			var source, declarations strings.Builder
+			var source, deadRegisters, deadDeclarations strings.Builder
+			var initialized, unknownMemory []x86OriginalGPInitializedFormat
+			privateOnly := 0
 			index := 0
 			for _, op := range x86ScalarCompareNames(target.arch) {
 				for _, row := range x86ScalarCompareOracleRows(op, target.arch) {
 					body := op + " " + row
 					ins := x86PureGPUnknownInstruction(t, body)
-					if _, known, err := x86ScalarCompareProperties(ins.Op, ins, target.arch); !known || err != nil {
+					form, known, err := x86ScalarCompareProperties(ins.Op, ins, target.arch)
+					if !known || err != nil {
 						t.Fatalf("typed shape %s: %v", body, err)
 					}
-					fmt.Fprintf(&source, "TEXT ·form%d(SB),4,$0-0\n%s\nRET\n", index, body)
-					fmt.Fprintf(&declarations, "func form%d()\n", index)
+					name := fmt.Sprintf("form%d", index)
+					original := fmt.Sprintf("TEXT ·%s(SB),4,$0-0\n%s\nRET\n", name, body)
+					source.WriteString(original)
+					if form.memory >= 0 {
+						memory, partner := form.args[form.memory], form.args[1-form.memory]
+						hardwareOnly := memory.Kind == OpMem && memory.Mem.Segment != "" &&
+							memory.Mem.Base == "" && memory.Mem.Index == "" && partner.Kind == OpImm
+						if !hardwareOnly {
+							unknownMemory = append(unknownMemory, x86OriginalGPInitializedFormat{
+								source: original, declaration: "func " + name + "()",
+							})
+						}
+					} else if x86ScalarCompareOrdinaryDeadRegisters(form, target.arch) {
+						deadRegisters.WriteString(original)
+						fmt.Fprintf(&deadDeclarations, "func %s()\n", name)
+					}
+					fixture, reason := x86ScalarCompareOriginalInitializedFormat(target.arch, name, body, form)
+					if reason == "" {
+						initialized = append(initialized, fixture)
+					} else {
+						privateOnly++
+						t.Logf("original compare row %d keeps its independent role: %s: %s", index, body, reason)
+					}
 					index++
 				}
 			}
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
-			for _, api := range []string{"text", "module", "Go"} {
-				t.Run(api, func(t *testing.T) {
-					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
-					if err != nil {
-						t.Fatal(err)
+			want := map[string]int{"amd64": 566, "386": 426}[target.arch]
+			if index != want {
+				t.Fatal("complete original compare inventory changed", index, want)
+			}
+			wantInitialized := map[string]int{"amd64": 420, "386": 306}[target.arch]
+			if len(initialized) != wantInitialized || privateOnly != want-wantInitialized {
+				t.Fatal("original compare input partition changed", len(initialized), privateOnly, wantInitialized)
+			}
+			file, signatures := x86UnboundVoidFormatSources(t, source.String(), target.arch, target.triple)
+			ir := x86SingleInstructionFormatObjectUnits(t, file, signatures, target.arch, target.triple,
+				func(c *amd64Ctx, instruction Instr) (bool, bool, error) {
+					return c.lowerCmpBt(instruction.Op, instruction)
+				})
+			for _, level := range []string{"-O0", "-O2"} {
+				x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+			}
+			for row, fixture := range unknownMemory {
+				t.Run(fmt.Sprintf("unbound-memory/row%d", row), func(t *testing.T) {
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, fixture.source, fixture.declaration, target.arch, target.triple, api)
+						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+							t.Fatal("unbound original comparison acquired numerical inputs", api, err)
+						}
 					}
-					compileLLVMToObject(t, llc, target.triple, "compare-forms.ll", "compare-forms.o", ir)
 				})
 			}
-			t.Logf("%d actual Go forms through three LLVM APIs", index)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run("dead-registers/"+api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, deadRegisters.String(), deadDeclarations.String(), target.arch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("ordinary dead comparison registers changed domain", err)
+					}
+				})
+			}
+			x86OriginalGPInitializedFormatObjects(t, initialized, target.arch, target.triple)
+			t.Logf("%d unchanged Go/private LLVM comparison formats; %d initialized counterparts; %d independent physical/static/address roles",
+				index, len(initialized), privateOnly)
 		})
 	}
+}
+
+func x86ScalarCompareOrdinaryDeadRegisters(form x86ScalarCompareForm, arch string) bool {
+	for _, operand := range form.args {
+		if operand.Kind == OpImm {
+			continue
+		}
+		if operand.Kind != OpReg || x86OriginalGPPhysicalRegister(operand.Reg, arch) {
+			return false
+		}
+	}
+	return true
+}
+
+func x86ScalarCompareOriginalInitializedFormat(arch, name, body string, form x86ScalarCompareForm) (x86OriginalGPInitializedFormat, string) {
+	// Both compare operands are reads. Reuse the test's ordinary two-input
+	// producer builder; this does not project a compare into a product BT form.
+	first, second := form.args[0], form.args[1]
+	if form.memory == 0 || second.Kind == OpImm {
+		first, second = second, first
+	}
+	for _, operand := range []Operand{first, second} {
+		if operand.Kind == OpSym && strings.HasPrefix(operand.Sym, "$") {
+			return x86OriginalGPInitializedFormat{}, "relocated immediate retains its source-bound numerical role"
+		}
+	}
+	for _, operand := range []*Operand{&first, &second} {
+		if operand.Kind == OpReg {
+			if base, _, alias := amd64ByteAlias(operand.Reg); alias {
+				operand.Reg = base
+			}
+		}
+	}
+	return x86BitTestOriginalInitializedFormat(arch, name, body, x86BitTestForm{index: first, destination: second})
 }
 
 func TestX86ScalarCompareMalformedForms(t *testing.T) {
