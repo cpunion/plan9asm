@@ -97,7 +97,16 @@ func x86LoweredMULXResultStep(ins Instr, state *x86ResultState, owned []bool,
 		local.x86Encoded, local.x86SourceRaw = false, nil
 	}
 	if !x86RegisterAddressedNativeMemoryOperand(form.source, arch) {
-		return x86ResultTransfer(local, state, owned, resultOffset, arch), true
+		next := state.clone()
+		next.loweredStaticReads, next.goReadOnlyRead = state.loweredStaticReads, state.goReadOnlyRead
+		if x86ResultTransfer(local, &next, owned, resultOffset, arch) {
+			*state = next
+			return true, true
+		}
+		if form.needsNativeProof(ins, arch) {
+			return false, true // Raw, physical-frame and native roles retain their strict input contract.
+		}
+		return x86MULXUnknownNumericalResults(local, state, owned, arch), true
 	}
 	effect, _, _ := x86TypedMULXByteEffect(local.Op, local, arch)
 	// Consume both the effective address and numerical DX before replacing
@@ -115,15 +124,64 @@ func x86LoweredMULXResultStep(ins Instr, state *x86ResultState, owned []bool,
 	return true, true
 }
 
+// Only the existing named, non-native, nontrapping numerical domain may
+// leave scratch products unknown. Readable storage and pointer/NUM roles remain
+// strict; both output dependencies must survive until any observable use.
+func x86MULXUnknownNumericalResults(ins Instr, state *x86ResultState, owned []bool, arch string) bool {
+	effect, known, err := x86TypedMULXByteEffect(ins.Op, ins, arch)
+	if !known || err != nil {
+		return false
+	}
+	unknown := false
+	for _, input := range effect.operands {
+		if !input.read {
+			continue
+		}
+		if input.operand.Kind != OpReg {
+			if !x86ResultRead(input.operand, input.width, state, owned, arch) {
+				return false
+			}
+			continue
+		}
+		index, mask, valid := x86ResultGP(input.operand.Reg, input.width, arch)
+		if !valid || state.pointerGP[index] {
+			return false
+		}
+		unknown = unknown || state.gp[index]&mask != mask
+	}
+	if !unknown {
+		return false // Some other strict failure must never become permission.
+	}
+	after := *state
+	for _, output := range effect.operands {
+		if !output.write {
+			continue
+		}
+		index, mask, valid := x86ResultGP(output.operand.Reg, output.width, arch)
+		if output.operand.Kind != OpReg || !valid {
+			return false
+		}
+		after.gp[index] &^= mask
+		after.canonicalGP[index] &^= mask
+		if output.width == 4 {
+			after.gp[index] |= 0xf0 // Only architectural upper32 are independently known zero.
+			if arch == "amd64" {
+				after.canonicalGP[index] |= 0xf0
+			}
+		}
+		after.pointerGP[index] = false
+	}
+	*state = after
+	return true
+}
+
 func (c *amd64Ctx) lowerMULX(op Op, ins Instr) (bool, bool, error) {
 	form, known, err := x86MULXProperties(op, ins, c.goarch)
 	if !known || err != nil {
 		return known, false, err
 	}
-	if form.needsNativeProof(ins, c.goarch) {
-		if err := c.integerEffectResultInitialized("MULX"); err != nil {
-			return true, false, err
-		}
+	if err := c.integerEffectResultInitialized("MULX"); err != nil {
+		return true, false, err
 	}
 	return true, false, c.emitMULX(form, ins)
 }

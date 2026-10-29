@@ -63,8 +63,8 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if _, known, err := x86ADXProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Both input words and the selected CF/OF chain remain obligations for raw/named Void.
 		}
-		if form, known, err := x86MULXProperties(ins.Op, ins, arch); known && err == nil && form.needsNativeProof(ins, arch) {
-			return true // A dead native read still needs its actual address; owned DATA retains its independent role.
+		if _, known, err := x86MULXProperties(ins.Op, ins, arch); known && err == nil {
+			return true // Unknown scratch products stay unknown; observable results and native inputs need complete proof.
 		}
 		if _, known, err := x86ScalarShiftProperties(ins.Op, ins, arch); known && err == nil {
 			return true // A paired ISA choice needs actual inputs; Void/unused bool cannot opt out.
