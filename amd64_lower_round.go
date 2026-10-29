@@ -29,6 +29,12 @@ func (c *amd64Ctx) lowerRound(rawOp Op, ins Instr) (ok bool, terminated bool, er
 	if !known || err != nil {
 		return known, false, err
 	}
+	if !form.spec.vector && form.memory && form.source.Kind != OpFP {
+		memory := x86FloatBinaryForm{bits: form.spec.laneBits, scalar: form.spec.scalar, legacy: true,
+			first: 1, second: len(ins.Args) - 1, destination: len(ins.Args) - 1, mask: -1,
+			byteWidth: 16, memory: 1, memoryBytes: form.memoryBytes}
+		return true, false, c.emitLegacyAlternatingRoundMemory(local, memory, &form.immediate)
+	}
 	intrinsic := amd64RoundIntrinsic(form.immediate)
 	if form.spec.scalar {
 		return c.lowerScalarRound(form, intrinsic)

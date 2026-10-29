@@ -32,6 +32,9 @@ func x86LoweredNumericalProducerReplay(fn Func, arch string) error {
 			if _, known, _ := x86ImmediateBlendProperties(ins.Op, ins, arch); known {
 				return true
 			}
+			if form, known, _ := x86AlternatingFloatProperties(ins, arch); known && !form.legacy {
+				return true // Erased or edited raw arithmetic origins cannot skip whole-source replay.
+			}
 			if _, known, _ := x86MULXProperties(ins.Op, ins, arch); known {
 				return true
 			}

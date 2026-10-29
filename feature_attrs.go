@@ -177,6 +177,10 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				form.legacy && form.spec.laneBytes == 4 && form.memory >= 0 {
 				add("+sse3") // Only the original aligned legacy opcode needs a native carrier.
 			}
+			if form, known, err := x86AlternatingFloatProperties(ins, moveArch); known && err == nil &&
+				form.legacy && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+				add("+sse3") // The original ADDSUB memory opcode requires its native XMM carrier.
+			}
 			if form, known, err := amd64FMA3Properties(ins, moveArch); known && err == nil && !form.spec.rawOnly {
 				if x86FMA3NativeEVEX(ins, form) {
 					add("+avx512f")

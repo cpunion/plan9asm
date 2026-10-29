@@ -12,6 +12,9 @@ func (c *amd64Ctx) lowerAlternatingFloatingAddSubtract(op Op, ins Instr) (ok boo
 	if !known || err != nil {
 		return known, false, err
 	}
+	if form.legacy && form.memory >= 0 && ins.Args[form.first].Kind != OpFP {
+		return true, false, c.emitLegacyAlternatingRoundMemory(local, form, nil)
+	}
 	first, err := c.loadAlternatingRoundFloat(ins.Args[form.first], form.byteWidth, form.bits, !form.legacy)
 	if err != nil {
 		return true, false, err

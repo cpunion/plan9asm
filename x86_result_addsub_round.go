@@ -9,10 +9,21 @@ func x86ResultAlternatingFloatStep(ins Instr, state *x86ResultState, owned []boo
 	if !known || err != nil {
 		return false, known
 	}
-	if !x86ResultNamedPredicateInstruction(ins) {
-		return false, true
+	local := ins
+	if !x86ResultNamedPredicateInstruction(local) {
+		if !native || !x86RawAlternatingFloatSource(ins, arch) {
+			return false, true
+		}
+		local.x86Encoded, local.x86SourceRaw = false, nil
 	}
-	return x86ScalarFPFloatBinaryTransferWithRead(ins, form, state, owned, arch, native && !form.legacy), true
+	read := native && (!form.legacy || form.memory >= 0 &&
+		x86LegacyAlternatingRoundMemorySource(local, local.Args[form.first], arch))
+	return x86ScalarFPFloatBinaryTransferWithRead(local, form, state, owned, arch, read), true
+}
+
+func x86RawAlternatingFloatSource(ins Instr, arch string) bool {
+	form, known, err := x86AlternatingFloatProperties(ins, arch)
+	return known && err == nil && !form.legacy && x86RawOrdinaryVectorSourceAt(ins, arch, form.first)
 }
 
 // Only the existing source-local decoder, immutable source replay, DATA
@@ -38,7 +49,7 @@ func x86ResultRoundStep(ins Instr, state *x86ResultState, owned []bool, arch str
 	}
 	low := x86CallerVectorByteMask(int64(form.memoryBytes))
 	if form.memory {
-		if !x86ResultReadWithNativeContinuation(ins, form.source, int64(form.memoryBytes), state, owned, arch, native && form.spec.vector) {
+		if !x86ResultReadWithNativeContinuation(ins, form.source, int64(form.memoryBytes), state, owned, arch, native && (form.spec.vector || x86LegacyAlternatingRoundMemorySource(ins, form.source, arch))) {
 			return false, true
 		}
 	} else {

@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -87,10 +88,6 @@ func TestDecodedX86VEXHorizontalFloatCompleteRegisterFamily(t *testing.T) {
 
 func TestTranslateRawVEXAddSubComplexAVX2Regression(t *testing.T) {
 	const source = "TEXT rawAddSub(SB),$0-0\n\tLONG $0xc1d0f9c5\n\tRET\n"
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -101,16 +98,39 @@ func TestTranslateRawVEXAddSubComplexAVX2Regression(t *testing.T) {
 		"x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: map[string]FuncSig{
-				"rawAddSub": {Name: "rawAddSub", Ret: Void},
-			}})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86UnboundVoidRawScalarFormatObject(t, source, "amd64", triple)
 			if !strings.Contains(ir, "fsub double") || !strings.Contains(ir, "fadd double") {
 				t.Fatalf("VADDSUBPD omitted alternating arithmetic:\n%s", ir)
 			}
 			compileLLVMToObject(t, llc, triple, "raw-vaddsub.ll", "raw-vaddsub.o", ir)
+		})
+	}
+}
+
+func TestX86RawAddSubInitializedPublicInputs(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			// The original VADDSUBPD bytes are unchanged. Independent typed
+			// inputs provide both vectors, and the complete result is observed.
+			loadSecond := "MOVUPD b+16(FP),X1\n"
+			source := "TEXT Value(SB),4,$0-48\nMOVUPD a+0(FP),X0\n" + loadSecond +
+				"LONG $0xc1d0f9c5\nMOVUPD X0,ret+32(FP)\nRET\n"
+			const declaration = "func Value(a,b [16]byte) [16]byte"
+			requireX86GoAssemblerResult(t, target.arch, source, true)
+			named := strings.Replace(source, "LONG $0xc1d0f9c5", "VADDSUBPD X1,X0,X0", 1)
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewAPI(t, named, declaration, target.arch, target.triple, api); err != nil || ir == "" {
+					t.Fatal("initialized named counterpart must precede raw comparison", api, err)
+				}
+			}
+			x86RawNumericalFamilyObjects(t, source, declaration, target.arch, target.triple)
+			for _, api := range []string{"text", "module", "Go"} {
+				missing := strings.Replace(source, loadSecond, "", 1)
+				ir, err := x86ScalarFPBitViewAPI(t, missing, declaration, target.arch, target.triple, api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("raw arithmetic borrowed its missing second vector", api, err)
+				}
+			}
 		})
 	}
 }

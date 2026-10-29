@@ -286,6 +286,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawADXSource(ins, arch) {
 			continue // Only the bound default address mode shares the typed carry chain.
 		}
+		if x86RawAlternatingFloatSource(ins, arch) {
+			continue // Exact original arithmetic retains every real vector and memory input.
+		}
 		if x86RawMULXSource(ins, arch) {
 			continue // Exact identity supplies neither implicit DX nor native address inputs.
 		}
