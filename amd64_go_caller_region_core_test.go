@@ -235,8 +235,8 @@ func TestX86GoCallerRegionCoreRejectsStaleSourceSignatureAndAccess(t *testing.T)
 				if x86RawReturnMemoryBound(file.Funcs[0], file, options, true) {
 					t.Fatal("edited access inherited a whole-function memory permission")
 				}
-				// Final normalization deliberately recomputes a valid certificate
-				// from unchanged original operands, never trusts the edited one.
+				// This checks private access revocation. Public normalization
+				// requires a fresh original source, not the edited sealed snapshot.
 				return
 			}
 			sigs["caller.kernel"] = sig

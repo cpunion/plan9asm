@@ -198,8 +198,8 @@ func TestX86GoCallerAcyclicJoinFinalCertificatesAndSourceMutations(t *testing.T)
 					if x86CallerMemoryCertified(*ins, 0) || x86RawReturnMemoryBound(normalized.Funcs[0], normalized, options, true) {
 						t.Fatal("changed provisional access acquired final admission")
 					}
-					// Final normalization recaptures the unchanged original native
-					// read, rather than inheriting the changed private certificate.
+					// Editing a private certificate also invalidates the sealed
+					// normalized snapshot; recapture must start from original source.
 				} else if change == "operand" {
 					ins.Args[0].Mem.Base = DX
 				}
@@ -220,12 +220,25 @@ func TestX86GoCallerAcyclicJoinFinalCertificatesAndSourceMutations(t *testing.T)
 				return
 			}
 			_, err = Translate(normalized, options)
-			if change == "none" || change == "access width" {
+			if change == "none" {
 				if err != nil {
 					t.Fatal(err)
 				}
 			} else if !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatalf("edited %s acquired a final caller proof: %v", change, err)
+			}
+			if change == "access width" {
+				fresh, err := Parse(ArchAMD64, assembly)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := Translate(fresh, options); err != nil {
+					t.Fatalf("recapture from unchanged original source: %v", err)
+				}
+				requireX86GoAssemblerResult(t, "amd64", assembly, true)
+				if err := x86CallerCoreTranslate(t, pkg, assembly, options.TargetTriple); err != nil {
+					t.Fatalf("fresh actual caller source and LLVM object: %v", err)
+				}
 			}
 		})
 	}

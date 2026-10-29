@@ -129,12 +129,25 @@ func TestX86GoCallerCountedLoopSealsAllPartitionsAndSource(t *testing.T) {
 				sigs[sig.Name] = sig
 			}
 			_, err = Translate(normalized, options)
-			if change == "none" || change == "certificate width" {
+			if change == "none" {
 				if err != nil {
 					t.Fatal(err)
 				}
 			} else if !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatalf("edited %s retained final proof: %v", change, err)
+			}
+			if change == "certificate width" {
+				fresh, err := Parse(ArchAMD64, assembly)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := Translate(fresh, options); err != nil {
+					t.Fatalf("recapture from unchanged original source: %v", err)
+				}
+				requireX86GoAssemblerResult(t, "amd64", assembly, true)
+				if err := x86CallerCoreTranslate(t, pkg, assembly, options.TargetTriple); err != nil {
+					t.Fatalf("fresh actual caller source and LLVM object: %v", err)
+				}
 			}
 		})
 	}
