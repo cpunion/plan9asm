@@ -73,7 +73,9 @@ Run focused RED/GREEN tests first; preserve failures under ignored `_out/`.
 Before choosing a family selector, enumerate its canonical row/object roots and
 all changed regression owners. Check every name against the selector and the
 actual JSON RUN/terminal inventory; a broad-looking prefix can omit legacy
-owners. Keep source-row, witness, module-object and executed-case counts separate.
+owners. When width or alias semantics change, also audit rejection assertions
+in indirect consumers, such as masked broadcasts seeded by KMOV. Keep source-row,
+witness, module-object and executed-case counts separate.
 An object helper's O0 pass does not establish O2: verify the actual compiler
 options for each API/module before reporting either level.
 

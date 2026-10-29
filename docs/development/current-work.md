@@ -8,7 +8,20 @@ this page records the current candidate and its limits.
 
 ## Publication and review
 
-PR40 remains draft. Published `5831e71bc` completes its
+PR40 remains draft. Published `1426b8a6d` adds the qualified K and insert/extract
+batch below. Its [own CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40809159475)
+is still running and has failures. Actual ordinary, coverage and race artifacts
+identify two stale consumer expectations: a Go-encodable terminal extract and
+a mode32 GP-to-K mask seed. Local test-only commits `60c89e454` and `dd065ab8d`
+retain all original inputs and correct those expectations. Both SDKs pass the
+respective 12-root / 58-child and 8 / 129 scopes, with no skips, plus Node573
+and Go26 / 301 policies. The first scope preserves raw memory-zero rejection;
+the second preserves unknown/partial inputs and true 64-bit K/memory controls.
+They do not change translator code or establish current-head cloud acceptance.
+A Windows partition also failed artifact upload after its tests passed; missing
+artifacts remain a formal failure. Let this round finish before a batched push.
+
+The preceding published `5831e71bc` completes its
 [own CI round](https://github.com/xgo-dev/plan9asm/actions/runs/40782298561):
 **325/325 successful**, **88.1%** statement coverage and a successful exact-head
 Codecov patch check. Every job name and check ID is reconciled against the
@@ -16,7 +29,7 @@ complete inventory. The race and Windows unions each contain all 22 packages;
 race retains 299 root / seven child skips, Windows 277 root / zero child skips.
 Those skips are not execution passes or new hardware acceptance.
 
-Its published inventory is **39 views, 3,406 mixed-mode source records /
+The `5831e71bc` inventory is **39 views, 3,406 mixed-mode source records /
 12,454 canonical witnesses**, with 441 source/declaration batches and two
 separate aliases. The AVX join is **2,877 / 3,568 rows (80.63%)**; 529 legacy
 and fallback records have a separate denominator. This measures initialized
@@ -26,7 +39,7 @@ rows and double-shift fallback records are not an amd64 percentage. Preceding
 `bebc7092d` had 34 views / 2,927 rows / 11,010 witnesses and its own successful
 325-job / 88.1% round, retaining 276 Windows root skips.
 
-The next locally qualified batch has **41 views / 3,575 source records** and
+The current published batch has **41 views / 3,575 source records** and
 **12,751 observed canonical witnesses**. Its AVX source-row ownership is
 **3,046 / 3,568 (85.37%)**. This retains the previous source-row denominator;
 it is not a new claim that every row has a directly selectable named encoding.
@@ -67,7 +80,8 @@ The final integrated `adb136c05` source also passes both KMOV runtime roots
 (2 / 38 per SDK), Node573 and Go26 / 301 on frozen source/tools/driver. Component
 evidence is inherited only through exact file/function/tool identity. The two
 test-only identity overlays are recorded separately from ordinary binaries.
-This batch needs its own complete cloud round after publication.
+Its current cloud round is not accepted; the local test repairs require their
+own complete cloud round after publication.
 
 The preceding `4aeffe806` round also completed 325/325 with 88.1% coverage;
 its Windows union retained 278 root skips, separate from `5831e71bc`'s 277.
