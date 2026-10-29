@@ -177,10 +177,7 @@ func TestTranslateX86RawVEXRoundObjects(t *testing.T) {
 		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ir := x86RawRoundOriginalModuleObjects(t, file, source.String(), triple, sigs)
 			compileLLVMToObject(t, llc, triple, "raw-vex-round.ll", "raw-vex-round.o", ir)
 		})
 	}

@@ -15,12 +15,25 @@ func x86ResultAlternatingFloatStep(ins Instr, state *x86ResultState, owned []boo
 	return x86ScalarFPFloatBinaryTransferWithRead(ins, form, state, owned, arch, native && !form.legacy), true
 }
 
+// Only the existing source-local decoder, immutable source replay, DATA
+// binding and independent raw-return owner can supply this literal role.
+// It is not ordinary raw, incoming-pointer or later-read authority.
+func x86RawRoundLiteralForm(ins Instr, arch string) bool {
+	if !x86RawLiteralSourceIdentity(ins, arch) {
+		return false
+	}
+	form, known, err := x86RoundProperties(ins, arch)
+	return known && err == nil && form.spec.vector && form.memory &&
+		ins.x86RIPMemoryRead.source == 1 && ins.x86RIPMemoryRead.width == int64(form.memoryBytes)
+}
+
 func x86ResultRoundStep(ins Instr, state *x86ResultState, owned []bool, arch string, native bool) (bool, bool) {
 	form, known, err := x86RoundProperties(ins, arch)
 	if !known || err != nil {
 		return false, known
 	}
-	if !x86ResultNamedPredicateInstruction(ins) || !x86ResultRead(ins.Args[0], 1, state, owned, arch) {
+	literal := x86RawRoundLiteralForm(ins, arch)
+	if !x86ResultNamedPredicateInstruction(ins) && !literal || !x86ResultRead(ins.Args[0], 1, state, owned, arch) {
 		return false, true
 	}
 	low := x86CallerVectorByteMask(int64(form.memoryBytes))
@@ -44,7 +57,11 @@ func x86ResultRoundStep(ins Instr, state *x86ResultState, owned []bool, arch str
 		if !valid || arch == "386" && upper >= 8 {
 			return false, true
 		}
-		defined |= state.vectorBytes(upper) & (0xffff &^ low)
+		upperRequired := uint64(0xffff) &^ low
+		if literal && state.vectorBytes(upper)&upperRequired != upperRequired {
+			return false, true
+		}
+		defined |= state.vectorBytes(upper) & upperRequired
 	}
 	state.writeVector(destination, form.byteWidth, defined, !form.spec.vector)
 	return true, true // All unrelated vector/GP/FLAGS/mask/storage facts survive.
