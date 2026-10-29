@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -92,28 +93,50 @@ func TestTranslateX86ApproximateMathCompleteGoAssemblerForms(t *testing.T) {
 			source.WriteString("\tRET\n")
 
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"approximatemathforms": {Name: "approximatemathforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, mnemonic := range []string{"vexp2ps", "vexp2pd", "vrcp28ps", "vrcp28pd", "vrcp28ss", "vrcp28sd", "vrsqrt28ps", "vrsqrt28pd", "vrsqrt28ss", "vrsqrt28sd"} {
-				if !strings.Contains(ir, mnemonic) {
-					t.Fatalf("translation omitted inline %s:\n%s", mnemonic, ir)
+			// Keep the complete original uninitialized source and its actual
+			// Go acceptance. Neither the grammar nor a private register slot
+			// supplies the missing vector, mask or native address inputs.
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source.String(), "func approximatemathforms()",
+					target.goarch, target.triple, api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original unbound approximation formats invented their inputs", api, err)
 				}
 			}
-			for _, fragment := range []string{"kmovw", "{%k1}", "{sae}", `"target-features"="+avx512f"`} {
-				if !strings.Contains(ir, fragment) {
-					t.Fatalf("translation omitted %q:\n%s", fragment, ir)
-				}
+			counterpart := source.String()
+			if target.goarch == "386" {
+				// Go's original high-X syntax above remains a separate source
+				// observation. The initialized physical counterpart uses X7.
+				counterpart = strings.ReplaceAll(counterpart, "X23", "X7")
 			}
-			compileLLVMToObject(t, llc, target.triple, "approximate-math-"+target.name+".ll", "approximate-math-"+target.name+".o", ir)
+			initialized, declaration, count := x86Reciprocal14InitializeOriginalShapes(t, counterpart, target.goarch)
+			want := 72
+			if target.goarch == "386" {
+				want = 60
+			}
+			if count != want {
+				t.Fatal("original approximation shape counterpart omitted an instruction", count, want)
+			}
+			x86LEAActualTargetGoObject(t, target.goarch, target.triple, initialized)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, initialized, declaration, target.goarch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("complete initialized original approximation shapes rejected", api, err)
+					}
+					for _, mnemonic := range []string{"vexp2ps", "vexp2pd", "vrcp28ps", "vrcp28pd", "vrcp28ss", "vrcp28sd", "vrsqrt28ps", "vrsqrt28pd", "vrsqrt28ss", "vrsqrt28sd"} {
+						if !strings.Contains(ir, mnemonic) {
+							t.Fatalf("translation omitted inline %s:\n%s", mnemonic, ir)
+						}
+					}
+					for _, fragment := range []string{"kmovw", "{%k1}", "{sae}", `"target-features"="+avx512f"`} {
+						if !strings.Contains(ir, fragment) {
+							t.Fatalf("translation omitted %q:\n%s", fragment, ir)
+						}
+					}
+					compileLLVMToObject(t, llc, target.triple, "approximate-math-"+target.name+"-"+api+".ll", "approximate-math-"+target.name+"-"+api+".o", ir)
+				})
+			}
 		})
 	}
 }

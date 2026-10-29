@@ -11,10 +11,13 @@ type x86FloatingHelperSpec struct {
 	bits, bytes                            int
 	scalar, immediate, second              bool
 	readDestination, maskResult, round, dq bool
-	estimate14                             bool
+	estimate14, estimate28                 bool
 }
 
 func x86FloatingHelperSpecFor(op Op) (x86FloatingHelperSpec, bool) {
+	if spec, known := amd64ApproximateMathSpecs[op]; known {
+		return x86FloatingHelperSpec{bits: spec.laneBits, scalar: spec.scalar, estimate28: true}, true
+	}
 	if spec, known := amd64Reciprocal14Specs[op]; known {
 		return x86FloatingHelperSpec{bits: spec.laneBits, scalar: spec.scalar, estimate14: true}, true
 	}
@@ -100,6 +103,7 @@ func x86FloatingHelperProperties(ins Instr, arch string) (x86FloatingHelperForm,
 		form.byteWidth = spec.bytes
 	}
 	if form.byteWidth != 16 && form.byteWidth != 32 && form.byteWidth != 64 || spec.scalar && form.byteWidth != 16 ||
+		spec.estimate28 && !spec.scalar && form.byteWidth != 64 ||
 		(properties.sae || properties.rounding != "") && !spec.scalar && form.byteWidth != 64 {
 		return fail()
 	}
@@ -185,9 +189,9 @@ func x86TypedFloatingHelperByteEffect(op Op, ins Instr, arch string) (x86TypedBy
 	effect := x86TypedByteEffect{requiresResultProof: true, operands: []x86TypedByteOperand{
 		{index: form.first, operand: ins.Args[form.first], width: firstWidth, read: true},
 	}}
-	if form.spec.estimate14 {
+	if form.spec.estimate14 || form.spec.estimate28 {
 		effect.vector.upperWrite = x86TypedVectorUpperZero
-		// The E4/E5 native instruction accepts unaligned memory. Its original
+		// Native estimates accept unaligned memory. Their original
 		// masked access/fault behavior still executes in the native helper;
 		// this alignment metadata supplies no private/caller storage authority.
 		effect.vector.memoryAlignment = 1
@@ -198,7 +202,7 @@ func x86TypedFloatingHelperByteEffect(op Op, ins Instr, arch string) (x86TypedBy
 		effect.operands = append(effect.operands, x86TypedByteOperand{
 			index: form.second, operand: ins.Args[form.second], width: int64(form.byteWidth), read: true,
 		})
-		if form.spec.estimate14 && form.spec.scalar {
+		if (form.spec.estimate14 || form.spec.estimate28) && form.spec.scalar {
 			effect.operands[len(effect.operands)-1].requiredBytes = 0xffff &^ x86CallerVectorByteMask(int64(form.activeBytes()))
 		}
 	}
@@ -206,7 +210,7 @@ func x86TypedFloatingHelperByteEffect(op Op, ins Instr, arch string) (x86TypedBy
 		index: form.destination, operand: ins.Args[form.destination], width: outputWidth,
 		read: !form.spec.maskResult && (form.spec.readDestination || form.mask >= 0 && !form.properties.zeroing), write: true,
 	})
-	if form.spec.estimate14 && form.spec.scalar && form.mask >= 0 && !form.properties.zeroing {
+	if (form.spec.estimate14 || form.spec.estimate28) && form.spec.scalar && form.mask >= 0 && !form.properties.zeroing {
 		effect.operands[len(effect.operands)-1].requiredBytes = x86CallerVectorByteMask(int64(form.activeBytes()))
 	}
 	if form.mask >= 0 {
