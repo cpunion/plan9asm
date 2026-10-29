@@ -13,6 +13,13 @@ type x86ResultBitScanPending struct {
 }
 
 func x86ResultBitScanStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	return x86ResultBitScanStepWithRead(ins, state, owned, arch, false)
+}
+
+// Only the paired exact-width volatile emitter may supply numerical source
+// bytes after its read. Standalone queries, source permissions and the
+// zero-input prior destination retain their independent requirements.
+func x86ResultBitScanStepWithRead(ins Instr, state *x86ResultState, owned []bool, arch string, native bool) (bool, bool) {
 	spec, known, err := x86ScalarBitScanProperties(ins.Op, ins, arch)
 	if !known || err != nil {
 		return false, known
@@ -23,7 +30,7 @@ func x86ResultBitScanStep(ins Instr, state *x86ResultState, owned []bool, arch s
 	}
 	width := int64(spec.bits / 8)
 	index, mask, valid := x86ResultGP(ins.Args[1].Reg, width, arch)
-	if !valid || !x86ResultRead(ins.Args[0], width, state, owned, arch) {
+	if !valid || !x86ResultReadWithNativeContinuation(ins, ins.Args[0], width, state, owned, arch, native) {
 		return false, true
 	}
 	if width == 4 && arch == "amd64" {

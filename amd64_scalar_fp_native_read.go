@@ -600,6 +600,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86LoweredScalarBitCountNativeRead(ins, state, owned, resultOffset, arch); known {
 			return accepted
 		}
+		if accepted, known := x86ResultBitScanStepWithRead(ins, state, owned, arch, true); known {
+			return accepted // The paired scan emitter retains its exact volatile source read.
+		}
 		if accepted, known := x86ResultScalarBitFieldStep(ins, state, owned, resultOffset, arch, true); known {
 			return accepted
 		}

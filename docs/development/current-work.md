@@ -25,20 +25,20 @@ The local follow-up has the following source-table ownership:
 
 | Local inventory | Count and meaning |
 |---|---|
-| Family views | 47; overlapping views retain explicit identity |
+| Family views | 48; overlapping views retain explicit identity |
 | AVX source rows | 3,568 / 3,568 original table rows |
-| Mixed-mode source records | 4,145 = 3,568 AVX + 577 legacy/fallback records |
-| Historical canonical witness union | 14,504; separate from all runtime forms |
-| New source witnesses | 1,358, checked with actual Go and three API O0/O2 objects |
-| New bounded source/declaration batches | 40; not a function or object count |
+| Mixed-mode source records | 4,173 = 3,568 AVX + 605 legacy/fallback records |
+| Historical canonical witness union | 14,560; separate from all runtime forms |
+| New source witnesses | 1,414, checked with actual Go and three API O0/O2 objects |
+| New bounded source/declaration batches | 44; not a function or object count |
 | Inherited identity | All 22 old JSON snapshots byte-exact |
 
 Complete AVX table ownership preserves original SDK rows, first-match choices,
 shadow alternatives, source modes and terminal forms. It does not establish
 all-ISA support, every named syntax alternative or native numerical execution.
 Legacy has its own denominator: 1,306 current-SDK / 1,305 minimum-SDK machine
-candidates, plus 112 separate `ymovtab` records. The 577 joined records comprise
-559 `optab` and 18 `ymovtab` entries; 841 current / 840 minimum records remain
+candidates, plus 112 separate `ymovtab` records. The 605 joined records comprise
+587 `optab` and 18 `ymovtab` entries; 813 current / 812 minimum records remain
 unjoined. These are inventory gaps, not counts of unsupported translations.
 Two PADDD aliases remain separate from rows.
 
@@ -46,6 +46,18 @@ The new CMOV join adds all 16 conditions across W/L/Q: 48 original rows and
 96 canonical register/memory witnesses. The 386 subset has 32 rows / 64
 witnesses; the 16 Q rows retain actual frontend refusals. The original 22
 identity snapshots remain byte-exact. No CMOV translator or FLAGS rule changes.
+
+The remaining non-CMOV `yml_rl` closure adds 28 original legacy rows through
+shared scalar prefix/ModRM transport: 56 AMD64 witnesses and the independently
+observed 34-witness 386 subset. The eleven REX.W rows retain actual Go source
+refusals. All 24 preceding identity snapshots remain byte-exact.
+LAR/LSL selector reads stay m16; extension source and result widths remain
+distinct. BSF/BSR now share their existing strict result step with the paired
+exact-width volatile reader. Continued execution supplies only that input's
+numerical bytes; it supplies no reusable memory, bounds or caller permission.
+Zero-input destination knowledge and portable ZF-only observation stay intact.
+Void and unused bool cannot hide missing scan inputs. Native numerical
+execution remains separate from initialized source and LLVM object evidence.
 
 ## Current class repairs
 

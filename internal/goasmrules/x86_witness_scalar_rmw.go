@@ -100,6 +100,41 @@ func X86ConditionalMoveRows(catalog X86LegacyCatalog, arch string) ([]X86ScalarR
 	return result, nil
 }
 
+// X86ScalarRMRegisterRows retains the non-CMOV yml_rl source closure. Mode
+// filtering follows the independently observed original Go REX.W refusals;
+// operand spellings and bytes still come from the shared scalar transport.
+func X86ScalarRMRegisterRows(catalog X86LegacyCatalog, arch string) ([]X86ScalarRMWRow, error) {
+	if arch != "386" && arch != "amd64" {
+		return nil, fmt.Errorf("scalar rm-to-register requires a Go x86 mode")
+	}
+	var result []X86ScalarRMWRow
+	seen := map[string]bool{}
+	for _, entry := range catalog.Optab {
+		if entry.Ytab != "yml_rl" || strings.HasPrefix(entry.Opcode, "CMOV") {
+			continue
+		}
+		if seen[entry.Opcode] || len(entry.Rows) != 1 {
+			return nil, fmt.Errorf("duplicate or malformed scalar rm-to-register source")
+		}
+		seen[entry.Opcode] = true
+		witnesses, err := x86ScalarRMWRowWitnesses(entry, entry.Rows[0], arch)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", entry.Opcode, err)
+		}
+		row := X86ScalarRMWRow{ID: fmt.Sprintf("optab/%d/%s/%s/0", entry.TableIndex, entry.Opcode, entry.Ytab), Opcode: entry.Opcode}
+		if arch == "386" && (entry.Prefix == "Pw" || entry.Prefix == "Pfw" || entry.Prefix == "Pq4w" || entry.Prefix == "Pq5w") {
+			row.ModeFiltered = "original Go source rejects REX.W in 386 mode"
+		} else {
+			row.Witnesses = witnesses
+		}
+		result = append(result, row)
+	}
+	if len(result) != 28 || len(seen) != 28 {
+		return nil, fmt.Errorf("incomplete scalar rm-to-register closure: names=%d rows=%d", len(seen), len(result))
+	}
+	return result, nil
+}
+
 func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch string) ([]X86ScalarRMWWitness, error) {
 	// These are ordered physical schemas, not opcode values. In particular,
 	// /digit immediate extension and ModRM direction have different transports.
@@ -113,18 +148,27 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		"yml_rl": {"Zm_r/1/Yml,Yrl"},
 	}
 	schema := schemas[entry.Ytab]
+	if entry.Opcode == "" {
+		return nil, fmt.Errorf("missing scalar source opcode")
+	}
 	width := entry.Opcode[len(entry.Opcode)-1]
 	conditional := strings.HasPrefix(entry.Opcode, "CMOV")
+	remainingPrefix := ""
 	if conditional {
 		if len(entry.Opcode) != 7 || entry.Ytab != "yml_rl" || !strings.ContainsRune("WLQ", rune(entry.Opcode[4])) {
 			return nil, fmt.Errorf("unmodeled conditional-move source shape")
 		}
 		width = entry.Opcode[4]
 	} else if entry.Ytab == "yml_rl" {
-		return nil, fmt.Errorf("scalar source family does not own this table")
+		width, remainingPrefix = x86ScalarYmlRegisterPrefix(entry.Opcode)
+		if remainingPrefix == "" {
+			return nil, fmt.Errorf("scalar source family does not own this table")
+		}
 	}
 	expectedPrefix := map[byte]string{'B': "Pb", 'W': "Pe", 'L': "Px", 'Q': "Pw"}[width]
-	if (entry.Ytab == "ybtl" || conditional) && width != 'Q' {
+	if remainingPrefix != "" {
+		expectedPrefix = remainingPrefix
+	} else if (entry.Ytab == "ybtl" || conditional) && width != 'Q' {
 		expectedPrefix = map[byte]string{'W': "Pq", 'L': "Pm"}[width]
 	} else if entry.Ytab == "yincl" {
 		expectedPrefix = "Px1"
@@ -165,6 +209,20 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		prefix = []byte{0x66, 0x0f}
 	case "Pw":
 		prefix = []byte{0x48}
+	case "Pf3":
+		prefix = []byte{0xf3, 0x0f}
+	case "Pef3":
+		prefix = []byte{0x66, 0xf3, 0x0f}
+	case "Pfw":
+		prefix = []byte{0xf3, 0x48, 0x0f}
+	case "Pq4":
+		prefix = []byte{0x66, 0x0f, 0x38}
+	case "Pq4w":
+		prefix = []byte{0x66, 0x48, 0x0f, 0x38}
+	case "Pq5":
+		prefix = []byte{0xf3, 0x0f, 0x38}
+	case "Pq5w":
+		prefix = []byte{0xf3, 0x48, 0x0f, 0x38}
 	}
 	if payload[offset] == 0x0f {
 		prefix = append(prefix, 0x0f)
@@ -193,7 +251,7 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 	case "Zr_m":
 		operands = append(operands, [2]string{src, dst}, [2]string{src, "0(SI)"})
 	case "Zm_r":
-		if conditional {
+		if entry.Ytab == "yml_rl" {
 			operands = append(operands, [2]string{src, dst})
 		}
 		operands = append(operands, [2]string{"0(SI)", dst})
@@ -250,4 +308,42 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		witnesses = append(witnesses, X86ScalarRMWWitness{Instruction: instruction + args[1], Destination: args[1], Encoding: code})
 	}
 	return witnesses, nil
+}
+
+// This is family/prefix grammar, not an opcode-byte table. The original Go
+// payload remains the only instruction-byte source. GP spellings use the Yrl
+// carrier; source-memory tuples and result definedness belong to typed effects.
+func x86ScalarYmlRegisterPrefix(name string) (byte, string) {
+	if len(name) < 2 {
+		return 0, ""
+	}
+	if strings.HasPrefix(name, "MOV") {
+		if len(name) != 7 || name[5:] != "SX" && name[5:] != "ZX" ||
+			!(name[3] == 'W' && (name[4] == 'L' || name[4] == 'Q') || name[3] == 'L' && name[4] == 'Q') {
+			return 0, ""
+		}
+		if name[3] == 'L' && name[5:] == "ZX" {
+			return 'L', "Px" // Ordinary MOVL encoding; AMD64 zero-extends its GP result.
+		}
+		return name[4], map[byte]string{'L': "Pm", 'Q': "Pw"}[name[4]]
+	}
+	width, stem := name[len(name)-1], name[:len(name)-1]
+	switch stem {
+	case "BSF", "BSR", "LAR", "LSL":
+		return width, map[byte]string{'W': "Pq", 'L': "Pm", 'Q': "Pw"}[width]
+	case "LZCNT", "POPCNT":
+		return width, map[byte]string{'W': "Pef3", 'L': "Pf3", 'Q': "Pfw"}[width]
+	case "ADCX", "ADOX":
+		prefix := "Pq4"
+		if stem == "ADOX" {
+			prefix = "Pq5"
+		}
+		if width == 'Q' {
+			return width, prefix + "w"
+		}
+		if width == 'L' {
+			return width, prefix
+		}
+	}
+	return 0, ""
 }
