@@ -6378,20 +6378,10 @@ func TestTranslateX86GatherCompleteGo127Forms(t *testing.T) {
 			}
 			src.WriteString("\tRET\n")
 
-			file, err := Parse(ArchAMD64, src.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"gather_forms": {Name: "gather_forms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Original operand formats have neither incoming values nor a
+			// pointer base. Preserve Go bytes and objects with public Context;
+			// the separate official-row owner supplies real initialized inputs.
+			ll := x86UnboundVoidScalarFormatObject(t, src.String(), "gather_forms", target.goarch, target.triple)
 			compileLLVMToObject(t, llc, target.triple, "gather-"+target.name+".ll", "gather-"+target.name+".o", ll)
 		})
 	}

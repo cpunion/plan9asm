@@ -36,6 +36,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		if _, known, err := x86ExplicitMaskMoveProperties(ins.Op, ins, arch); known && err == nil {
 			return true // Dead loads/stores retain actual masks, data and address obligations.
 		}
+		if form, known, err := x86VSIBProperties(ins, arch); known && err == nil && !form.prefetch {
+			return true // Dead indexed accesses retain index, mask, merge/data and address inputs.
+		}
 		if _, known, err := x86FloatMinMaxProperties(ins, arch); known && err == nil {
 			return true // Dead MIN/MAX still consumes actual lane, merge and mask inputs.
 		}

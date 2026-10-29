@@ -44,18 +44,10 @@ func TestTranslateX86ScatterCompleteGoAssemblerForms(t *testing.T) {
 			}
 			source.WriteString("\tRET\n")
 
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs:         map[string]FuncSig{"scatterforms": {Name: "scatterforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Retain every original format, including mode32 high data banks,
+			// without treating unknown data, masks and addresses as an entry.
+			// Initialized public objects belong to the independent official-row owner.
+			ll := x86UnboundVoidScalarFormatObject(t, source.String(), "scatterforms", target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
