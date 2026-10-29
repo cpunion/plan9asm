@@ -32,20 +32,7 @@ func TestTranslateX86AlternatingFloatingAddSubtractCompleteGoAssemblerForms(t *t
 				fmt.Fprintf(&src, "\t%s (AX), Y14, Y15\n", vop)
 			}
 			src.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, src.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"alternatingfloataddsubforms": {Name: "alternatingfloataddsubforms", Ret: Void},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86UnboundVoidScalarFormatObject(t, src.String(), "alternatingfloataddsubforms", target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

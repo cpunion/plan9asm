@@ -38,18 +38,7 @@ func TestTranslateX86RoundCompleteGoAssemblerForms(t *testing.T) {
 				fmt.Fprintf(&source, "\t%s $255, X0, X1, X2\n", op)
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs:         map[string]FuncSig{"roundforms": {Name: "roundforms", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
+			ll := x86RoundOriginalSourceClassifiedObjects(t, source.String(), target.goarch, target.triple)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")

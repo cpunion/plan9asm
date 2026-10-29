@@ -1,9 +1,6 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 type amd64RoundSpec struct {
 	laneBits int
@@ -26,59 +23,17 @@ var amd64RoundSpecs = map[Op]amd64RoundSpec{
 }
 
 func (c *amd64Ctx) lowerRound(rawOp Op, ins Instr) (ok bool, terminated bool, err error) {
-	raw := strings.ToUpper(string(rawOp))
-	if strings.Contains(raw, ".") {
-		base := Op(strings.SplitN(raw, ".", 2)[0])
-		if _, recognized := amd64RoundSpecs[base]; recognized {
-			return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, base, ins.Raw)
-		}
-		return false, false, nil
+	local := ins
+	local.Op = rawOp
+	form, known, err := x86RoundProperties(local, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	spec, recognized := amd64RoundSpecs[Op(raw)]
-	if !recognized {
-		return false, false, nil
+	intrinsic := amd64RoundIntrinsic(form.immediate)
+	if form.spec.scalar {
+		return c.lowerScalarRound(form, intrinsic)
 	}
-	wantArgs := 3
-	if spec.vector && spec.scalar {
-		wantArgs = 4
-	}
-	if len(ins.Args) != wantArgs {
-		return true, false, fmt.Errorf("%s %s expects immediate, source, %sdestination: %q", c.goarch, raw, map[bool]string{true: "upper-lane source, "}[spec.vector && spec.scalar], ins.Raw)
-	}
-	if ins.Args[0].Kind != OpImm {
-		return true, false, fmt.Errorf("%s %s expects an 8-bit immediate: %q", c.goarch, raw, ins.Raw)
-	}
-	imm := ins.Args[0].Imm
-	if (!spec.vector && (imm < 0 || imm > 255)) || (spec.vector && (imm < -128 || imm > 255)) {
-		return true, false, fmt.Errorf("%s %s immediate is outside Go 1.27's table: %q", c.goarch, raw, ins.Raw)
-	}
-	destination := ins.Args[len(ins.Args)-1]
-	if destination.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s destination must be a vector register: %q", c.goarch, raw, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	if spec.scalar {
-		if byteWidth != 16 || !c.isGoVEXVectorRegister(destination, 16, false) {
-			return true, false, fmt.Errorf("%s %s destination must be an X register in the Go VEX class: %q", c.goarch, raw, ins.Raw)
-		}
-	} else if (!spec.vector && byteWidth != 16) || (spec.vector && byteWidth != 16 && byteWidth != 32) || !c.isGoVEXVectorRegister(destination, byteWidth, false) {
-		return true, false, fmt.Errorf("%s %s destination has a width outside Go 1.27's table: %q", c.goarch, raw, ins.Raw)
-	}
-	source := ins.Args[1]
-	if !c.isGoVEXVectorRegister(source, byteWidth, true) {
-		return true, false, fmt.Errorf("%s %s source must be same-width X/Y or memory: %q", c.goarch, raw, ins.Raw)
-	}
-	if spec.vector && spec.scalar {
-		upper := ins.Args[2]
-		if !c.isGoVEXVectorRegister(upper, 16, false) {
-			return true, false, fmt.Errorf("%s %s upper-lane source must be an X register: %q", c.goarch, raw, ins.Raw)
-		}
-	}
-	intrinsic := amd64RoundIntrinsic(uint8(imm))
-	if spec.scalar {
-		return c.lowerScalarRound(spec, ins, destination, intrinsic)
-	}
-	return c.lowerPackedRound(spec, source, destination, byteWidth, intrinsic)
+	return c.lowerPackedRound(form, intrinsic)
 }
 
 func amd64RoundIntrinsic(imm uint8) string {
@@ -97,8 +52,9 @@ func amd64RoundIntrinsic(imm uint8) string {
 	}
 }
 
-func (c *amd64Ctx) lowerScalarRound(spec amd64RoundSpec, ins Instr, destination Operand, intrinsic string) (bool, bool, error) {
-	value, err := c.evalScalarFloatForInteger(ins.Args[1], spec.laneBits)
+func (c *amd64Ctx) lowerScalarRound(form x86RoundForm, intrinsic string) (bool, bool, error) {
+	spec, destination := form.spec, form.destination
+	value, err := c.loadAlternatingRoundFloat(form.source, form.memoryBytes, spec.laneBits, spec.vector)
 	if err != nil {
 		return true, false, err
 	}
@@ -106,11 +62,7 @@ func (c *amd64Ctx) lowerScalarRound(spec amd64RoundSpec, ins Instr, destination 
 	bits := c.newTmp()
 	floatingType := amd64FloatingTypeForBits(spec.laneBits)
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to i%d\n", bits, floatingType, rounded, spec.laneBits)
-	baseReg := destination.Reg
-	if spec.vector {
-		baseReg = ins.Args[2].Reg
-	}
-	baseBytes, err := c.loadX(baseReg)
+	baseBytes, err := c.loadX(form.upper.Reg)
 	if err != nil {
 		return true, false, err
 	}
@@ -121,8 +73,9 @@ func (c *amd64Ctx) lowerScalarRound(spec amd64RoundSpec, ins Instr, destination 
 	return true, false, c.storeVectorScalarRegister(destination.Reg, spec.laneBits, "%"+bits, base, "", false)
 }
 
-func (c *amd64Ctx) lowerPackedRound(spec amd64RoundSpec, source, destination Operand, byteWidth int, intrinsic string) (bool, bool, error) {
-	bytesValue, err := c.loadPackedCompareBytes(source, byteWidth)
+func (c *amd64Ctx) lowerPackedRound(form x86RoundForm, intrinsic string) (bool, bool, error) {
+	spec, destination, byteWidth := form.spec, form.destination, form.byteWidth
+	bytesValue, err := c.loadRoundPackedBytes(form)
 	if err != nil {
 		return true, false, err
 	}

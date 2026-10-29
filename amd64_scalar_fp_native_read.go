@@ -403,6 +403,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86ResultXLATStep(ins, state, owned, arch, true); known {
 			return accepted // Only the paired exact volatile m8 consumes the unsigned AL index and native BX input.
 		}
+		if accepted, known := x86ResultAlternatingFloatStep(ins, state, owned, arch, true); known {
+			return accepted // The VEX tuple remains observable even when its numerical result is dead.
+		}
+		if accepted, known := x86ResultRoundStep(ins, state, owned, arch, true); known {
+			return accepted // Scalar active bytes and copied upper bytes remain distinct.
+		}
 		if accepted, known := x86ResultVSIBStep(ins, state, arch, true); known {
 			return accepted // Exact indexed continuation; never an ordinary contiguous native tuple.
 		}
