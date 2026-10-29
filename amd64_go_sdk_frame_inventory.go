@@ -14,7 +14,8 @@ import (
 // selected dependency retains its independent complete original source/export
 // graph; active relative CPP includes remain unsupported. Root membership and
 // child identities are rechecked before/after commands. The ordinary owned
-// flat inventory and the 256-member/16MiB SDK bounds stay unchanged.
+// flat inventory keeps its 256-member bound. The SDK retains its16MiB byte
+// budget and uses the shared original-source membership bound.
 func (source *GoX86SDKASMDataSource) snapshotSDKPrimaryDirectory() error {
 	return captureSDKPackageDirectoryInputs(source.guard, source.retainDirectory)
 }
@@ -28,9 +29,16 @@ func captureSDKPackageDirectoryInputs(guard *GoAMD64FrameSource, retainDirectory
 	if err != nil || resolved != guard.request.Directory {
 		return sdkASMDataContext("SDK-primary package directory is not canonical")
 	}
-	entries, info, err := gooriginalsrc.ReadDirectory(resolved, 256)
-	if err != nil || len(entries) == 0 || len(entries) > 256 {
-		return sdkASMDataContext("SDK-primary complete package inventory exceeds its bound")
+	inventory := gooriginalsrc.NewSnapshot()
+	if err := inventory.Directory(resolved, false); err != nil {
+		return sdkASMDataContext("SDK-primary complete package inventory: %v", err)
+	}
+	// Snapshot.Directory closes the complete EOF and applies the existing
+	// shared file/directory count budgets. Use its observed cardinality, not
+	// a newly guessed per-package cap, for the same direct member list.
+	entries, info, err := gooriginalsrc.ReadDirectory(resolved, len(inventory.View().Entries[resolved]))
+	if err != nil || len(entries) == 0 {
+		return sdkASMDataContext("SDK-primary complete package inventory changed: %v", err)
 	}
 	guard.directoryInfo = info
 	remaining := int64(16 << 20)
@@ -54,5 +62,19 @@ func captureSDKPackageDirectoryInputs(guard *GoAMD64FrameSource, retainDirectory
 		remaining -= int64(len(data))
 		guard.inputs[path] = digest
 	}
+	if err := inventory.Verify(); err != nil {
+		return sdkASMDataContext("SDK-primary input membership changed during capture: %v", err)
+	}
+	guard.directoryInventory = inventory
 	return nil
+}
+
+// The frame owner copies mutable input maps/slices, while retaining the same
+// immutable directory observation through its existing live SDK source owner.
+// Directory metadata does not supply frame, numerical or native-entry facts.
+func (source *GoAMD64FrameSource) copySDKPrimaryInputInventory(original *GoAMD64FrameSource) {
+	source.inputs = cloneSDKASMDataInputs(original.inputs)
+	source.entries = append([]string(nil), original.entries...)
+	source.directoryInfo = original.directoryInfo
+	source.directoryInventory = original.directoryInventory
 }

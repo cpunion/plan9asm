@@ -57,6 +57,7 @@ type GoAMD64FrameSource struct {
 	inputs             map[string][32]byte
 	entries            []string
 	directoryInfo      os.FileInfo
+	directoryInventory *gooriginalsrc.Snapshot // Immutable complete SDK membership; no source or ASM authority.
 	owned              string
 	ownedInfo          os.FileInfo
 	functions          map[string]goAMD64FrameFunction
@@ -609,7 +610,20 @@ func (source *GoAMD64FrameSource) verifyInputs() error {
 	if err := source.verifyOwned(); err != nil {
 		return err
 	}
-	entries, directoryInfo, err := gooriginalsrc.ReadDirectory(source.request.Directory, 256)
+	maximum := 256 // Ordinary owned-main retains its original flat bound.
+	if inventory := source.directoryInventory; inventory != nil {
+		if err := inventory.Verify(); err != nil {
+			return goAMD64FrameContext("complete SDK directory membership changed: %v", err)
+		}
+		view := inventory.View()
+		original := view.Directories[source.request.Directory]
+		if original == nil || source.directoryInfo == nil || !os.SameFile(original, source.directoryInfo) ||
+			len(view.Entries[source.request.Directory]) != len(source.entries) {
+			return goAMD64FrameContext("complete SDK directory inventory lost its original role")
+		}
+		maximum = len(view.Entries[source.request.Directory])
+	}
+	entries, directoryInfo, err := gooriginalsrc.ReadDirectory(source.request.Directory, maximum)
 	if err != nil || source.directoryInfo == nil || !os.SameFile(source.directoryInfo, directoryInfo) {
 		return goAMD64FrameContext("original package directory inventory or identity changed: %v", err)
 	}

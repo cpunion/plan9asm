@@ -76,9 +76,7 @@ func CaptureGoAMD64SDKFrameSource(ctx context.Context, pkg GoPackage, request Go
 	}
 	if err == nil {
 		source.selection, source.env, source.imports = state.Selection, state.Env, state.Imports
-		source.inputs = cloneSDKASMDataInputs(data.guard.inputs)
-		source.entries = append([]string(nil), data.guard.entries...)
-		source.directoryInfo = data.guard.directoryInfo
+		source.copySDKPrimaryInputInventory(data.guard)
 		source.owned, source.ownedInfo = data.guard.owned, data.guard.ownedInfo
 		source.functions, source.declarations, err = source.sdkFrameRecords()
 	}
@@ -230,7 +228,8 @@ func (source *GoAMD64FrameSource) verifySDKFrame(ctx context.Context) (result er
 	err := func() error {
 		if !source.ready || !reflect.DeepEqual(source.request, origin.request) ||
 			!reflect.DeepEqual(source.selection, data.guard.selection) || !reflect.DeepEqual(source.env, data.guard.env) ||
-			!reflect.DeepEqual(source.imports, data.guard.imports) || !reflect.DeepEqual(source.inputs, data.guard.inputs) {
+			!reflect.DeepEqual(source.imports, data.guard.imports) || !reflect.DeepEqual(source.inputs, data.guard.inputs) ||
+			source.directoryInventory != data.guard.directoryInventory {
 			return goAMD64FrameContext("SDK-primary native frame source/profile/complete input identity changed")
 		}
 		if err := source.verifyInputs(); err != nil {

@@ -111,26 +111,57 @@ func TestSDKAMD64PrimaryInventoryByteBoundary(t *testing.T) {
 }
 
 func TestSDKAMD64PrimaryInventoryMemberBoundary(t *testing.T) {
-	for _, count := range []int{256, 257} {
-		root := t.TempDir()
-		for index := 0; index < count; index++ {
-			if err := os.WriteFile(filepath.Join(root, fmt.Sprintf("%03d.go", index)), nil, 0600); err != nil {
+	for _, count := range []int{256, 257, 300, 792} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			root := t.TempDir()
+			for index := 0; index < count; index++ {
+				name, data := fmt.Sprintf("%03d.go", index), []byte("package fixture\n")
+				if index == 0 {
+					name, data = "kernel_amd64.s", []byte("TEXT ·F(SB),4,$0-0\nRET\n")
+				} else if index == 1 {
+					data = []byte("package fixture\nfunc F()\n")
+				}
+				if err := os.WriteFile(filepath.Join(root, name), data, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			root, err := sourcepath.Resolve(root)
+			if err != nil {
 				t.Fatal(err)
 			}
-		}
-		root, err := sourcepath.Resolve(root)
-		if err != nil {
-			t.Fatal(err)
-		}
-		source := &GoX86SDKASMDataSource{guard: newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{Directory: root}), directories: make(map[string]os.FileInfo)}
-		err = source.snapshotSDKPrimaryDirectory()
-		if count == 256 {
-			if err != nil || len(source.guard.inputs) != count {
-				t.Fatal("exact original primary member bound was rejected", err)
+			request := GoAMD64FrameCaptureRequest{Directory: root, AssemblyFile: "kernel_amd64.s"}
+			ordinary := newGoOriginalInputGuard(request)
+			err = ordinary.snapshotDirectory()
+			if count == 256 {
+				if err != nil {
+					t.Fatal("ordinary flat boundary rejected", err)
+				}
+			} else if !errors.Is(err, ErrProbeNeedsContext) || len(ordinary.inputs) != 0 {
+				t.Fatal("SDK observation widened the ordinary flat input role", err)
 			}
-		} else if !errors.Is(err, ErrProbeNeedsContext) || len(source.guard.inputs) != 0 {
-			t.Fatal("oversized primary membership was retained", err)
-		}
+			source := &GoX86SDKASMDataSource{guard: newGoOriginalInputGuard(request), directories: make(map[string]os.FileInfo)}
+			if err := source.snapshotSDKPrimaryDirectory(); err != nil || len(source.guard.inputs) != count {
+				t.Fatal("complete SDK input inventory was rejected or truncated", err, len(source.guard.inputs), count)
+			}
+			owned, err := sourcepath.Resolve(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			source.guard.owned = owned
+			source.guard.ownedInfo, err = sourcepath.Lstat(owned)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := source.guard.verifyInputs(); err != nil {
+				t.Fatal("unchanged complete SDK inventory failed verification", err)
+			}
+			if err := os.WriteFile(filepath.Join(root, "new-inactive.s"), nil, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := source.guard.verifyInputs(); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("larger directory became a silently accepted bounded prefix", err)
+			}
+		})
 	}
 }
 
@@ -182,5 +213,82 @@ func TestSDKAMD64PrimaryInventoryDoesNotAuthorizeChildInclude(t *testing.T) {
 	if _, _, err := source.captureAssembly(context.Background(), 0, "source.s"); !errors.Is(err, ErrProbeNeedsContext) ||
 		!strings.Contains(err.Error(), "relative/foreign include") {
 		t.Fatal("observed child identity became compiler/include source authority", err)
+	}
+}
+
+// This tests the same private input transfer used by the SDK frame factory.
+// It supplies no ready frame or ABI permission and runs no compiler subprocess.
+func TestSDKAMD64PrimaryInventoryCloneRetainsCompleteMembership(t *testing.T) {
+	for _, change := range []string{"none", "add", "remove", "bytes", "replace root", "close owner", "copy inputs", "copy entries", "drop inventory"} {
+		t.Run(change, func(t *testing.T) {
+			root, err := sourcepath.Resolve(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for index := 0; index < 300; index++ {
+				if err := os.WriteFile(filepath.Join(root, fmt.Sprintf("%03d.go", index)), nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			request := GoAMD64FrameCaptureRequest{Directory: root}
+			source := &GoX86SDKASMDataSource{guard: newGoOriginalInputGuard(request), directories: make(map[string]os.FileInfo)}
+			if err := source.snapshotSDKPrimaryDirectory(); err != nil {
+				t.Fatal(err)
+			}
+			cloned := newGoOriginalInputGuard(request)
+			cloned.copySDKPrimaryInputInventory(source.guard)
+			owned, err := sourcepath.Resolve(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, guard := range []*GoAMD64FrameSource{source.guard, cloned} {
+				guard.owned = owned
+				guard.ownedInfo, err = sourcepath.Lstat(owned)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := guard.verifyInputs(); err != nil {
+					t.Fatal("complete original or copied SDK inputs rejected", err)
+				}
+			}
+			switch change {
+			case "add":
+				err = os.WriteFile(filepath.Join(root, "added.s"), nil, 0600)
+			case "remove":
+				err = os.Remove(filepath.Join(root, "299.go"))
+			case "bytes":
+				err = os.WriteFile(filepath.Join(root, "299.go"), []byte("// changed\n"), 0600)
+			case "close owner":
+				err = source.guard.Close()
+			case "copy inputs":
+				cloned.inputs[filepath.Join(root, "299.go")] = [32]byte{}
+			case "copy entries":
+				cloned.entries[0] = "foreign.go"
+			case "drop inventory":
+				cloned.directoryInventory = nil
+			case "replace root":
+				original := root + "-original"
+				err = os.Rename(root, original)
+				if err == nil {
+					t.Cleanup(func() {
+						if err := os.RemoveAll(original); err != nil {
+							t.Error(err)
+						}
+					})
+					err = os.Mkdir(root, 0700)
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, guard := range []*GoAMD64FrameSource{source.guard, cloned} {
+				err := guard.verifyInputs()
+				copyOnly := change == "copy inputs" || change == "copy entries" || change == "drop inventory"
+				changed := change != "none" && (!copyOnly || guard == cloned)
+				if !changed && err != nil || changed && !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original/copy complete-input invalidation differs", change, err)
+				}
+			}
+		})
 	}
 }
