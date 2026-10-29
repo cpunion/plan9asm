@@ -10,8 +10,9 @@ Original qualification, failures and host exclusions remain in their reports.
 
 [PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The published
 batch `fad14e2e1` has its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40872759334)
-in progress. Its formatting failure is repaired locally while the remaining
-jobs finish. The public baseline `5616f67d8` completed its
+in progress. Its formatting, private MULX context, bare raw ADDSUB fixture and
+legacy ROUND memory failures have local repairs while the remaining jobs
+finish. The public baseline `5616f67d8` completed its
 [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40851464196)
 with 325/325 successful jobs. Those results certify that baseline. Every newly
 published head needs its own complete CI, coverage and external review.
@@ -19,15 +20,15 @@ The previous `18492758d` [round](https://github.com/xgo-dev/plan9asm/actions/run
 passed 325/325 jobs with 88.1% statement coverage; those results belong to that
 previous head. External review remains outstanding.
 
-The published batch has the following source-table ownership:
+The local follow-up has the following source-table ownership:
 
 | Local inventory | Count and meaning |
 |---|---|
-| Family views | 46; overlapping views retain explicit identity |
+| Family views | 47; overlapping views retain explicit identity |
 | AVX source rows | 3,568 / 3,568 original table rows |
-| Mixed-mode source records | 4,097 = 3,568 AVX + 529 legacy/fallback records |
-| Historical canonical witness union | 14,408; separate from all runtime forms |
-| New source witnesses | 1,262, checked with actual Go and three API O0/O2 objects |
+| Mixed-mode source records | 4,145 = 3,568 AVX + 577 legacy/fallback records |
+| Historical canonical witness union | 14,504; separate from all runtime forms |
+| New source witnesses | 1,358, checked with actual Go and three API O0/O2 objects |
 | New bounded source/declaration batches | 40; not a function or object count |
 | Inherited identity | All 22 old JSON snapshots byte-exact |
 
@@ -35,8 +36,15 @@ Complete AVX table ownership preserves original SDK rows, first-match choices,
 shadow alternatives, source modes and terminal forms. It does not establish
 all-ISA support, every named syntax alternative or native numerical execution.
 Legacy has its own denominator: 1,306 current-SDK / 1,305 minimum-SDK machine
-candidates, plus 112 separate `ymovtab` records. The 529 joined records are not
-the complete legacy inventory. Two PADDD aliases remain separate from rows.
+candidates, plus 112 separate `ymovtab` records. The 577 joined records comprise
+559 `optab` and 18 `ymovtab` entries; 841 current / 840 minimum records remain
+unjoined. These are inventory gaps, not counts of unsupported translations.
+Two PADDD aliases remain separate from rows.
+
+The new CMOV join adds all 16 conditions across W/L/Q: 48 original rows and
+96 canonical register/memory witnesses. The 386 subset has 32 rows / 64
+witnesses; the 16 Q rows retain actual frontend refusals. The original 22
+identity snapshots remain byte-exact. No CMOV translator or FLAGS rule changes.
 
 ## Current class repairs
 
@@ -52,6 +60,13 @@ erase its fault. Mode32 high data/mask banks retain separate numerical rejection
 legacy Void-format objects do not certify hardware execution or native entry.
 The paired access grants no contiguous extent or later-read authority.
 
+Every data gather/scatter now enters complete input validation even with a
+dead Void result. Eight source profiles retain exactly 128 classification
+changes over 517 original statements: 209 unclosed effects, 272 undefined
+inputs and 36 SP/AUTO contexts. No prefetch, unsupported entry or other
+architecture changes. These probe wrappers have no initialized prefix or
+bounded original TEXT. Their Context outcomes do not erase initialized objects.
+
 The ten-member / twenty-row approximation family reuses the existing native FP
 helper, removing 227 production lines. Masking, SAE and MXCSR remain owned by
 the original instruction; source operands are not eagerly read before masking.
@@ -65,6 +80,14 @@ not borrow that VEX native-read premise or a new alignment/fault guarantee.
 Go scalar ROUND uses Yu8 and rejects ordinary mode32 four-operand syntax;
 normalized raw physical forms keep their own identity and NUM restrictions.
 
+Physical legacy memory now executes the original SSE ADDSUB/ROUND opcode with
+its exact memory tuple, immediate, copied upper bytes and machine-state effects.
+This supplies numerical bytes only on continuation, with no extent or later-read
+permission. Its SSE3/SSE4.1 carrier, matching target and source inputs remain
+explicit. Logical FP and register paths retain their mathematical emitters.
+Initialized raw ADDSUB uses the existing exact source identity and whole-source
+replay; the bare original bytes retain public Context and private format objects.
+
 ROUND RIP literals reuse the existing exact decoder, source replay, DATA and
 raw-return binding. Self-contained packed literals retain public translation.
 Bare scalar upper inputs remain Context; genuinely initialized raw and named
@@ -74,20 +97,20 @@ is added. The original fixture bytes and literal tails remain observable.
 
 ## Qualification boundary
 
-The frozen combined wide scope passes both endpoint SDKs at `fad14e2e1`.
-Go 1.27.3 records 172 roots / 9,734 children with 9,899 passes; Go 1.20.14
-records 171 roots / 9,731 children with 9,895 passes. Each retains seven explicit host exclusions
-and no failure. The extra current-SDK x87 mode32 root is absent from the minimum
-SDK's actual built inventory. Both commands exited naturally with exact,
-unique terminal outcomes. Six legacy members plus four typed-FP counterparts
-also pass five targets / three APIs / O0/O2: one root / 20 children per SDK.
-Both complete five-architecture validators pass after reviewing the 57 amd64
-classification changes. The eight profiles retain their actual fingerprints;
-no encoder or runtime counts are promoted. Node573 and Go26 / 301 policies pass.
-The paired translation measurements cover 29 cases in three ABBA blocks per
-SDK; no case has a sustained regression of at least 5%. This does not establish
-a general SDK or native-runtime speedup.
-Component results do not certify the next published head's CI.
+Go 1.27.3 and Go 1.20.14 use LLVM22. Each passes the local repair scope of
+35 roots / 1,268 children without skips. The complete original ROUND runtime
+assembly and opaque five-pointer frame also pass a separate root / 30 children
+through three targets and three APIs at O0/O2. The original assembly, native
+guard and C driver remain byte-identical. This is source/object evidence;
+actual native execution retains its existing independent runtime owner.
+
+The complete cold rule package passes 119 roots / 10,699 children per SDK.
+The original candidate five-architecture validators fail on the new VSIB
+classification until its independently audited 24 baseline fields are updated.
+All original failures remain retained. Run the merged broad scope, normative
+five-architecture checks, Node and Go policies, whole-source regression and
+paired translation measurements before publishing. Component results certify
+neither the next head's CI nor its unexecuted hardware.
 
 The terminal-prefix class retains all prior input obligations before UD2 and
 all reachable ordinary return obligations. Its official Linux/amd64
@@ -104,11 +127,9 @@ neither a smaller helper nor a microbenchmark proves faster SDK compilation.
 
 ## Remaining closeout
 
-1. Finish the current public CI round and repair its observed failures. The
-   local five-architecture reports, paired translation measurements and policy
-   checks are complete. Publish repairs only through the allowed fork after
-   the running round finishes; require fresh complete CI, coverage and review
-   at the new head.
+1. Finish the merged qualification and the current public CI round. Publish
+   repairs only through the allowed fork after that round finishes; require
+   fresh complete CI, coverage and review at the new head.
 2. Continue legacy families using original literal prefixes, modes and selection
    order. Keep source-row ownership distinct from complete semantic acceptance.
    Do not add another opcode registry or cache mutable source verification.
