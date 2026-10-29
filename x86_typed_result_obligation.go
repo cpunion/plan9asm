@@ -27,6 +27,9 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 	}
 	opaqueAddressResult := x86OpaqueAddressPointerResultRole(fn, sig, arch)
 	for ordinal, ins := range fn.Instrs {
+		if form, known, err := x86ScalarCompareProperties(ins.Op, ins, arch); known && err == nil && form.memory >= 0 {
+			return true // Dead compare/test FLAGS do not remove the original faulting read or its inputs.
+		}
 		if _, terminal, err := x86UndefinedTrapProperties(ins.Op, ins, arch); terminal && err == nil {
 			return true // Only this instruction has no inputs; earlier effects still need complete proof.
 		}
