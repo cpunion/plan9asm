@@ -9,12 +9,16 @@ Original qualification, failures and host exclusions remain in their reports.
 ## Published and local revisions
 
 [PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. Published
-`137945fdf` has its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40904358535).
-Its two failing source-test owners mutate private access-certificate widths
+`137945fdf` completed its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40904358535):
+292 successful and 33 failed jobs. Its two failing source-test owners mutate
+private access-certificate widths
 but expect normalization to accept the edited sealed snapshot. The local
 tests-only repair retains rejection and adds fresh original-source capture
 and LLVM-object positives. Both SDKs pass five roots / 75 children without
 skips. New contribution heads require their own complete CI and review.
+The 22 source failures comprise eleven jobs per owner; eleven collectors
+retain the corresponding failed partitions. The complete round and all
+original failure artifacts remain failed evidence.
 
 The preceding batch `fad14e2e1` completed its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40872759334)
 with 280 successful and 45 failed jobs. The failures comprise formatting,
@@ -141,6 +145,17 @@ Retain the original failing reports and rerun the normative five-architecture
 checks and policies on the integrated head. Component results certify neither
 that head's CI nor its unexecuted hardware.
 
+SDK-primary inventories now reuse the existing complete bounded directory
+snapshot. Ordinary packages retain their flat 256-member limit; SDK file
+bytes retain the 16 MiB budget. Capture, verification and frame cloning retain
+the same physical membership observation. Member mutation, closure, aliases
+and shared graph limits remain checked. Current Go passes 148 roots / 1,673
+children; minimum Go selects 72 roots / 1,373 children, all passing without
+skips. The other 76 roots are current-SDK build-tag owners, not minimum passes.
+The strict 55-source benchmark still reports 41 passes and fourteen failures.
+Five diagnostics progress from directory capacity to an unsupported relative
+SDK include; generic Void ABI barriers remain. This is no full-SDK acceptance.
+
 The terminal-prefix class retains all prior input obligations before UD2 and
 all reachable ordinary return obligations. Its official Linux/amd64
 [staging run](https://github.com/cpunion/plan9asm/actions/runs/40828444104)
@@ -171,7 +186,7 @@ neither a smaller helper nor a microbenchmark proves faster SDK compilation.
    unexecuted native owners require their own acceptance evidence.
 5. Preserve ARM64, ARM, WASM and their known object/control gaps. Classify the
    fourteen strict-SDK failures in [issue47](https://github.com/xgo-dev/plan9asm/issues/47)
-   individually: source-inventory limits, DATA/TEXT merging and generic ABI
+   individually: relative SDK includes, DATA/TEXT merging and generic ABI
    forms include repository-owned gaps, alongside special runtime contracts.
    Broader callbacks and library compatibility retain independent execution
    owners. Coordinate one heavy local Go/LLVM/Node invocation at a time.

@@ -14,7 +14,7 @@ import (
 // selected dependency retains its independent complete original source/export
 // graph; active relative CPP includes remain unsupported. Root membership and
 // child identities are rechecked before/after commands. The ordinary owned
-// flat inventory keeps its 256-member bound. The SDK retains its16MiB byte
+// flat inventory keeps its 256-member bound. The SDK retains its 16 MiB byte
 // budget and uses the shared original-source membership bound.
 func (source *GoX86SDKASMDataSource) snapshotSDKPrimaryDirectory() error {
 	return captureSDKPackageDirectoryInputs(source.guard, source.retainDirectory)
