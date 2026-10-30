@@ -60,7 +60,15 @@ func TestX86OrdinaryMoveNamedFPAddressSourceBoundaries(t *testing.T) {
 					}
 					source, declaration := x86OrdinaryMoveFPAddressFixture(arch, width, address)
 					accepted := control != "numeric-FP" && !(arch == "386" && width == "Q")
-					goAssemblerOracleOutput(t, arch, source, "", accepted)
+					observed := source
+					if arch == "386" && width == "Q" {
+						// The existing frame-diagnostic observer deliberately models
+						// one focused instruction and stack steps. Keep this exact
+						// original MOV in that closed context; Go reports its LEAQ
+						// rewrite with PARAM bias +4, rather than the source opcode.
+						observed = "TEXT ·FPAddress(SB),4,$0-8\nMOVQ " + address + ",BX\nRET\n"
+					}
+					goAssemblerOracleOutput(t, arch, observed, "", accepted)
 					ins := x86ScalarLaneInstruction(t, "MOV"+width+" "+address+",BX")
 					original := fmt.Sprintf("%#v", ins)
 					switch control {
@@ -78,7 +86,7 @@ func TestX86OrdinaryMoveNamedFPAddressSourceBoundaries(t *testing.T) {
 					if control == "numeric-FP" || control == "outside-field" || arch == "386" && width == "Q" {
 						for _, api := range []string{"text", "module", "Go"} {
 							if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, x86AddressMemoryTargets(arch)[0], api); err == nil || ir != "" {
-								t.Fatal("invalid/unmapped/mode32-Q FP address produced public IR", api, ir, err)
+								t.Error("invalid/unmapped/mode32-Q FP address produced public IR", api, len(ir), err)
 							}
 						}
 					}
