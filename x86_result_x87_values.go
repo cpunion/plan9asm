@@ -41,7 +41,7 @@ func x86X87ValueFlowNeeded(fn Func) bool {
 		if name == "FLDENV" {
 			return true // Allocation only; the actual transfer still checks mode and source.
 		}
-		if _, known := x86X87ValueSpecs[Op(name)]; known {
+		if _, known := x86X87ValueSpecForName(Op(name)); known {
 			return true
 		}
 		if _, known := x86X87WordSpecs[Op(name)]; known {
@@ -137,6 +137,12 @@ func x86ResultX87ValueStepWithMemory(ins Instr, state *x86ResultState, owned []b
 		return false, false
 	}
 	if err != nil || form.unprovedEncoding || !x86ResultNamedPredicateInstruction(ins) || state.x87 == nil || state.x87.invalid {
+		return false, true
+	}
+	// A binary64/i64 value model cannot certify arbitrary packed BCD or
+	// extended80 values, faults and conversions. Keep all existing cell/control
+	// facts untouched while refusing the unproved numerical continuation.
+	if form.memoryBytes() == 10 {
 		return false, true
 	}
 	x87 := state.x87

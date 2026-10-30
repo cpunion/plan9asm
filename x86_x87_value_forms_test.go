@@ -18,7 +18,7 @@ func x86X87ValueInstruction(t *testing.T, source string) Instr {
 
 func TestX86X87ValueCompleteGrammarAndMode(t *testing.T) {
 	names := strings.Fields(`
-		FMOVF FMOVFP FMOVD FMOVDP FXCHD FTST FSTSW
+		FMOVF FMOVFP FMOVD FMOVDP FMOVB FMOVBP FMOVX FMOVXP FXCHD FTST FSTSW
 		FMOVW FMOVWP FMOVL FMOVLP FMOVV FMOVVP FRNDINT
 		FLD1 FLDL2E FLDL2T FLDLG2 FLDLN2 FLDPI FLDZ FABS FCHS FSQRT
 		FADDW FADDL FADDF FADDD FADDDP FMULW FMULL FMULF FMULD FMULDP
@@ -29,7 +29,7 @@ func TestX86X87ValueCompleteGrammarAndMode(t *testing.T) {
 		FCMOVCC FCMOVCS FCMOVEQ FCMOVHI FCMOVLS FCMOVB FCMOVBE
 		FCMOVNB FCMOVNBE FCMOVE FCMOVNE FCMOVNU FCMOVU FCMOVUN
 	`)
-	if len(names) != 84 || len(x86X87ValueSpecs) != len(names) {
+	if len(names) != 88 || len(x86X87ValueSpecs) != len(names) {
 		t.Fatal("complete independent x87 value-family denominator changed", len(names), len(x86X87ValueSpecs))
 	}
 	for _, name := range names {

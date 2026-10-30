@@ -21,7 +21,7 @@ func x86TypedFPResultNeedsProof(fn Func, sig FuncSig, arch string) bool {
 		}
 		if form, known, err := x86X87ValueProperties(ins, arch); known && err == nil &&
 			(form.spec.kind == x86X87FloatMove || form.spec.kind == x86X87IntegerMove || form.spec.kind == x86X87Round ||
-				form.spec.kind == x86X87ConditionalMove) && x86ResultNamedPredicateInstruction(ins) {
+				form.spec.kind == x86X87ConditionalMove) && (form.memoryBytes() == 10 || x86ResultNamedPredicateInstruction(ins)) {
 			return true // Input/control/stack obligations also apply to Void; private slots cannot supply unknown facts.
 		}
 	}

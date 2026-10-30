@@ -23,7 +23,7 @@ const (
 
 type x86X87ValueSpec struct {
 	kind        x86X87ValueKind
-	width       byte // W/L/V signed integer memory, F/D floating memory.
+	width       byte // W/L/V signed integer memory, F/D floating memory, B/X ten-byte format.
 	stem        string
 	pop         uint8
 	reverse     bool
@@ -33,14 +33,18 @@ type x86X87ValueSpec struct {
 
 // These are value-availability forms, not a physical x87 entry/control-word,
 // native-memory or caller-state contract. The Go rows are shared by both x86
-// modes. Environment, BCD/extended moves and transcendental state stay
-// outside this independent logical family.
+// modes. BCD/extended forms retain input obligations but no numerical value
+// permission. Environment and transcendental state remain independent.
 var x86X87ValueSpecs = func() map[Op]x86X87ValueSpec {
 	forms := map[Op]x86X87ValueSpec{
 		"FMOVD":   {kind: x86X87FloatMove, width: 'D'},
 		"FMOVDP":  {kind: x86X87FloatMove, width: 'D', pop: 1},
 		"FMOVF":   {kind: x86X87FloatMove, width: 'F'},
 		"FMOVFP":  {kind: x86X87FloatMove, width: 'F', pop: 1},
+		"FMOVB":   {kind: x86X87FloatMove, width: 'B'},
+		"FMOVBP":  {kind: x86X87FloatMove, width: 'B', pop: 1},
+		"FMOVX":   {kind: x86X87FloatMove, width: 'X'},
+		"FMOVXP":  {kind: x86X87FloatMove, width: 'X', pop: 1},
 		"FXCHD":   {kind: x86X87Exchange},
 		"FTST":    {kind: x86X87Test},
 		"FSTSW":   {kind: x86X87Status},
@@ -100,6 +104,19 @@ var x86X87ValueSpecs = func() map[Op]x86X87ValueSpec {
 	return forms
 }()
 
+// Decoder spellings share the original BCD format. This projection neither
+// rewrites the instruction nor grants a raw source or numerical entry role.
+func x86X87ValueSpecForName(name Op) (x86X87ValueSpec, bool) {
+	switch name {
+	case "FBLD":
+		name = "FMOVB"
+	case "FBSTP":
+		name = "FMOVBP"
+	}
+	spec, known := x86X87ValueSpecs[name]
+	return spec, known
+}
+
 type x86X87ValueForm struct {
 	spec                x86X87ValueSpec
 	source, destination Operand
@@ -116,6 +133,8 @@ func (form x86X87ValueForm) memoryBytes() int64 {
 		return 4
 	case 'D', 'V':
 		return 8
+	case 'B', 'X':
+		return 10
 	}
 	return 0
 }
@@ -125,7 +144,7 @@ func (form x86X87ValueForm) memoryBytes() int64 {
 // resolved integer immediate is not an x87 memory value.
 func x86X87ValueProperties(ins Instr, arch string) (x86X87ValueForm, bool, error) {
 	name, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
-	spec, known := x86X87ValueSpecs[Op(name)]
+	spec, known := x86X87ValueSpecForName(Op(name))
 	if !known {
 		return x86X87ValueForm{}, false, nil
 	}
@@ -173,7 +192,19 @@ func x86X87ValueProperties(ins Instr, arch string) (x86X87ValueForm, bool, error
 		form.destination = word.operand
 		return form, true, err
 	}
-	if len(ins.Args) != 2 {
+	operands := ins.Args
+	if name == "FBLD" || name == "FBSTP" {
+		if len(operands) != 1 {
+			return fail("expects its original decoder memory operand")
+		}
+		f0 := Operand{Kind: OpReg, Reg: "F0"}
+		if spec.pop != 0 {
+			operands = []Operand{f0, operands[0]}
+		} else {
+			operands = []Operand{operands[0], f0}
+		}
+	}
+	if len(operands) != 2 {
 		switch spec.kind {
 		case x86X87Compare:
 			return fail("expects lhs, rhs")
@@ -186,7 +217,7 @@ func x86X87ValueProperties(ins Instr, arch string) (x86X87ValueForm, bool, error
 		}
 		return fail("expects src, dst")
 	}
-	first, last := ins.Args[0], ins.Args[1]
+	first, last := operands[0], operands[1]
 	form.source, form.destination = first, last
 	switch spec.kind {
 	case x86X87ConditionalMove:
@@ -222,7 +253,7 @@ func x86X87ValueProperties(ins Instr, arch string) (x86X87ValueForm, bool, error
 			form.push = true
 			return form, true, nil
 		}
-		if isX87F0(first) && (memory(last) || spec.width == 'D' && register(last)) {
+		if (spec.width == 'F' || spec.width == 'D') && isX87F0(first) && (memory(last) || spec.width == 'D' && register(last)) {
 			return form, true, nil
 		}
 		return fail("expects memory,F0, Freg,F0, F0,memory, or F0,Freg")
