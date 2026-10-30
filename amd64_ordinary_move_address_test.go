@@ -35,7 +35,7 @@ func TestGoAMD64FixedLocalOriginalMoveAddressDomains(t *testing.T) {
 				}
 			})
 		}
-		for _, control := range []string{"missing-proof", "changed-raw", "changed-operand", "physical-origin", "address-size", "SP-output"} {
+		for _, control := range []string{"missing-proof", "changed-raw", "changed-operand", "physical-origin", "address-size", "SP-output", "unnamed-address", "unnamed-computed-address"} {
 			t.Run(width+"/"+control, func(t *testing.T) {
 				ins := x86ScalarLaneInstruction(t, "MOV"+width+" $slot-16(SP),BX")
 				proof := &x86FixedLocalProof{frame: 16}
@@ -52,6 +52,10 @@ func TestGoAMD64FixedLocalOriginalMoveAddressDomains(t *testing.T) {
 					ins.x86AddressBits = 32
 				case "SP-output":
 					ins = x86ScalarLaneInstruction(t, "MOV"+width+" $slot-16(SP),SP")
+				case "unnamed-address":
+					ins = x86ScalarLaneInstruction(t, "MOV"+width+" $8(SP),BX")
+				case "unnamed-computed-address":
+					ins = x86ScalarLaneInstruction(t, "MOV"+width+" $(1<<3)(SP),BX")
 				}
 				state := x86FixedLocalState{pointers: map[Reg]int64{SP: 0}, known: map[Reg]uint8{},
 					opaque: map[Reg]x86FixedLocalOrigins{}, constants: map[Reg]int64{}, booleans: map[Reg]uint8{}}
