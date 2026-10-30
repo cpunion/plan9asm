@@ -3,6 +3,7 @@ package gostaticstorage
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"reflect"
 )
 
@@ -82,9 +83,18 @@ func asmDataBaseKind(kind uint8) uint8 {
 }
 
 func validateASMDataArchiveNames(members []ASMDataMember) error {
+	declarationPairs := asmDataCompilerDeclarationPairs(members)
 	type abiGroup struct {
+		// The value records whether this member's definitions use the
+		// linker-visible nonpackage namespace, rather than package-local Self.
 		members      map[int]bool
 		nonDuplicate bool
+	}
+	type definitionIndex struct {
+		group    *abiGroup
+		member   int
+		index    uint32
+		relative bool
 	}
 	type namedGroup struct {
 		kind       uint8
@@ -92,7 +102,8 @@ func validateASMDataArchiveNames(members []ASMDataMember) error {
 		abis       map[uint16]*abiGroup
 	}
 	seen := make(map[string]*namedGroup)
-	observe := func(name string, abi uint16, namespace TextSymbolNamespace, kind, flags uint8, member int) error {
+	var nonpackageIndices map[definitionIndex]bool
+	observe := func(name string, abi uint16, namespace TextSymbolNamespace, kind, flags uint8, member int, index, relative uint32) error {
 		if name == "" || abi == 65535 || namespace == TextSymbolHashed64 || namespace == TextSymbolHashed {
 			return nil
 		}
@@ -103,7 +114,8 @@ func validateASMDataArchiveNames(members []ASMDataMember) error {
 			seen[name] = group
 		}
 		if group.kind != kind {
-			return contextError("SDK ASM DATA named definition collides with a different TEXT/storage kind")
+			return contextError(fmt.Sprintf("SDK ASM DATA named definition collides with a different TEXT/storage kind: name=%q previous-kind=%d kind=%d ABI=%d namespace=%d member=%d index=%d",
+				name, group.kind, kind, abi, namespace, member, index))
 		}
 		if !currentSDKObjectIsText(kind) && group.storageABI != abi {
 			return contextError("SDK ASM DATA named storage has multiple ABI identities")
@@ -114,10 +126,27 @@ func validateASMDataArchiveNames(members []ASMDataMember) error {
 			group.abis[abi] = identities
 		}
 		duplicate := flags&1 != 0
-		if identities.members[member] || !duplicate && identities.nonDuplicate {
-			return contextError("SDK ASM DATA named definition has an ambiguous non-DUPok body")
+		previousNonpackage, sameMember := identities.members[member]
+		nonpackage := namespace == TextSymbolNonpkgDefinition
+		if sameMember && !(previousNonpackage && nonpackage) || !duplicate && identities.nonDuplicate {
+			return contextError(fmt.Sprintf("SDK ASM DATA named definition has an ambiguous non-DUPok body: name=%q ABI=%d namespace=%d member=%d same-member=%t previous-non-DUPok=%t flags=%#x",
+				name, abi, namespace, member, sameMember, identities.nonDuplicate, flags))
 		}
-		identities.members[member] = true
+		if nonpackage {
+			// Keep every object-local identity. DUPok permits several original
+			// definitions; it never permits replaying the same index twice or
+			// selecting one body by its name or equal data bytes.
+			if nonpackageIndices == nil {
+				nonpackageIndices = make(map[definitionIndex]bool)
+			}
+			combined := definitionIndex{group: identities, member: member, index: index}
+			local := definitionIndex{group: identities, member: member, index: relative, relative: true}
+			if nonpackageIndices[combined] || nonpackageIndices[local] {
+				return contextError("SDK ASM DATA named definition repeats an original nonpackage index: " + name)
+			}
+			nonpackageIndices[combined], nonpackageIndices[local] = true, true
+		}
+		identities.members[member] = nonpackage
 		identities.nonDuplicate = identities.nonDuplicate || !duplicate
 		// Only aggregate collision facts, never a winning body. All original
 		// member/namespace/index identities remain in the returned observation.
@@ -125,12 +154,16 @@ func validateASMDataArchiveNames(members []ASMDataMember) error {
 	}
 	for ordinal, member := range members {
 		for _, definition := range member.Definitions {
-			if err := observe(definition.Name, definition.ABI, definition.Namespace, definition.Kind, definition.Flags, ordinal); err != nil {
+			if asmDataCompilerBSSDeclaration(member, definition) &&
+				declarationPairs[asmDataStorageExtent{asmDataStorageIdentity{definition.Name, definition.ABI}, definition.Size}] {
+				continue // Preserve the original record; it is not a second initialized body.
+			}
+			if err := observe(definition.Name, definition.ABI, definition.Namespace, definition.Kind, definition.Flags, ordinal, definition.Index, definition.Relative); err != nil {
 				return err
 			}
 		}
 		for _, text := range member.Texts {
-			if err := observe(text.Name, text.ABI, text.Namespace, text.Kind, text.Flags, ordinal); err != nil {
+			if err := observe(text.Name, text.ABI, text.Namespace, text.Kind, text.Flags, ordinal, text.Index, text.Relative); err != nil {
 				return err
 			}
 		}

@@ -3,6 +3,7 @@ package gostaticstorage
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -101,6 +102,63 @@ func TestASMDataNamedCollisionGroups(t *testing.T) {
 			err := validateASMDataArchiveNames(test.members)
 			if test.valid && err != nil || !test.valid && !errors.Is(err, ErrContext) {
 				t.Fatal("complete named collision class differs", err)
+			}
+		})
+	}
+}
+
+// Nonpackage DUPok definitions may occur several times in one Go compiler
+// member. This validates collision classes, not a linked winning body or source
+// role; the actual SDK runtime factory independently exercises the real archive.
+func TestASMDataSameMemberNonpkgDUPokKeepsIndexedIdentities(t *testing.T) {
+	fixture := func() []ASMDataMember {
+		return []ASMDataMember{{Definitions: []ASMDataDefinition{
+			{Name: "fixture.funcval", Namespace: TextSymbolNonpkgDefinition, Index: 10,
+				Relative: 0, Kind: 3, Flags: 1, Size: 8, Data: []byte{1}},
+			{Name: "fixture.funcval", Namespace: TextSymbolNonpkgDefinition, Index: 11,
+				Relative: 1, Kind: 3, Flags: 1, Size: 8, Data: []byte{2}},
+		}}}
+	}
+	for _, mutation := range []string{"none", "third-index", "duplicate-index", "duplicate-relative", "self", "mixed-namespace",
+		"one-non-DUPok", "non-DUPok-first", "two-non-DUPok", "kind", "ABI"} {
+		t.Run(mutation, func(t *testing.T) {
+			members := fixture()
+			definitions := members[0].Definitions
+			switch mutation {
+			case "third-index":
+				third := definitions[1]
+				third.Index, third.Relative = 12, 2
+				members[0].Definitions = append(definitions, third)
+			case "duplicate-index":
+				definitions[1].Index = definitions[0].Index
+			case "duplicate-relative":
+				definitions[1].Relative = definitions[0].Relative
+			case "self":
+				definitions[0].Namespace, definitions[1].Namespace = TextSymbolSelf, TextSymbolSelf
+			case "mixed-namespace":
+				definitions[1].Namespace = TextSymbolSelf
+			case "one-non-DUPok":
+				definitions[1].Flags = 0
+			case "non-DUPok-first":
+				definitions[0].Flags = 0
+			case "two-non-DUPok":
+				definitions[0].Flags, definitions[1].Flags = 0, 0
+			case "kind":
+				definitions[1].Kind = 7
+			case "ABI":
+				definitions[1].ABI = 1
+			}
+			before := fmt.Sprintf("%#v", members)
+			err := validateASMDataArchiveNames(members)
+			valid := mutation == "none" || mutation == "third-index" || mutation == "one-non-DUPok" || mutation == "non-DUPok-first"
+			if valid && err != nil || !valid && !errors.Is(err, ErrContext) {
+				t.Fatal("original nonpackage DUPok/index collision class differs", err)
+			}
+			if before != fmt.Sprintf("%#v", members) {
+				t.Fatal("collision validation changed an original definition")
+			}
+			if mutation == "none" && !reflect.DeepEqual(members, fixture()) {
+				t.Fatal("collision checking selected or merged a DUPok body")
 			}
 		})
 	}
