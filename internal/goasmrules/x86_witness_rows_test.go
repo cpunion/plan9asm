@@ -141,7 +141,11 @@ func TestX86LegacyLiteralSIMDRejectsMalformedSource(t *testing.T) {
 		}
 		selected := original.Rows[0]
 		for _, control := range []string{"kind", "row-count", "prefix", "escape", "index", "zcase", "stride", "offset",
-			"original-arity", "selected-arity", "original-stride", "missing-zero", "early-zero", "tail", "nonbyte"} {
+			"original-arity", "selected-arity", "original-index", "original-zcase", "original-stride", "original-offset",
+			"original-immediate-role", "selected-immediate-role", "missing-zero", "early-zero", "tail", "nonbyte"} {
+			if strings.HasSuffix(control, "immediate-role") && original.Ytab != "yxshuf" {
+				continue
+			}
 			t.Run(original.Opcode+"/"+control, func(t *testing.T) {
 				entry, row := original, selected
 				entry.Rows = append([]X86LegacyOperand(nil), original.Rows...)
@@ -167,8 +171,20 @@ func TestX86LegacyLiteralSIMDRejectsMalformedSource(t *testing.T) {
 					entry.Rows[0].Classes = []string{strings.Join(selected.Classes, ",")}
 				case "selected-arity":
 					row.Classes = []string{strings.Join(selected.Classes, ",")}
+				case "original-index":
+					entry.Rows[0].RowIndex++
+				case "original-zcase":
+					entry.Rows[0].ZCase = "Zibr_m"
 				case "original-stride":
 					entry.Rows[0].ZOffset++
+				case "original-offset":
+					entry.Rows[0].UnmatchedOffset++
+				case "original-immediate-role":
+					entry.Rows[0].Classes = append([]string(nil), selected.Classes...)
+					entry.Rows[0].Classes[0] = "Yi32"
+				case "selected-immediate-role":
+					row.Classes = append([]string(nil), selected.Classes...)
+					row.Classes[0] = "Yi32"
 				case "missing-zero":
 					entry.OpBytes = entry.OpBytes[:len(entry.OpBytes)-1]
 				case "early-zero":
@@ -187,6 +203,39 @@ func TestX86LegacyLiteralSIMDRejectsMalformedSource(t *testing.T) {
 					t.Fatal("LEGACY_LITERAL_SIMD_MALFORMED_ACCEPTED", control, witnesses, err)
 				}
 			})
+		}
+	}
+}
+
+func TestX86LegacyLiteralSIMDRejectsEveryLiteralAtom(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, original := range catalog.Optab {
+		if !x86LegacyLiteralSIMDSource(original) {
+			continue
+		}
+		for index := 1; index < len(original.OpBytes); index++ {
+			values := []string{"0", "256"}
+			if index == len(original.OpBytes)-1 {
+				values = []string{"1"} // Preserve the span while removing its final zero.
+			}
+			for _, value := range values {
+				t.Run(fmt.Sprintf("%s/atom%d/%s", original.Opcode, index, value), func(t *testing.T) {
+					entry := original
+					entry.OpBytes = append([]string(nil), original.OpBytes...)
+					entry.OpBytes[index] = value
+					defer func() {
+						if panicValue := recover(); panicValue != nil {
+							t.Fatal("LEGACY_LITERAL_SIMD_MALFORMED_PANIC", index, value, panicValue)
+						}
+					}()
+					if witnesses, err := x86PackedLegacyRowWitnesses(entry, entry.Rows[0]); err == nil || len(witnesses) != 0 {
+						t.Fatal("LEGACY_LITERAL_SIMD_MALFORMED_ACCEPTED", index, value, witnesses, err)
+					}
+				})
+			}
 		}
 	}
 }
