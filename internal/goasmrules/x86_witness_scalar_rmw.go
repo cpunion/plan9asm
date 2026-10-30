@@ -223,6 +223,9 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		return nil, fmt.Errorf("unmodeled complete scalar operand schema/prefix")
 	}
 	multiplyMove := entry.Ytab == "yimul" || entry.Ytab == "yimul3" || entry.Ytab == "ymovbe"
+	if multiplyMove && (!strings.ContainsRune("WLQ", rune(width)) || entry.EscapeAdjustment < 0 || entry.EscapeAdjustment > 1) {
+		return nil, fmt.Errorf("scalar carrier or source escape is outside the complete table grammar")
+	}
 	if multiplyMove {
 		offset := 0
 		for index, original := range entry.Rows {
@@ -256,6 +259,13 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		}
 		payload = append(payload, byte(value))
 	}
+	adjustment := 0
+	if len(payload) != 0 && payload[0] == 0x0f {
+		adjustment = 1
+	}
+	if multiplyMove && entry.EscapeAdjustment != adjustment {
+		return nil, fmt.Errorf("scalar original leading byte and source escape differ")
+	}
 	if multiplyMove {
 		for _, original := range entry.Rows {
 			start, size := original.UnmatchedOffset, original.ZOffset+entry.EscapeAdjustment
@@ -272,10 +282,6 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 				return nil, fmt.Errorf("scalar literal source escape changed")
 			}
 		}
-	}
-	adjustment := 0
-	if len(payload) != 0 && payload[0] == 0x0f {
-		adjustment = 1
 	}
 	offset := 0
 	for _, previous := range entry.Rows[:row.RowIndex] {
