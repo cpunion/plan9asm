@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -17,6 +18,144 @@ import (
 )
 
 var legacyGPRMWDraftNames = regexp.MustCompile(`^(ADC|ADD|AND|OR|SBB|SUB|XOR|INC|DEC|NEG|NOT|BTC|BTR|BTS)[BWLQ]$`)
+
+// Independent original-table fixture construction. The fixed low registers
+// make ModRM direction explicit; the original payload remains the byte source.
+// These cases establish encoding, not input definedness or memory authority.
+func x86ScalarMultiplyMOVBESourceCases(t *testing.T, catalog goasmrules.X86LegacyCatalog, arch string) []x86OfficialPackedCase {
+	t.Helper()
+	var cases []x86OfficialPackedCase
+	rows := 0
+	for _, entry := range catalog.Optab {
+		if entry.Ytab != "yimul" && entry.Ytab != "yimul3" && entry.Ytab != "ymovbe" {
+			continue
+		}
+		width := entry.Opcode[len(entry.Opcode)-1]
+		for _, row := range entry.Rows {
+			rows++
+			if arch == "386" && width == 'Q' {
+				continue
+			}
+			var payload []byte
+			for _, atom := range entry.OpBytes {
+				if atom == "Pm" {
+					payload = append(payload, 0x0f)
+					continue
+				}
+				value, err := strconv.ParseUint(atom, 0, 8)
+				if err != nil {
+					t.Fatal("original GP source atom changed", atom, err)
+				}
+				payload = append(payload, byte(value))
+			}
+			var prefix []byte
+			if width == 'W' {
+				prefix = append(prefix, 0x66)
+			}
+			if width == 'Q' {
+				prefix = append(prefix, 0x48)
+			}
+			if entry.Ytab == "ymovbe" && width != 'Q' {
+				prefix = append(prefix, 0x0f)
+			}
+			add := func(operands, destination string, code []byte) {
+				cases = append(cases, x86OfficialPackedCase{
+					row: fmt.Sprintf("optab/%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, row.RowIndex),
+					witness: goasmrules.X86PackedBinaryWitness{Instruction: entry.Opcode + " " + operands,
+						Destination: destination, Encoding: append(append([]byte(nil), prefix...), code...)},
+				})
+			}
+			offset := row.UnmatchedOffset
+			switch entry.Ytab {
+			case "yimul":
+				switch row.RowIndex {
+				case 0:
+					add("CX", "AX", []byte{payload[offset], 0xe9})
+					add("0(SI)", "AX", []byte{payload[offset], 0x2e})
+				case 1, 2:
+					value, size := 1, 1
+					if row.RowIndex == 2 {
+						value, size = 128, 4
+						if width == 'W' {
+							size = 2
+						}
+					}
+					code := []byte{payload[offset], 0xdb}
+					for byteIndex := 0; byteIndex < size; byteIndex++ {
+						code = append(code, byte(value>>uint(byteIndex*8)))
+					}
+					add(fmt.Sprintf("$%d,BX", value), "BX", code)
+				case 3:
+					add("CX,BX", "BX", []byte{payload[offset], payload[offset+1], 0xd9})
+					add("0(SI),BX", "BX", []byte{payload[offset], payload[offset+1], 0x1e})
+				}
+			case "yimul3":
+				value, size := 1, 1
+				if row.RowIndex == 1 {
+					value, size = 128, 4
+					if width == 'W' {
+						size = 2
+					}
+				}
+				for _, input := range []struct {
+					operand string
+					modrm   byte
+				}{{"CX", 0xd9}, {"0(SI)", 0x1e}} {
+					code := []byte{payload[offset], input.modrm}
+					for byteIndex := 0; byteIndex < size; byteIndex++ {
+						code = append(code, byte(value>>uint(byteIndex*8)))
+					}
+					add(fmt.Sprintf("$%d,%s,BX", value, input.operand), "BX", code)
+				}
+			case "ymovbe":
+				code := append([]byte(nil), payload[offset:offset+row.ZOffset+entry.EscapeAdjustment-1]...)
+				if row.RowIndex == 0 {
+					add("0(SI),BX", "BX", append(code, 0x1e))
+				} else {
+					add("CX,0(SI)", "0(SI)", append(code, 0x0e))
+				}
+			}
+		}
+	}
+	if rows != 24 || len(cases) != map[string]int{"amd64": 36, "386": 24}[arch] {
+		t.Fatal("complete original GP source/mode count changed", arch, rows, len(cases))
+	}
+	return cases
+}
+
+func TestX86OfficialScalarMultiplyMOVBEOriginalGoBytes(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		cases := x86ScalarMultiplyMOVBESourceCases(t, catalog, arch)
+		for start := 0; start < len(cases); start += 32 {
+			end := start + 32
+			if end > len(cases) {
+				end = len(cases)
+			}
+			t.Run(fmt.Sprintf("%s/batch%d", arch, start/32), func(t *testing.T) {
+				batch := cases[start:end]
+				var source strings.Builder
+				for index := range batch {
+					batch[index].symbol = fmt.Sprintf("OriginalGP%d", index)
+					fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-0\n", batch[index].symbol)
+					batch[index].line = strings.Count(source.String(), "\n") + 1
+					fmt.Fprintln(&source, batch[index].witness.Instruction)
+					fmt.Fprintln(&source, "RET")
+				}
+				listing, err := x86ScalarLiteralGoListing(t, arch, source.String())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := x86OfficialPackedVerifyListing(listing, batch); err != nil {
+					t.Fatal("independent original GP row/bytes mismatch", err)
+				}
+			})
+		}
+	}
+}
 
 func TestX86OfficialScalarRMWCompleteSourceCarrier(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src/cmd/internal/obj/x86/asm6.go"))

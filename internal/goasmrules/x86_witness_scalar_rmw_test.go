@@ -8,6 +8,33 @@ import (
 	"testing"
 )
 
+// This exercises the existing scalar transport before adding a new view. A
+// source-format refusal is a missing projection, not a numerical defect.
+func TestX86ScalarMultiplyMOVBECompleteSourceTransport(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, entry := range catalog.Optab {
+		if entry.Ytab != "yimul" && entry.Ytab != "yimul3" && entry.Ytab != "ymovbe" {
+			continue
+		}
+		for _, row := range entry.Rows {
+			count++
+			t.Run(fmt.Sprintf("%s/%d", entry.Opcode, row.RowIndex), func(t *testing.T) {
+				witnesses, err := x86ScalarRMWRowWitnesses(entry, row, "amd64")
+				if err != nil || len(witnesses) == 0 {
+					t.Fatal("SCALAR_MULTIPLY_MOVBE_SOURCE_FEATURE_GAP", err)
+				}
+			})
+		}
+	}
+	if count != 24 {
+		t.Fatal("complete original three-table denominator changed", count)
+	}
+}
+
 func TestX86ScalarRMWCompleteOrderedRowsAndModes(t *testing.T) {
 	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {
