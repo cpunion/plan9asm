@@ -14,7 +14,7 @@ func TestGoAMD64FixedLocalOriginalMoveAddressDomains(t *testing.T) {
 				ins := x86ScalarLaneInstruction(t, "MOV"+width+" $slot-16(SP),BX")
 				original := fmt.Sprintf("%#v", ins)
 				state := x86FixedLocalState{pointers: map[Reg]int64{SP: 0, BX: 8}, known: map[Reg]uint8{BX: old},
-					opaque: map[Reg]x86FixedLocalOrigins{}, constants: map[Reg]int64{BX: 7}, booleans: map[Reg]uint8{}}
+					opaque: map[Reg]x86FixedLocalOrigins{}, constants: map[Reg]int64{BX: 7}, booleans: map[Reg]uint8{}, flags: x86ByteFlagsAll}
 				proof := &x86FixedLocalProof{frame: 16}
 				if known, err := fixedLocalPrivateAddressStep(ins, &state, proof); !known || err != nil {
 					t.Fatal("original source address did not reach its existing private LEA consumer", known, err)
@@ -29,7 +29,7 @@ func TestGoAMD64FixedLocalOriginalMoveAddressDomains(t *testing.T) {
 				} else if width == "Q" {
 					want = 0
 				}
-				if pointer != (width == "Q") || pointer && value != 0 || state.known[BX] != want ||
+				if pointer != (width == "Q") || pointer && value != 0 || state.known[BX] != want || state.flags != x86ByteFlagsAll ||
 					len(state.constants) != 0 || len(state.opaque) != 0 {
 					t.Fatal("partial address became NUM or retained a full pointer identity", state)
 				}
