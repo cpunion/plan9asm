@@ -71,7 +71,7 @@ func TestX86X87TenByteCompleteGoFormats(t *testing.T) {
 			for _, address := range []string{"(AX)", "7(AX)"} {
 				instruction := format.instruction(address)
 				t.Run(arch+"/"+instruction, func(t *testing.T) {
-					code := []byte{format.opcode, format.digit<<3}
+					code := []byte{format.opcode, format.digit << 3}
 					if address == "7(AX)" {
 						code[1] |= 0x40
 						code = append(code, 7)
@@ -98,8 +98,8 @@ func TestX86X87TenByteCompleteGoFormats(t *testing.T) {
 			}
 			for _, instruction := range []string{
 				reversed,
-				format.op+" AX,F0", format.op+" F1,(AX)", format.op+" (AX),F1",
-				format.instruction("(AX)")+",F2", format.instruction("(AX)(CX*3)"),
+				format.op + " AX,F0", format.op + " F1,(AX)", format.op + " (AX),F1",
+				format.instruction("(AX)") + ",F2", format.instruction("(AX)(CX*3)"),
 			} {
 				t.Run(arch+"/malformed/"+instruction, func(t *testing.T) {
 					file, err := Parse(ArchAMD64, "TEXT probe(SB),4,$0-0\n"+instruction+"\nRET\n")
@@ -159,7 +159,7 @@ func TestX86X87TenByteDefinedInputsDoNotGrantNumericalPrecision(t *testing.T) {
 						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *[10]byte)", arch, testTargetTriple("linux", arch), api)
 						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
 							t.Fatal("X87_TEN_BYTE_DEFINED_INPUT_IS_NOT_PRECISION", err, source)
-							}
+						}
 					})
 				}
 			}
@@ -176,96 +176,96 @@ func TestX86X87TenByteRawAliasObservationAndInputBoundary(t *testing.T) {
 		for _, row := range []struct {
 			code  []byte
 			store bool
-			op x86asm.Op
+			op    x86asm.Op
 		}{
 			{[]byte{0xdf, 0x20}, false, x86asm.FBLD}, {[]byte{0xdf, 0x30}, true, x86asm.FBSTP},
 			{[]byte{0xdb, 0x28}, false, x86asm.FLD}, {[]byte{0xdb, 0x38}, true, x86asm.FSTP},
 		} {
 			t.Run(fmt.Sprintf("%s/%x", arch, row.code), func(t *testing.T) {
-			decoded, err := x86asm.Decode(row.code, mode)
-			if err != nil || decoded.Op != row.op || decoded.Len != len(row.code) || decoded.MemBytes != 10 {
-				t.Fatal("original raw ten-byte decoder observation", decoded, err)
-			}
-			var raw strings.Builder
-			for _, code := range row.code {
-				fmt.Fprintf(&raw, "BYTE $0x%02x\n", code)
-			}
-			original, err := Parse(ArchAMD64, "TEXT ·Raw(SB),4,$0-0\n"+raw.String()+"RET\n")
-			if err != nil {
-				t.Fatal(err)
-			}
-			normalized, err := normalizeX86RawFile(original, arch)
-			if err != nil {
-				t.Fatal("exact decoded source normalization prerequisite", decoded.Op, err)
-			}
-			var opcode Op
-			found := 0
-			for _, ins := range normalized.Funcs[0].Instrs {
-				if ins.x86SourceRaw == nil {
-					continue
+				decoded, err := x86asm.Decode(row.code, mode)
+				if err != nil || decoded.Op != row.op || decoded.Len != len(row.code) || decoded.MemBytes != 10 {
+					t.Fatal("original raw ten-byte decoder observation", decoded, err)
 				}
-				found++
-				opcode = ins.Op
-				before := ins
-				before.Args = append([]Operand(nil), ins.Args...)
-				origin := *ins.x86SourceRaw
-				origin.args = append([]Operand(nil), origin.args...)
-				before.x86SourceRaw = &origin
-				if origin.op != ins.Op || !reflect.DeepEqual(origin.args, ins.Args) || origin.addressBits != ins.x86AddressBits {
-					t.Fatal("normalized raw identity differs", row.code, ins)
+				var raw strings.Builder
+				for _, code := range row.code {
+					fmt.Fprintf(&raw, "BYTE $0x%02x\n", code)
 				}
-				form, known, err := x86X87ValueProperties(ins, arch)
-				if row.op == x86asm.FBLD || row.op == x86asm.FBSTP {
-					if len(ins.Args) != 1 {
-						t.Fatal("BCD decoder alias lost its single original memory operand", row.code, ins)
-					}
-					wantPop := uint8(0)
-					if row.store {
-						wantPop = 1
-					}
-					if !known || err != nil || form.memoryBytes() != 10 || form.push == row.store || form.spec.pop != wantPop {
-						t.Fatal("X87_TEN_BYTE_RAW_TYPED_ALIAS_FEATURE_GAP", row.code, known, err)
-					}
-					memory, f0 := ins.Args[0], Operand{Kind: OpReg, Reg: "F0"}
-					wantSource, wantDestination := memory, f0
-					if row.store {
-						wantSource, wantDestination = f0, memory
-					}
-					if !reflect.DeepEqual(form.source, wantSource) || !reflect.DeepEqual(form.destination, wantDestination) {
-						t.Fatal("derived typed alias changed exact source/destination", row.code, form)
-					}
-					if !x86TypedFPResultNeedsProof(normalized.Funcs[0], FuncSig{Name: "Raw", Ret: Void}, arch) {
-						t.Fatal("X87_TEN_BYTE_RAW_VOID_OBLIGATION_MISSING", row.code)
-					}
-				} else if opcode != "FLD" && opcode != "FSTP" {
-					t.Fatal("extended decoder boundary acquired an invented source alias", row.code, opcode)
+				original, err := Parse(ArchAMD64, "TEXT ·Raw(SB),4,$0-0\n"+raw.String()+"RET\n")
+				if err != nil {
+					t.Fatal(err)
 				}
-				if !reflect.DeepEqual(before, ins) {
-					t.Fatal("typed alias query changed original raw source", row.code)
+				normalized, err := normalizeX86RawFile(original, arch)
+				if err != nil {
+					t.Fatal("exact decoded source normalization prerequisite", decoded.Op, err)
 				}
-			}
-			if found != 1 {
-				t.Fatal("exact two-byte raw source did not retain one decoded instruction", row.code, found)
-			}
-			body := fmt.Sprintf("FINIT\n%s p+0(FP),AX\n", move)
-			if row.store {
-				body += "FLDPI\n"
-			}
-			body += raw.String()
-			body += "FINIT\nRET\n"
-			source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s", word, body)
-			goAssemblerOracleOutput(t, arch, source, "", true)
-			for _, api := range []string{"text", "module", "Go"} {
-				t.Run(api, func(t *testing.T) {
-					ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *[10]byte)", arch, testTargetTriple("linux", arch), api)
-					unsupported := (opcode == "FLD" || opcode == "FSTP") && err != nil &&
-						strings.HasSuffix(err.Error(), "amd64: unsupported instruction "+string(opcode))
-					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) && !unsupported {
-						t.Fatal("X87_TEN_BYTE_RAW_REJECTION_CLASS_DIFFERS", opcode, err)
+				var opcode Op
+				found := 0
+				for _, ins := range normalized.Funcs[0].Instrs {
+					if ins.x86SourceRaw == nil {
+						continue
 					}
-					t.Logf("raw source retained: code=%x decoder=%s memory=%d; no numerical/native claim: %v", row.code, decoded.Op, decoded.MemBytes, err)
-				})
-			}
+					found++
+					opcode = ins.Op
+					before := ins
+					before.Args = append([]Operand(nil), ins.Args...)
+					origin := *ins.x86SourceRaw
+					origin.args = append([]Operand(nil), origin.args...)
+					before.x86SourceRaw = &origin
+					if origin.op != ins.Op || !reflect.DeepEqual(origin.args, ins.Args) || origin.addressBits != ins.x86AddressBits {
+						t.Fatal("normalized raw identity differs", row.code, ins)
+					}
+					form, known, err := x86X87ValueProperties(ins, arch)
+					if row.op == x86asm.FBLD || row.op == x86asm.FBSTP {
+						if len(ins.Args) != 1 {
+							t.Fatal("BCD decoder alias lost its single original memory operand", row.code, ins)
+						}
+						wantPop := uint8(0)
+						if row.store {
+							wantPop = 1
+						}
+						if !known || err != nil || form.memoryBytes() != 10 || form.push == row.store || form.spec.pop != wantPop {
+							t.Fatal("X87_TEN_BYTE_RAW_TYPED_ALIAS_FEATURE_GAP", row.code, known, err)
+						}
+						memory, f0 := ins.Args[0], Operand{Kind: OpReg, Reg: "F0"}
+						wantSource, wantDestination := memory, f0
+						if row.store {
+							wantSource, wantDestination = f0, memory
+						}
+						if !reflect.DeepEqual(form.source, wantSource) || !reflect.DeepEqual(form.destination, wantDestination) {
+							t.Fatal("derived typed alias changed exact source/destination", row.code, form)
+						}
+						if !x86TypedFPResultNeedsProof(normalized.Funcs[0], FuncSig{Name: "Raw", Ret: Void}, arch) {
+							t.Fatal("X87_TEN_BYTE_RAW_VOID_OBLIGATION_MISSING", row.code)
+						}
+					} else if opcode != "FLD" && opcode != "FSTP" {
+						t.Fatal("extended decoder boundary acquired an invented source alias", row.code, opcode)
+					}
+					if !reflect.DeepEqual(before, ins) {
+						t.Fatal("typed alias query changed original raw source", row.code)
+					}
+				}
+				if found != 1 {
+					t.Fatal("exact two-byte raw source did not retain one decoded instruction", row.code, found)
+				}
+				body := fmt.Sprintf("FINIT\n%s p+0(FP),AX\n", move)
+				if row.store {
+					body += "FLDPI\n"
+				}
+				body += raw.String()
+				body += "FINIT\nRET\n"
+				source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s", word, body)
+				goAssemblerOracleOutput(t, arch, source, "", true)
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(api, func(t *testing.T) {
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *[10]byte)", arch, testTargetTriple("linux", arch), api)
+						unsupported := (opcode == "FLD" || opcode == "FSTP") && err != nil &&
+							strings.HasSuffix(err.Error(), "amd64: unsupported instruction "+string(opcode))
+						if ir != "" || !errors.Is(err, ErrProbeNeedsContext) && !unsupported {
+							t.Fatal("X87_TEN_BYTE_RAW_REJECTION_CLASS_DIFFERS", opcode, err)
+						}
+						t.Logf("raw source retained: code=%x decoder=%s memory=%d; no numerical/native claim: %v", row.code, decoded.Op, decoded.MemBytes, err)
+					})
+				}
 			})
 		}
 	}
