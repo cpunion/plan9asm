@@ -7,6 +7,53 @@ import (
 	"testing"
 )
 
+func TestGoAMD64LocalAddressIgnoresUncertifiedAccessFields(t *testing.T) {
+	for _, source := range []string{"MOVQ $slot-16(SP),BX", "LEAQ slot-16(SP),BX"} {
+		// This is an isolated emitter-consumption counterexample, not an
+		// initialized native entry. The independent runtime owner captures
+		// and executes the complete actual Go source for both address forms.
+		emit := func(t *testing.T, stale string) string {
+			t.Helper()
+			ins := x86ScalarLaneInstruction(t, source)
+			ctx, output := newAMD64CtxWithFuncForTest(t, Func{Instrs: []Instr{ins}}, FuncSig{Ret: Void}, nil)
+			proof := &x86FixedLocalProof{frame: 16, accesses: map[int]map[int]x86FixedLocalAccess{}}
+			ctx.fixedLocal = proof
+			if stale != "" {
+				shape, err := fixedLocalInstructionDigest(ins)
+				if err != nil {
+					t.Fatal(err)
+				}
+				access := x86FixedLocalAccess{owner: proof, shape: shape, width: 8, nativeInput: true}
+				if stale == "mismatched-record" {
+					expected := access
+					expected.nativeInput = false
+					proof.accesses[0] = map[int]x86FixedLocalAccess{0: expected}
+				}
+				ins.x86FixedLocalMemory = map[int]x86FixedLocalAccess{0: access}
+				if _, certified := ctx.fixedLocalMemoryAccess(ins, 0); certified {
+					t.Fatal("stale private fields unexpectedly authenticated themselves")
+				}
+			}
+			ctx.blocks = []amd64Block{{instrs: []Instr{ins}}}
+			if terminated, err := ctx.lowerInstr(0, 0, ins, nil, nil); terminated || err != nil {
+				t.Fatal("address-only emission borrowed an access contract", terminated, err)
+			}
+			if ctx.fixedMemRoles != nil {
+				t.Fatal("original-instruction address projection escaped its lifetime")
+			}
+			return output.String()
+		}
+		want := emit(t, "")
+		for _, stale := range []string{"missing-record", "mismatched-record"} {
+			t.Run(source+"/"+stale, func(t *testing.T) {
+				if got := emit(t, stale); got != want {
+					t.Error("unverified nativeInput changed address-only emission")
+				}
+			})
+		}
+	}
+}
+
 func TestGoAMD64FixedLocalOriginalMoveAddressDomains(t *testing.T) {
 	for _, width := range []string{"W", "L", "Q"} {
 		for _, old := range []uint8{0, 3, 0x55, 0xff} {
