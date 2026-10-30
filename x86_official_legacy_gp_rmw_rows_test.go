@@ -157,6 +157,113 @@ func TestX86OfficialScalarMultiplyMOVBEOriginalGoBytes(t *testing.T) {
 	}
 }
 
+func TestX86OfficialScalarMultiplyImmediateFirstMatchGoBytes(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		var cases []x86OfficialPackedCase
+		for _, value := range []int{-129, -128, 127, 128, 255} {
+			for _, canonical := range x86ScalarMultiplyMOVBESourceCases(t, catalog, arch) {
+				parts := strings.Split(canonical.row, "/")
+				if parts[3] != "yimul" && parts[3] != "yimul3" {
+					continue
+				}
+				row, _ := strconv.Atoi(parts[4])
+				short := value >= -128 && value <= 127
+				if parts[3] == "yimul" && row != map[bool]int{true: 1, false: 2}[short] ||
+					parts[3] == "yimul3" && row != map[bool]int{true: 0, false: 1}[short] {
+					continue
+				}
+				fixture := canonical
+				old := "$128"
+				if short {
+					old = "$1"
+				}
+				fixture.witness.Instruction = strings.Replace(canonical.witness.Instruction, old, fmt.Sprintf("$%d", value), 1)
+				size := 1
+				if !short {
+					size = 4
+					if strings.HasSuffix(parts[2], "W") {
+						size = 2
+					}
+				}
+				code := append([]byte(nil), canonical.witness.Encoding[:len(canonical.witness.Encoding)-size]...)
+				for index := 0; index < size; index++ {
+					code = append(code, byte(value>>uint(index*8)))
+				}
+				fixture.witness.Encoding = code
+				cases = append(cases, fixture)
+			}
+		}
+		if len(cases) != map[string]int{"amd64": 45, "386": 30}[arch] {
+			t.Fatal("complete signed-immediate first-match inventory changed", arch, len(cases))
+		}
+		for start := 0; start < len(cases); start += 32 {
+			end := start + 32
+			if end > len(cases) {
+				end = len(cases)
+			}
+			t.Run(fmt.Sprintf("%s/batch%d", arch, start/32), func(t *testing.T) {
+				batch := cases[start:end]
+				var source strings.Builder
+				for index := range batch {
+					batch[index].symbol = fmt.Sprintf("ImmediateGP%d", index)
+					fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-0\n", batch[index].symbol)
+					batch[index].line = strings.Count(source.String(), "\n") + 1
+					fmt.Fprintln(&source, batch[index].witness.Instruction)
+					fmt.Fprintln(&source, "RET")
+				}
+				listing, err := x86ScalarLiteralGoListing(t, arch, source.String())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := x86OfficialPackedVerifyListing(listing, batch); err != nil {
+					t.Fatal("original Go Yi8/Yi32 first-match or immediate width differs", err)
+				}
+			})
+		}
+	}
+}
+
+func TestX86OfficialScalarMultiplyMOVBEModeAndRegisterRefusals(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, fixture := range x86ScalarMultiplyMOVBESourceCases(t, catalog, "amd64") {
+		if seen[fixture.row] {
+			continue
+		}
+		seen[fixture.row] = true
+		instruction := fixture.witness.Instruction
+		if strings.HasSuffix(strings.Fields(instruction)[0], "Q") {
+			t.Run("386-Q/"+fixture.row, func(t *testing.T) {
+				goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+instruction+"\nRET\n", "", false)
+			})
+		}
+		register := "BX"
+		if strings.Contains(instruction, "CX") {
+			register = "CX"
+		}
+		for _, arch := range []string{"amd64", "386"} {
+			t.Run("high-register/"+arch+"/"+fixture.row, func(t *testing.T) {
+				line := strings.Replace(instruction, register, "R8", 1)
+				goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+line+"\nRET\n", "", arch == "amd64")
+			})
+		}
+		t.Run("high-byte/"+fixture.row, func(t *testing.T) {
+			line := strings.Replace(instruction, register, "AH", 1)
+			goAssemblerOracleOutput(t, "amd64", "TEXT f(SB),4,$0-0\n"+line+"\nRET\n", "", false)
+		})
+	}
+	if len(seen) != 24 {
+		t.Fatal("mode and register observation lost an original row", len(seen))
+	}
+}
+
 func TestX86OfficialScalarRMWCompleteSourceCarrier(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src/cmd/internal/obj/x86/asm6.go"))
 	if err != nil {

@@ -35,6 +35,106 @@ func TestX86ScalarMultiplyMOVBECompleteSourceTransport(t *testing.T) {
 	}
 }
 
+func TestX86ScalarMultiplyMOVBERejectsMalformedSource(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range catalog.Optab {
+		if entry.Ytab != "yimul" && entry.Ytab != "yimul3" && entry.Ytab != "ymovbe" {
+			continue
+		}
+		for _, row := range entry.Rows {
+			mutations := []string{"original-arity", "selected-arity", "original-index", "selected-index",
+				"original-zcase", "selected-zcase", "original-offset", "selected-offset",
+				"original-stride", "selected-stride", "row-count", "prefix", "escape", "payload-short"}
+			if entry.Ytab == "yimul3" {
+				mutations = append(mutations, "original-immediate-role", "selected-immediate-role")
+			}
+			for _, mutation := range mutations {
+				t.Run(fmt.Sprintf("%s/%d/%s", entry.Opcode, row.RowIndex, mutation), func(t *testing.T) {
+					changed, selected := entry, row
+					changed.Rows = append([]X86LegacyOperand(nil), entry.Rows...)
+					changed.OpBytes = append([]string(nil), entry.OpBytes...)
+					original := &changed.Rows[row.RowIndex]
+					switch mutation {
+					case "original-arity":
+						original.Classes = []string{strings.Join(original.Classes, ",")}
+						if len(row.Classes) == 1 {
+							original.Classes = append(original.Classes, "")
+						}
+					case "selected-arity":
+						selected.Classes = []string{strings.Join(selected.Classes, ",")}
+						if len(row.Classes) == 1 {
+							selected.Classes = append(selected.Classes, "")
+						}
+					case "original-index":
+						original.RowIndex++
+					case "selected-index":
+						selected.RowIndex = -1
+					case "original-zcase":
+						original.ZCase = "Zibr_m"
+					case "selected-zcase":
+						selected.ZCase = "Zibr_m"
+					case "original-offset":
+						original.UnmatchedOffset++
+					case "selected-offset":
+						selected.UnmatchedOffset++
+					case "original-stride":
+						original.ZOffset++
+					case "selected-stride":
+						selected.ZOffset++
+					case "row-count":
+						changed.Rows = append(changed.Rows, row)
+					case "prefix":
+						changed.Prefix = "P32"
+					case "escape":
+						changed.EscapeAdjustment++
+					case "payload-short":
+						changed.OpBytes = changed.OpBytes[:len(changed.OpBytes)-1]
+					case "original-immediate-role":
+						original.Classes = append([]string(nil), original.Classes...)
+						original.Classes[0] = "Yu8"
+					case "selected-immediate-role":
+						selected.Classes = append([]string(nil), selected.Classes...)
+						selected.Classes[0] = "Yu8"
+					}
+					// No malformed metadata may panic before returning a refusal.
+					if _, err := x86ScalarRMWRowWitnesses(changed, selected, "amd64"); err == nil {
+						t.Fatal("SCALAR_MULTIPLY_MOVBE_MALFORMED_ACCEPTED", mutation)
+					}
+				})
+			}
+			for atom := range entry.OpBytes {
+				values := []string{"0x100", "not-a-byte"}
+				if entry.Ytab == "yimul" {
+					if atom == 1 {
+						values = append(values, "8")
+					} else if atom == 4 {
+						values = append(values, "0x0f", "Pe")
+					} else {
+						values = append(values, "0")
+					}
+				} else if entry.OpBytes[atom] == "0" || entry.OpBytes[atom] == "00" {
+					values = append(values, "1")
+				} else {
+					values = append(values, "0")
+				}
+				for _, value := range values {
+					t.Run(fmt.Sprintf("%s/%d/atom%d/%s", entry.Opcode, row.RowIndex, atom, value), func(t *testing.T) {
+						changed := entry
+						changed.OpBytes = append([]string(nil), entry.OpBytes...)
+						changed.OpBytes[atom] = value
+						if _, err := x86ScalarRMWRowWitnesses(changed, row, "amd64"); err == nil {
+							t.Fatal("SCALAR_MULTIPLY_MOVBE_MALFORMED_ACCEPTED", atom, value)
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
 func TestX86ScalarRMWCompleteOrderedRowsAndModes(t *testing.T) {
 	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {
