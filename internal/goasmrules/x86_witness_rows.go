@@ -1041,7 +1041,7 @@ func x86LegacyLiteralSIMDEncoding(entry X86LegacyOpcode, selected X86LegacyOpera
 	var prefix []byte
 	escape := 0
 	switch {
-	case entry.Ytab == "yxshuf" && len(literal) == 1:
+	case entry.Ytab == "yxshuf" && len(literal) == 1 && literal[0] != 0x0f:
 		switch entry.Prefix {
 		case "Pq":
 			prefix = []byte{0x66, 0x0f}
