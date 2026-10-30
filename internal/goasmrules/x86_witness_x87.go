@@ -88,13 +88,13 @@ func x86X87RowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([]X86Scala
 		schema = x86X87MoveRowSchema(entry.Ytab)
 	}
 	if schema == nil || entry.Kind != "encoding" || entry.Prefix != "Px" || entry.EscapeAdjustment != 0 ||
-		len(entry.Rows) != len(schema) || len(entry.OpBytes) != 2*len(schema) || row.RowIndex < 0 || row.RowIndex >= len(schema) {
+		len(entry.Rows) != len(schema) || len(entry.OpBytes) != 2*len(schema) || len(row.Classes) != 2 || row.RowIndex < 0 || row.RowIndex >= len(schema) {
 		return nil, fmt.Errorf("unmodeled complete x87 source schema")
 	}
 	var payload [2]byte
 	for index, original := range entry.Rows {
 		shape := fmt.Sprintf("%s/%d/%s", original.ZCase, original.ZOffset, strings.Join(original.Classes, ","))
-		if original.RowIndex != index || original.UnmatchedOffset != 2*index || shape != schema[index] {
+		if len(original.Classes) != 2 || original.RowIndex != index || original.UnmatchedOffset != 2*index || shape != schema[index] {
 			return nil, fmt.Errorf("ordered x87 source row changed")
 		}
 		for atom := 0; atom < 2; atom++ {
