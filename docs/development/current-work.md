@@ -8,12 +8,18 @@ translation efficiency while preserving all five architecture gates. Read
 ## Published CI and local revisions
 
 [PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The
-published `d905e3682` [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41082550177)
+last accepted `d905e3682` [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41082550177)
 completed naturally on attempt one: 325/325 successful jobs, no reruns or job
 skips. Fresh acceptance joins all 286 source artifacts, 240 partitions,
 Windows/race raw outcomes for 22 packages each and 22 profiles: 88.2% statements
 and 93.40% patch coverage. Test and hardware skips remain separate from passes.
 Both existing threads are resolved; no formal approval is recorded.
+
+The newer `2e85591e3` [round](https://github.com/xgo-dev/plan9asm/actions/runs/41110443099)
+encountered account cache-egress exhaustion and Go installation timeouts before
+tests ran. Preserve that round's failures. Shared Go setup disables remote
+Actions caches; writable job-local caches and exact compiler verification remain.
+The repair requires its own complete CI rather than inheriting earlier results.
 
 The historical
 `d6cb9245cd` [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41055685183)

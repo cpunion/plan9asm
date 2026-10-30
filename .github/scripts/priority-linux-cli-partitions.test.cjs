@@ -60,7 +60,7 @@ function requireRoles(source) {
     assert.match(setup, /^        timeout-minutes: 10$/m);
     assert.match(setup, /^        uses: \.\/\.github\/actions\/setup-go$/m);
     assert.match(setup, /^          go-version: \$\{\{ inputs\.go-version \}\}$/m);
-    assert.match(setup, /^          cache: true$/m);
+    assert.doesNotMatch(setup, /^          cache:/m);
     const compiler = step(body, 'Install LLVM 22 and cross compilers');
     assert.match(compiler, /^        timeout-minutes: 14$/m);
     assert.match(compiler, /^        run: bash scripts\/install-ci-llvm22-ubuntu\.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu$/m);

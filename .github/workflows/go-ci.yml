@@ -36,7 +36,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.1'
-          cache: true
 
       - name: Setup verified policy runtime
         uses: ./.github/actions/setup-node22
@@ -62,7 +61,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.2'
-          cache: true
 
       - name: Go fmt check
         run: |
@@ -90,7 +88,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.2'
-          cache: true
 
       - name: Go build
         run: go build ./...
@@ -161,7 +158,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.2'
-          cache: false
 
       - name: Build corpus tool for older Go lane
         if: matrix.prebuild_tool
@@ -176,7 +172,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: ${{ matrix.go-version }}
-          cache: true
 
       - name: Stdlib asm corpus gate
         shell: bash
@@ -230,7 +225,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.2'
-          cache: true
 
       - name: Setup required wasm execution runtime
         timeout-minutes: 10
@@ -287,7 +281,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.2'
-          cache: true
 
       - name: Setup required wasm execution runtime
         timeout-minutes: 10
@@ -366,7 +359,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: ${{ matrix.go-version }}
-          cache: true
 
       - name: Setup Python (Windows)
         if: runner.os == 'Windows'
@@ -483,7 +475,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.2'
-          cache: true
 
       - name: ARM scan gate
         env:
@@ -567,7 +558,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.2'
-          cache: true
 
       - name: Install LLVM 22
         timeout-minutes: 14
@@ -634,7 +624,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.2'
-          cache: true
 
       - name: Install LLVM 22
         timeout-minutes: 14
@@ -705,7 +694,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: ${{ matrix.go-version }}
-          cache: true
       - name: Install LLVM 22
         timeout-minutes: 14
         run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu

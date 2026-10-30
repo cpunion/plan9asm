@@ -32,7 +32,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: ${{ inputs.go-version }}
-          cache: true
       - name: Install LLVM 22 and cross compilers
         timeout-minutes: 14
         run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu
@@ -96,7 +95,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: ${{ inputs.go-version }}
-          cache: true
       - name: Install LLVM 22 and cross compilers
         timeout-minutes: 14
         run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu

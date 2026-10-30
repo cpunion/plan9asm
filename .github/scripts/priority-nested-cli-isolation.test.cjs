@@ -57,7 +57,7 @@ function requireCLITools(source) {
     assert.match(setup, /^        timeout-minutes: 10$/m);
     assert.match(setup, /^        uses: \.\/\.github\/actions\/setup-go$/m);
     assert.match(setup, /^          go-version: \$\{\{ inputs\.go-version \}\}$/m);
-    assert.match(setup, /^          cache: true$/m);
+    assert.doesNotMatch(setup, /^          cache:/m);
     assert.doesNotMatch(body, /uses: actions\/setup-go@|go-version-file:|check-latest:/);
     const compiler = step(body, 'Install LLVM 22 and cross compilers');
     assert.ok(compiler.includes(`        run: ${compilerInstall}\n`));

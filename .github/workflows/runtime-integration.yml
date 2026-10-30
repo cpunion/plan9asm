@@ -31,7 +31,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.2'
-          cache: true
 
       - name: Setup verified policy runtime
         uses: ./.github/actions/setup-node22
@@ -62,7 +61,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.2'
-          cache: true
 
       - name: Translate and compile standard-library assembly
         env:
@@ -132,7 +130,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: '1.27.2'
-          cache: false
 
       - name: Build corpus tool for older Go lane
         if: matrix.prebuild_tool
@@ -147,7 +144,6 @@ jobs:
         uses: ./.github/actions/setup-go
         with:
           go-version: ${{ matrix.go-version }}
-          cache: true
 
       - name: Stdlib asm corpus gate
         shell: bash

@@ -5,10 +5,6 @@ inputs:
   go-version:
     description: Go version accepted by actions/setup-go
     required: true
-  cache:
-    description: Whether actions/setup-go should cache dependencies
-    required: false
-    default: "true"
 
 runs:
   using: composite
@@ -26,7 +22,9 @@ runs:
       uses: actions/setup-go@v7
       with:
         go-version: ${{ inputs.go-version }}
-        cache: ${{ inputs.cache }}
+        # Account cache egress exhaustion must not block compiler installation.
+        # The writable job-local Go caches above remain available.
+        cache: false
 
     # Some self-hosted runner interruptions report a successful action before
     # its download completes. Neither that outcome nor an ambient Go is proof
