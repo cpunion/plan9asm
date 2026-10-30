@@ -64,7 +64,7 @@ func x86OrdinaryMoveOriginalCases(t *testing.T, catalog goasmrules.X86LegacyCata
 			original := entry.Opcode + " " + fixture.operands
 			selected, rewrite := original, ""
 			if entry.Rows[index].ZCase == "Zaut_r" && entry.Opcode != "MOVW" {
-				selected = "LEA" + entry.Opcode[3:] + " " + fixture.operands
+				selected = "LEA" + entry.Opcode[3:] + " " + strings.TrimPrefix(fixture.operands, "$")
 				rewrite = "original Go progedit rewrites TYPE_ADDR before ymov matching"
 			}
 			result = append(result, x86OrdinaryMoveOriginalCase{
@@ -84,6 +84,74 @@ func x86OrdinaryMoveOriginalCases(t *testing.T, catalog goasmrules.X86LegacyCata
 		t.Fatal("missing complete ordinary MOV source table", seen)
 	}
 	return result
+}
+
+func TestX86OrdinaryMoveAddressOriginalAndCanonicalLEASourceOwnership(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// These literal bytes and the actual Go assembler are independent of the
+	// MOV source formatter. A LEA object does not select a shadowed MOV row.
+	for _, arch := range []string{"amd64", "386"} {
+		for _, sample := range []struct{ width, code, prefix string }{
+			{"W", "668d1c24", "Pe"}, {"L", "8d1c24", "Px"}, {"Q", "488d1c24", "Pw"},
+		} {
+			if arch == "386" && sample.width == "Q" {
+				continue // Original mode32 refusal is independently executed above.
+			}
+			t.Run(arch+"/"+sample.width, func(t *testing.T) {
+				originalID, canonicalID := "", ""
+				for _, entry := range catalog.Optab {
+					if entry.Opcode == "MOV"+sample.width {
+						for _, row := range entry.Rows {
+							if row.ZCase == "Zaut_r" {
+								if originalID != "" || len(row.Classes) != 2 || row.Classes[0] != "Yiauto" || row.Classes[1] != "Yrl" {
+									t.Fatal("original address-MOV row identity changed")
+								}
+								originalID = fmt.Sprintf("optab/%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, row.RowIndex)
+							}
+						}
+					}
+					if entry.Opcode == "LEA"+sample.width {
+						if canonicalID != "" || entry.Ytab != "ym_rl" || entry.Prefix != sample.prefix || len(entry.Rows) != 1 {
+							t.Fatal("canonical LEA source identity changed")
+						}
+						row := entry.Rows[0]
+						if row.ZCase != "Zm_r" || row.ZOffset != 1 || row.UnmatchedOffset != 0 ||
+							len(row.Classes) != 2 || row.Classes[0] != "Ym" || row.Classes[1] != "Yrl" {
+							t.Fatal("canonical LEA complete row schema changed")
+						}
+						canonicalID = fmt.Sprintf("optab/%d/%s/%s/0", entry.TableIndex, entry.Opcode, entry.Ytab)
+					}
+				}
+				if originalID == "" || canonicalID == "" {
+					t.Fatal("original MOV or independent canonical LEA owner missing")
+				}
+				code, err := hex.DecodeString(sample.code)
+				if err != nil {
+					t.Fatal(err)
+				}
+				original := "MOV" + sample.width + " $slot+0(SP),BX"
+				canonical := "LEA" + sample.width + " slot+0(SP),BX"
+				observed := original
+				if sample.width != "W" {
+					observed = canonical
+				}
+				x86OrdinaryMoveCheckOriginalGo(t, arch, []x86OrdinaryMoveOriginalCase{
+					{x86OfficialPackedCase: x86OfficialPackedCase{row: originalID, witness: goasmrules.X86PackedBinaryWitness{
+						Instruction: observed, Destination: "BX", Encoding: code}}, original: original},
+					{x86OfficialPackedCase: x86OfficialPackedCase{row: canonicalID, witness: goasmrules.X86PackedBinaryWitness{
+						Instruction: canonical, Destination: "BX", Encoding: code}}, original: canonical},
+				})
+				if sample.width == "W" {
+					t.Log("actual original MOVW retains Zaut_r owner", originalID, "; independent LEAW owner", canonicalID)
+				} else {
+					t.Log("actual original MOV front-end rewrite before MOV table selection", originalID, "->", canonicalID, canonical)
+				}
+			})
+		}
+	}
 }
 
 func x86OrdinaryMoveCheckOriginalGo(t *testing.T, arch string, cases []x86OrdinaryMoveOriginalCase) {
