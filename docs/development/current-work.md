@@ -233,8 +233,13 @@ Local CI repairs preserve the original Go formats while distinguishing missing
 inputs from initialized source. Raw FS/GS reads retain exact decoder identity
 and numerical offset inputs. XADD/XCHG share output effects across native and
 actual module-owned numeric static storage, with writable extents still checked.
-Stack-expression positives use actual source-bound frames. These components
-require their final integrated regression and CI; they are not cloud passes.
+Stack-expression positives use actual source-bound frames. The integrated
+134-root scope passes with current Go. Minimum Go has one old assembler
+PCALIGN backend defect; its exact diagnostic is observed separately from a
+successful Go object. The changed owner passes on both endpoint SDKs and still
+requires all three LLVM target objects. Unchanged owners retain their frozen
+run identities. These are local results, not cloud passes; the three explicit
+host-inapplicable runtime owners still require native CI execution.
 
 The segment input matrix now uses bounded scenario batches instead of a separate
 subtest for every API call. All 17,056 source/declaration/role identities and

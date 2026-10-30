@@ -1,14 +1,17 @@
 package plan9asm
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestX86AddressSensitiveRawTextBlobReportedURootFarJump(t *testing.T) {
@@ -147,6 +150,37 @@ TEXT semantic(SB),NOSPLIT,$0-0
 	}
 }
 
+// Older x86 assemblers recognize PCALIGN in the parser but have no backend
+// implementation. Observe that exact tool defect separately; it is neither a
+// successful Go object nor a source-format rejection. LLVM objects below are
+// still required on every supported library toolchain.
+func x86AlignedRawTextGoObject(t *testing.T, source string) {
+	t.Helper()
+	directory := t.TempDir()
+	assembly, object := filepath.Join(directory, "aligned.s"), filepath.Join(directory, "aligned.o")
+	if err := os.WriteFile(assembly, []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	stage, cancelStage := runtimeOracleStageContext(t)
+	defer cancelStage()
+	ctx, cancel := context.WithTimeout(stage, time.Minute)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", "tool", "asm", "-p", "example.com/forms", "-o", object, assembly)
+	command.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH=amd64")
+	output, err := runtimeOracleCombinedOutput(ctx, command)
+	var exit *exec.ExitError
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if !goToolchainAtLeast(runtime.Version(), 1, 22) && ctx.Err() == nil && errors.As(err, &exit) && exit.ExitCode() == 1 &&
+		len(lines) == 2 && strings.HasPrefix(lines[0], "asm: asmins: missing op ") &&
+		strings.Contains(lines[0], "(<unknown line number>)\tPCALIGN\t$32") && lines[1] == "asm: assembly failed" {
+		t.Logf("GO_PCAlign_BACKEND_DEFECT_OBSERVED compiler=%s target=linux/amd64; no successful Go object claimed: %s", runtime.Version(), output)
+		return
+	}
+	if failure := goAssemblerOracleOutcome(assembly, object, output, err, ctx.Err(), true, "amd64", "example.com/forms"); failure != nil {
+		t.Fatalf("actual aligned raw TEXT compiler observation: %v\n%s", failure, output)
+	}
+}
+
 func TestX86AddressSensitiveAlignedRawTextBlobReportedURoot(t *testing.T) {
 	const source = `TEXT trampoline_start(SB),$0-0
 	LEAQ stack_top(SB), AX
@@ -156,7 +190,7 @@ TEXT stack_top(SB),$0
 	PCALIGN $32
 	LONG $0xdeadbeef
 `
-	requireX86GoAssemblerResult(t, "amd64", source, true)
+	x86AlignedRawTextGoObject(t, source)
 
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
@@ -180,6 +214,8 @@ TEXT stack_top(SB),$0
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
+	addressOnly := strings.Replace(source, "\tMOVQ (AX), AX\n", "", 1)
+	x86AlignedRawTextGoObject(t, addressOnly)
 	for _, target := range []struct {
 		name   string
 		triple string
@@ -204,8 +240,6 @@ TEXT stack_top(SB),$0
 			// The original source and blob checks above remain unchanged.
 			// This separate address-only program checks alignment and emitted
 			// bytes without pretending that the original load had an owner.
-			addressOnly := strings.Replace(source, "\tMOVQ (AX), AX\n", "", 1)
-			goAssemblerOracleOutput(t, "amd64", addressOnly, "", true)
 			addressFile, err := Parse(ArchAMD64, addressOnly)
 			if err != nil {
 				t.Fatal(err)
