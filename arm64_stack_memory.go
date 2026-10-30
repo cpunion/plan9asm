@@ -22,9 +22,6 @@ func arm64StackMemoryExtent(ins Instr, mem MemRef) (low, high, width int64, err 
 	if arm64NamedStackOffset(mem) {
 		return
 	}
-	if offset, ok := parseNamedStackConstantOffset(mem.OffRaw); ok && offset == mem.Off {
-		return
-	}
 	if multiplier, ok := parseVectorLengthScaleExpr(mem.OffRaw); ok {
 		if multiplier < -arm64MaxLocalStackSpan/256 || multiplier > arm64MaxLocalStackSpan/256 {
 			err = fmt.Errorf("scalable stack displacement exceeds allocation limit")

@@ -63,7 +63,7 @@ func fixedLocalMemoryAddress(ins Instr, index int, frame int64) (MemRef, error) 
 	}
 	prefix := strings.TrimSpace(literal[1])
 	offset, named := parseNamedStackConstantOffset(prefix)
-	if _, bare := parseIdent(prefix); bare {
+	if validPPIdentifier(prefix) {
 		offset, named = 0, true
 	}
 	if !named {
@@ -132,8 +132,7 @@ func x86ConditionalMoveOffsetKnown(memory MemRef) bool {
 	if offset, named := parseNamedStackConstantOffset(memory.OffRaw); named {
 		return offset == memory.Off
 	}
-	_, bare := parseIdent(memory.OffRaw)
-	return bare && memory.Off == 0
+	return validPPIdentifier(memory.OffRaw) && memory.Off == 0
 }
 
 func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x86FixedLocalProof, residue int) (bool, error) {

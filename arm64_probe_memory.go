@@ -9,8 +9,7 @@ func arm64NamedStackOffset(memory MemRef) bool {
 	if offset, ok := parseNamedStackConstantOffset(memory.OffRaw); ok {
 		return offset == memory.Off
 	}
-	_, named := parseIdent(memory.OffRaw)
-	return named && memory.Off == 0
+	return validPPIdentifier(memory.OffRaw) && memory.Off == 0
 }
 
 func arm64MemoryOffsetNeedsContext(memory MemRef) bool {

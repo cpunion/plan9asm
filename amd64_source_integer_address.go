@@ -148,7 +148,7 @@ func unresolvedX86MemoryOffsetError(memory MemRef) error {
 		return nil
 	}
 	if memory.Base == SP {
-		if _, named := parseIdent(memory.OffRaw); named && memory.Off == 0 {
+		if validPPIdentifier(memory.OffRaw) && memory.Off == 0 {
 			return nil // Bare NAME_AUTO supplies its descriptive name and offset zero.
 		}
 		if offset, named := parseNamedStackConstantOffset(memory.OffRaw); named && offset == memory.Off {

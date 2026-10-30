@@ -128,7 +128,7 @@ func x86NamedFrameMoveAddressInstruction(ins Instr, arch string) (Instr, bool, e
 		}
 		prefix := strings.TrimSpace(literal[1])
 		_, named := parseNamedStackConstantOffset(prefix)
-		if _, bare := parseIdent(prefix); bare {
+		if validPPIdentifier(prefix) {
 			named = true
 		}
 		if !named {

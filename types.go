@@ -1081,7 +1081,7 @@ func parseMem(s string) (MemRef, bool) {
 					}
 					return MemRef{Base: base, Off: int64(offset)}, true
 				}
-				if base == SP {
+				if base == SP && strings.EqualFold(baseText, "SP") {
 					if offset, ok := parseNamedStackConstantOffset(prefix); ok {
 						return MemRef{Base: SP, Off: offset}, true
 					}
@@ -1314,11 +1314,9 @@ func parseMem(s string) (MemRef, bool) {
 // determines the actual SP displacement. For example tmpdig-(1*4)(SP) and
 // tmpdig-4(SP) address the same slot. Only an evaluable expression is accepted
 // here, so an unresolved macro cannot silently become offset zero.
+// Bare names retain their spelling for architecture-specific AUTO consumers.
 func parseNamedStackConstantOffset(prefix string) (int64, bool) {
 	prefix = strings.TrimSpace(prefix)
-	if validPPIdentifier(prefix) {
-		return 0, true // Go's descriptive NAME_AUTO may omit its zero offset.
-	}
 	if len(prefix) < 3 {
 		return 0, false
 	}
