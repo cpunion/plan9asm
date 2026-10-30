@@ -117,6 +117,14 @@ func x86NamedFrameMoveAddressInstruction(ins Instr, arch string) (Instr, bool, e
 		if literal == nil {
 			return ins, false, nil // SB and unnamed addresses retain their own consumers.
 		}
+		prefix := strings.TrimSpace(literal[1])
+		_, named := parseNamedStackConstantOffset(prefix)
+		if _, bare := parseIdent(prefix); bare {
+			named = true
+		}
+		if !named {
+			return ins, false, nil // MOVW NAME_NONE falls through to TYPE_CONST, not Zaut_r.
+		}
 		var err error
 		address, err = parseOperandForArch(ArchAMD64, body)
 		if err != nil || address.Kind != OpMem || address.Mem.Base != SP {
