@@ -51,11 +51,15 @@ func TestX86OrdinaryMoveNamedFPAddressObjects(t *testing.T) {
 func TestX86OrdinaryMoveNamedFPAddressSourceBoundaries(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		for _, width := range []string{"W", "L", "Q"} {
-			for _, control := range []string{"numeric-FP", "outside-field", "changed-Raw", "changed-operand", "changed-name", "physical-origin", "address-as-number"} {
+			for _, control := range []string{"numeric-FP", "punctuated-FP", "register-FP", "outside-field", "changed-Raw", "changed-operand", "changed-name", "physical-origin", "address-as-number"} {
 				t.Run(arch+"/"+width+"/"+control, func(t *testing.T) {
 					address := "$input+0(FP)"
 					if control == "numeric-FP" {
 						address = "$0(FP)"
+					} else if control == "punctuated-FP" {
+						address = "$pkg.值+0(FP)"
+					} else if control == "register-FP" {
+						address = "$AX+0(FP)"
 					} else if control == "outside-field" {
 						address = "$input+32(FP)"
 					}
@@ -68,7 +72,8 @@ func TestX86OrdinaryMoveNamedFPAddressSourceBoundaries(t *testing.T) {
 						source = strings.Replace(source, "MOV"+width+" ", move+" $0,BX\nMOV"+width+" ", 1)
 						source = strings.Replace(source, "\n"+move+" $0,BX\n"+move+" AX,ret+", "\n"+move+" BX,ret+", 1)
 					}
-					accepted := control != "numeric-FP" && !(arch == "386" && width == "Q")
+					invalidName := control == "numeric-FP" || control == "punctuated-FP" || control == "register-FP"
+					accepted := !invalidName && !(arch == "386" && width == "Q")
 					observed := source
 					if arch == "386" && width == "Q" {
 						// The existing frame-diagnostic observer deliberately models
@@ -94,7 +99,7 @@ func TestX86OrdinaryMoveNamedFPAddressSourceBoundaries(t *testing.T) {
 					if control != "outside-field" && control != "address-as-number" && known && err == nil {
 						t.Error("invalid/changed FP spelling or physical role became a named address", view)
 					}
-					if control == "numeric-FP" || control == "outside-field" || control == "address-as-number" || arch == "386" && width == "Q" {
+					if invalidName || control == "outside-field" || control == "address-as-number" || arch == "386" && width == "Q" {
 						for _, api := range []string{"text", "module", "Go"} {
 							if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, x86AddressMemoryTargets(arch)[0], api); err == nil || ir != "" {
 								t.Error("invalid/unmapped/mode32-Q FP address produced public IR", api, len(ir), err)
