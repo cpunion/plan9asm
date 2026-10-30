@@ -130,6 +130,67 @@ func TestX86LegacyLiteralSIMDExistingTransportCompleteBytes(t *testing.T) {
 	}
 }
 
+func TestX86LegacyLiteralSIMDRejectsMalformedSource(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, original := range catalog.Optab {
+		if !x86LegacyLiteralSIMDSource(original) {
+			continue
+		}
+		selected := original.Rows[0]
+		for _, control := range []string{"kind", "row-count", "prefix", "escape", "index", "zcase", "stride", "offset",
+			"original-arity", "selected-arity", "original-stride", "missing-zero", "early-zero", "tail", "nonbyte"} {
+			t.Run(original.Opcode+"/"+control, func(t *testing.T) {
+				entry, row := original, selected
+				entry.Rows = append([]X86LegacyOperand(nil), original.Rows...)
+				entry.OpBytes = append([]string(nil), original.OpBytes...)
+				switch control {
+				case "kind":
+					entry.Kind = "special"
+				case "row-count":
+					entry.Rows = append(entry.Rows, selected)
+				case "prefix":
+					entry.Prefix = "Pw"
+				case "escape":
+					entry.EscapeAdjustment++
+				case "index":
+					row.RowIndex++
+				case "zcase":
+					row.ZCase = "Zibr_m"
+				case "stride":
+					row.ZOffset++
+				case "offset":
+					row.UnmatchedOffset++
+				case "original-arity":
+					entry.Rows[0].Classes = []string{strings.Join(selected.Classes, ",")}
+				case "selected-arity":
+					row.Classes = []string{strings.Join(selected.Classes, ",")}
+				case "original-stride":
+					entry.Rows[0].ZOffset++
+				case "missing-zero":
+					entry.OpBytes = entry.OpBytes[:len(entry.OpBytes)-1]
+				case "early-zero":
+					entry.OpBytes[0] = "0"
+				case "tail":
+					entry.OpBytes = append(entry.OpBytes, "0")
+				case "nonbyte":
+					entry.OpBytes[0] = "256"
+				}
+				defer func() {
+					if value := recover(); value != nil {
+						t.Fatal("LEGACY_LITERAL_SIMD_MALFORMED_PANIC", control, value)
+					}
+				}()
+				if witnesses, err := x86PackedLegacyRowWitnesses(entry, row); err == nil || len(witnesses) != 0 {
+					t.Fatal("LEGACY_LITERAL_SIMD_MALFORMED_ACCEPTED", control, witnesses, err)
+				}
+			})
+		}
+	}
+}
+
 func TestX86PackedNarrowRowsShareBinaryWitnesses(t *testing.T) {
 	x86CheckPackedRowInventory(t, X86PackedNarrowRows, `^V?PACK`, `DW$`, x86PackedRowCounts{
 		names: 8, mmx: 3, broadcast: 18,

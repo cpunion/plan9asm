@@ -137,6 +137,25 @@ func TestX86OfficialLegacyLiteralSIMDGoImmediateAndModeBoundaries(t *testing.T) 
 				})
 			}
 		}
+		modes := map[string]bool{}
+		for _, entry := range catalog.Optab {
+			if entry.Ytab != "yxshuf" && entry.Ytab != "yaes" {
+				continue
+			}
+			key := entry.Ytab + "/" + entry.Prefix
+			if modes[key] {
+				continue
+			}
+			modes[key] = true
+			t.Run("high-register/"+arch+"/"+key, func(t *testing.T) {
+				instruction := entry.Opcode + " X8,X1"
+				if entry.Ytab == "yxshuf" {
+					instruction = entry.Opcode + " $7,X8,X1"
+				}
+				source := "TEXT ·Mode(SB),4,$0-0\n" + instruction + "\nRET\n"
+				goAssemblerOracleOutput(t, arch, source, "", arch == "amd64")
+			})
+		}
 	}
 }
 
