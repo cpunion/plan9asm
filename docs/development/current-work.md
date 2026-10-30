@@ -197,18 +197,43 @@ These measure complete register-only translation, excluding Parse and live SDK
 capture. They establish neither whole-SDK nor native generated-code acceleration
 and do not qualify the later local head.
 
+## Local GP and SDK repairs
+
+The GP memory-read repair, hardware-segment backend guard, six-member counter
+family and static bit-string effects are locally committed. Their precise
+241-root regression union passes 104,095 nodes per endpoint SDK, with four
+existing host-inapplicable runtime skips retained separately. These results
+are not a new public-head CI or native x86 execution certificate.
+
+SDK capture now observes bounded relative headers through the shared source
+path implementation. Compiler object limits follow actual definition namespaces,
+exact index sentinels and physical payload blocks within the original byte
+budget. Same-member Nonpkg DUPok definitions keep every original index. An
+empty compiler BSS declaration may accompany a same-size ASM initializer;
+collision checking retains both records and grants no winning-body, numerical
+or storage permission. Two initialized non-DUPok bodies still fail.
+
+The complete static-storage package passes 1,768 nodes with Go 1.27.3 and 480
+with Go 1.20.14, without skips. Current-Go actual runtime capture, verification
+and source-revocation tests pass for both amd64 and 386. These are complete
+source/object observations, not execution of the translated runtime.
+
+The unchanged strict 55-file benchmark still reports 41 passes and fourteen
+failures, without new failing files. Six diagnostics advance to subsequent
+TEXT, frame, ABI or literal-initialization checks. Its 169-second complete run
+is slower than the historical 116-second comparison; SDK throughput remains
+unaccepted. The local current-Go profile package also retains one Rosetta
+preflight failure on an ARM64 host; no program executed in that failed owner.
+
 ## Remaining closeout
 
-1. Finish the current public CI round. Publish
-   repairs only through the allowed fork after that round finishes; require
-   fresh complete CI, coverage and review at the new head.
-2. Finish the independently reproduced GP memory-read routing class. Its
-   162 source-mode cases cover ALU, extensions, bit strings, explicit IMUL,
-   scalar MOV, exchange and scalar CMPXCHG. Both SDKs retain complete REDs;
-   numeric-base policy controls and IMUL initialized positives are classified
-   separately from missing-input acceptance. Share a restriction-only obligation
-   from existing typed forms; keep paired native transfer, FLAGS, raw replay
-   and source/frame permissions separate. Preserve nontrapping dead scratch.
+1. The published Plan9asm and LLGo pin have completed their CI rounds. Publish
+   the later local repairs only through the allowed fork after final gates;
+   require fresh complete CI, coverage and review at each new public head.
+2. Finish final GP classification review across five architectures and eight
+   source profiles, the policy suites and the unchanged complete-translation
+   benchmark. Do not replace initialized object or execution evidence with
+   bare instruction Context outcomes. Preserve the original REDs and skips.
 3. Continue legacy families using original literal prefixes, modes and selection
    order. Keep source-row ownership distinct from complete semantic acceptance.
    Do not add another opcode registry or cache mutable source verification.
@@ -221,7 +246,8 @@ and do not qualify the later local head.
    unexecuted native owners require their own acceptance evidence.
 6. Preserve ARM64, ARM, WASM and their known object/control gaps. Classify the
    fourteen strict-SDK failures in [issue47](https://github.com/xgo-dev/plan9asm/issues/47)
-   individually: relative SDK includes, DATA/TEXT merging and generic ABI
-   forms include repository-owned gaps, alongside special runtime contracts.
+   individually: the repaired include and DATA parsing paths expose further
+   TEXT, literal-initialization and generic ABI gaps, alongside the separately
+   tracked special runtime contracts. None of these failures is a pass.
    Broader callbacks and library compatibility retain independent execution
    owners. Coordinate one heavy local Go/LLVM/Node invocation at a time.
