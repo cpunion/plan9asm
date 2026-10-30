@@ -39,6 +39,65 @@ func TestX86ScalarImplicitMulDivOriginalSourceTransport(t *testing.T) {
 	}
 }
 
+func TestX86ScalarImplicitMulDivCompleteRowsAndModes(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		rows, err := X86ScalarImplicitMulDivRows(catalog, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen, filtered, witnesses := map[string]bool{}, 0, 0
+		for _, row := range rows {
+			if row.ID == "" || seen[row.ID] {
+				t.Fatal("implicit source identity is absent or repeated", row.ID)
+			}
+			seen[row.ID] = true
+			if row.ModeFiltered != "" {
+				filtered++
+				if len(row.Witnesses) != 0 {
+					t.Fatal("386 Q source acquired a named witness")
+				}
+			}
+			for _, witness := range row.Witnesses {
+				if witness.Destination != "AX" {
+					t.Fatal("implicit primary result lost AX/AL:AH carrier", witness)
+				}
+				witnesses++
+			}
+		}
+		if len(rows) != 16 || filtered != map[string]int{"amd64": 0, "386": 4}[arch] ||
+			witnesses != map[string]int{"amd64": 32, "386": 24}[arch] {
+			t.Fatal("complete implicit source/mode union differs", arch, len(rows), filtered, witnesses)
+		}
+	}
+	for _, arch := range []string{"", "arm", "wasm"} {
+		if _, err := X86ScalarImplicitMulDivRows(catalog, arch); err == nil {
+			t.Fatal("foreign mode acquired an implicit x86 source view", arch)
+		}
+	}
+	if _, err := X86ScalarImplicitMulDivRows(X86LegacyCatalog{}, "amd64"); err == nil {
+		t.Fatal("missing source closure silently passed")
+	}
+	for index, entry := range catalog.Optab {
+		if entry.Opcode != "DIVB" {
+			continue
+		}
+		changed := catalog
+		changed.Optab = append(append([]X86LegacyOpcode(nil), catalog.Optab[:index]...), catalog.Optab[index+1:]...)
+		if _, err := X86ScalarImplicitMulDivRows(changed, "amd64"); err == nil {
+			t.Fatal("missing original family member silently passed")
+		}
+		changed.Optab = append(append([]X86LegacyOpcode(nil), catalog.Optab...), entry)
+		if _, err := X86ScalarImplicitMulDivRows(changed, "amd64"); err == nil {
+			t.Fatal("duplicate original family member silently passed")
+		}
+		break
+	}
+}
+
 func TestX86ScalarImplicitMulDivMalformedSourceIsBounded(t *testing.T) {
 	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {

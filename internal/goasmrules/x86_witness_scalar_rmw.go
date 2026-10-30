@@ -171,6 +171,95 @@ func X86ScalarMultiplyMOVBERows(catalog X86LegacyCatalog, arch string) ([]X86Sca
 	return result, nil
 }
 
+// X86ScalarImplicitMulDivRows retains the four complete integer families.
+// Other users of ydivb/ydivl (descriptor/state operations and NOPs) have their
+// own contracts; sharing an operand table grants no numerical authority.
+func X86ScalarImplicitMulDivRows(catalog X86LegacyCatalog, arch string) ([]X86ScalarRMWRow, error) {
+	if arch != "amd64" && arch != "386" {
+		return nil, fmt.Errorf("implicit integer rows require a Go x86 mode")
+	}
+	var result []X86ScalarRMWRow
+	seen := map[string]bool{}
+	for _, entry := range catalog.Optab {
+		stem, width, known := x86ScalarImplicitFamily(entry.Opcode)
+		if !known {
+			continue
+		}
+		table := "ydivl"
+		if width == 'B' {
+			table = "ydivb"
+		} else if stem == "IMUL" {
+			table = "yimul"
+		}
+		if seen[entry.Opcode] || entry.Ytab != table || len(entry.Rows) == 0 {
+			return nil, fmt.Errorf("duplicate or changed implicit integer source table")
+		}
+		seen[entry.Opcode] = true
+		witnesses, err := x86ScalarRMWRowWitnesses(entry, entry.Rows[0], arch)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", entry.Opcode, err)
+		}
+		row := X86ScalarRMWRow{ID: fmt.Sprintf("optab/%d/%s/%s/0", entry.TableIndex, entry.Opcode, entry.Ytab),
+			Opcode: entry.Opcode, Witnesses: witnesses}
+		if arch == "386" && width == 'Q' {
+			row.ModeFiltered, row.Witnesses = "original Go rejects REX.W in 386 mode", nil
+		}
+		result = append(result, row)
+	}
+	if len(seen) != 16 {
+		return nil, fmt.Errorf("incomplete implicit integer source families: names=%d", len(seen))
+	}
+	return result, nil
+}
+
+func x86ScalarImplicitFamily(name string) (string, byte, bool) {
+	if len(name) < 4 || !strings.ContainsRune("BWLQ", rune(name[len(name)-1])) {
+		return "", 0, false
+	}
+	stem, width := name[:len(name)-1], name[len(name)-1]
+	return stem, width, stem == "MUL" || stem == "IMUL" || stem == "DIV" || stem == "IDIV"
+}
+
+// Validate every original row before selecting a byte offset. The selected
+// row alone cannot establish the stride, arity or identity of earlier rows.
+// Exact schemas and a 0/1 source escape bound all subsequent offset arithmetic.
+func x86ScalarCompleteOperandSchema(entry X86LegacyOpcode, row X86LegacyOperand, schema []string) error {
+	if len(schema) == 0 || len(entry.Rows) != len(schema) || row.RowIndex < 0 || row.RowIndex >= len(schema) ||
+		entry.EscapeAdjustment < 0 || entry.EscapeAdjustment > 1 {
+		return fmt.Errorf("unmodeled complete scalar operand schema/escape")
+	}
+	offset := 0
+	for index, original := range entry.Rows {
+		fields := strings.Split(schema[index], "/")
+		if len(fields) != 3 {
+			return fmt.Errorf("invalid internal scalar schema")
+		}
+		classes := strings.Split(fields[2], ",")
+		stride, err := strconv.Atoi(fields[1])
+		if err != nil || stride <= 0 || original.RowIndex != index || original.ZCase != fields[0] ||
+			original.ZOffset != stride || original.UnmatchedOffset != offset || len(original.Classes) != len(classes) {
+			return fmt.Errorf("scalar complete original row identity changed")
+		}
+		for position, class := range classes {
+			if original.Classes[position] != class {
+				return fmt.Errorf("scalar complete original operand class changed")
+			}
+		}
+		offset += stride + entry.EscapeAdjustment
+	}
+	original := entry.Rows[row.RowIndex]
+	if row.ZCase != original.ZCase || row.ZOffset != original.ZOffset || row.UnmatchedOffset != original.UnmatchedOffset ||
+		len(row.Classes) != len(original.Classes) {
+		return fmt.Errorf("scalar selected row differs from complete original source")
+	}
+	for index, class := range original.Classes {
+		if row.Classes[index] != class {
+			return fmt.Errorf("scalar selected operand classes differ from original row")
+		}
+	}
+	return nil
+}
+
 func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch string) ([]X86ScalarRMWWitness, error) {
 	// These are ordered physical schemas, not opcode values. In particular,
 	// /digit immediate extension and ModRM direction have different transports.
@@ -188,12 +277,21 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		"yimul":  {"Zm_o/2/Yml", "Zib_rr/1/Yi8,Yrl", "Zil_rr/1/Yi32,Yrl", "Zm_r/2/Yml,Yrl"},
 		"yimul3": {"Zibm_r/2/Yi8,Yml,Yrl", "Zibm_r/2/Yi32,Yml,Yrl"},
 		"ymovbe": {"Zlitm_r/3/Ym,Yrl", "Zlitr_m/3/Yrl,Ym"},
+		"ydivb":  {"Zm_o/2/Ymb"},
+		"ydivl":  {"Zm_o/2/Yml"},
 	}
 	schema := schemas[entry.Ytab]
 	if entry.Opcode == "" {
 		return nil, fmt.Errorf("missing scalar source opcode")
 	}
 	width := entry.Opcode[len(entry.Opcode)-1]
+	if entry.Ytab == "ydivb" || entry.Ytab == "ydivl" {
+		stem, actualWidth, known := x86ScalarImplicitFamily(entry.Opcode)
+		if !known || actualWidth == 'B' && entry.Ytab != "ydivb" || actualWidth != 'B' &&
+			(entry.Ytab != "ydivl" || stem == "IMUL") {
+			return nil, fmt.Errorf("shared divide table member is outside the implicit integer family")
+		}
+	}
 	conditional := strings.HasPrefix(entry.Opcode, "CMOV")
 	remainingPrefix := ""
 	if conditional {
@@ -217,32 +315,15 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 	} else if entry.Ytab == "ymovbe" {
 		expectedPrefix = map[byte]string{'W': "Pq", 'L': "Pm", 'Q': "Pw"}[width]
 	}
-	if entry.Kind != "encoding" || expectedPrefix == "" || entry.Prefix != expectedPrefix ||
-		len(entry.Rows) != len(schema) || row.RowIndex < 0 || row.RowIndex >= len(schema) ||
-		fmt.Sprintf("%s/%d/%s", row.ZCase, row.ZOffset, strings.Join(row.Classes, ",")) != schema[row.RowIndex] {
+	if entry.Kind != "encoding" || expectedPrefix == "" || entry.Prefix != expectedPrefix {
 		return nil, fmt.Errorf("unmodeled complete scalar operand schema/prefix")
 	}
-	multiplyMove := entry.Ytab == "yimul" || entry.Ytab == "yimul3" || entry.Ytab == "ymovbe"
-	if multiplyMove && (!strings.ContainsRune("WLQ", rune(width)) || entry.EscapeAdjustment < 0 || entry.EscapeAdjustment > 1) {
-		return nil, fmt.Errorf("scalar carrier or source escape is outside the complete table grammar")
+	if err := x86ScalarCompleteOperandSchema(entry, row, schema); err != nil {
+		return nil, err
 	}
-	if multiplyMove {
-		offset := 0
-		for index, original := range entry.Rows {
-			fields := strings.Split(schema[index], "/")
-			classes := strings.Split(fields[2], ",")
-			stride, _ := strconv.Atoi(fields[1])
-			if original.RowIndex != index || original.ZCase != fields[0] || original.ZOffset != stride ||
-				original.UnmatchedOffset != offset || len(original.Classes) != len(classes) ||
-				strings.Join(original.Classes, ",") != fields[2] {
-				return nil, fmt.Errorf("scalar complete original row identity changed")
-			}
-			offset += stride + entry.EscapeAdjustment
-		}
-		original := entry.Rows[row.RowIndex]
-		if len(row.Classes) != len(original.Classes) || row.UnmatchedOffset != original.UnmatchedOffset {
-			return nil, fmt.Errorf("scalar selected operand roles differ from original row")
-		}
+	multiplyMove := entry.Ytab == "yimul" || entry.Ytab == "yimul3" || entry.Ytab == "ymovbe"
+	if multiplyMove && !strings.ContainsRune("WLQ", rune(width)) {
+		return nil, fmt.Errorf("scalar carrier is outside the complete table grammar")
 	}
 	var payload []byte
 	for index, token := range entry.OpBytes {
@@ -263,7 +344,7 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 	if len(payload) != 0 && payload[0] == 0x0f {
 		adjustment = 1
 	}
-	if multiplyMove && entry.EscapeAdjustment != adjustment {
+	if entry.EscapeAdjustment != adjustment {
 		return nil, fmt.Errorf("scalar original leading byte and source escape differ")
 	}
 	if multiplyMove {
@@ -289,7 +370,7 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 	}
 	last := entry.Rows[len(entry.Rows)-1]
 	if entry.EscapeAdjustment != adjustment || row.UnmatchedOffset != offset ||
-		last.UnmatchedOffset+last.ZOffset+adjustment != len(payload) || offset >= len(payload) {
+		last.UnmatchedOffset+last.ZOffset+adjustment != len(payload) || offset < 0 || offset >= len(payload) {
 		return nil, fmt.Errorf("scalar complete payload/ordered offset changed")
 	}
 	var prefix []byte
@@ -441,7 +522,7 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		}
 		destination := args[1]
 		if row.ZCase == "Zm_o" {
-			destination = accumulator // The high implicit result remains a semantic effect.
+			destination = "AX" // B uses AL/AH; the separate DX output remains a semantic effect.
 		}
 		witnesses = append(witnesses, X86ScalarRMWWitness{Instruction: instruction + args[1], Destination: destination, Encoding: code})
 	}

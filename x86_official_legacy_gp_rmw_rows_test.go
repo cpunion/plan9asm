@@ -101,8 +101,65 @@ func TestX86OfficialImplicitMulDivOriginalGoBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	modes := map[string][]goasmrules.X86ScalarRMWRow{}
 	for _, arch := range []string{"amd64", "386"} {
-		x86ImplicitMulDivOriginalByteBatches(t, arch, x86ImplicitMulDivOriginalCases(t, catalog, arch))
+		cases := x86ImplicitMulDivOriginalCases(t, catalog, arch)
+		t.Run(arch+"/projection", func(t *testing.T) {
+			rows, err := goasmrules.X86ScalarImplicitMulDivRows(catalog, arch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			modes[arch] = rows
+			expected := map[string]goasmrules.X86PackedBinaryWitness{}
+			for _, fixture := range cases {
+				expected[fixture.row+"/"+fixture.witness.Instruction] = fixture.witness
+			}
+			for _, row := range rows {
+				for _, witness := range row.Witnesses {
+					key := row.ID + "/" + witness.Instruction
+					original, found := expected[key]
+					if !found || !bytes.Equal(witness.Encoding, original.Encoding) || witness.Destination != original.Destination {
+						t.Fatal("implicit row/instruction/bytes/destination join differs", key, witness, original)
+					}
+					delete(expected, key)
+				}
+			}
+			if len(expected) != 0 {
+				t.Fatal("implicit original witness omitted", expected)
+			}
+		})
+		x86ImplicitMulDivOriginalByteBatches(t, arch, cases)
+	}
+	x86Legacy127SaveIdentity(t, "PLAN9ASM_IMPLICIT_MULDIV_IDENTITY_OUTPUT", struct {
+		Source goasmrules.X86LegacyCatalog
+		Modes  map[string][]goasmrules.X86ScalarRMWRow
+	}{catalog, modes})
+}
+
+func x86ImplicitMulDivInitializedFunction(name, operation, arch string) (string, string) {
+	word, move := goWordSize(arch), "Q"
+	if word == 4 {
+		move = "L"
+	}
+	source := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\nMOV%s out+0(FP),DI\nMOV%s memory+%d(FP),SI\n"+
+		"MOV%s low+%d(FP),AX\nMOV%s high+%d(FP),DX\nMOV%s input+%d(FP),CX\n%s\n"+
+		"MOV%s AX,0(DI)\nMOV%s DX,%d(DI)\n",
+		name, 5*word, move, move, word, move, 2*word, move, 3*word, move, 4*word, operation, move, move, word)
+	// Division's undefined status must never become a public output. Product
+	// owners independently observe CF/OF; upper AX/DX bytes remain visible.
+	if !strings.Contains(strings.Fields(operation)[0], "DIV") {
+		source += fmt.Sprintf("SETCS CL\nMOVB CL,%d(DI)\nSETOS CL\nMOVB CL,%d(DI)\n", 2*word, 2*word+1)
+	}
+	return source + "RET\n", fmt.Sprintf("func %s(out *[32]byte,memory *[8]byte,low,high,input uintptr)\n", name)
+}
+
+func TestX86OfficialImplicitMulDivInitializedThreeAPIFiveObjects(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		x86Legacy127Objects(t, arch, x86ImplicitMulDivOriginalCases(t, catalog, arch), x86ImplicitMulDivInitializedFunction)
 	}
 }
 
