@@ -193,7 +193,8 @@ func x86X87ValueProperties(ins Instr, arch string) (x86X87ValueForm, bool, error
 		return form, true, err
 	}
 	operands := ins.Args
-	if name == "FBLD" || name == "FBSTP" {
+	decoderMemoryAlias := name == "FBLD" || name == "FBSTP"
+	if decoderMemoryAlias {
 		if len(operands) != 1 {
 			return fail("expects its original decoder memory operand")
 		}
@@ -241,9 +242,17 @@ func x86X87ValueProperties(ins Instr, arch string) (x86X87ValueForm, bool, error
 		}
 		return fail("expects signed integer memory,F0 or the registered F0,memory store row")
 	case x86X87FloatMove:
+		loadShape := "memory,F0, Freg,F0, F0,memory, or F0,Freg"
+		storeShape := "F0 source and memory or x87-register destination"
+		if form.memoryBytes() == 10 {
+			loadShape, storeShape = "memory source and F0 destination", "F0 source and memory destination"
+			if decoderMemoryAlias {
+				loadShape, storeShape = "memory source", "memory destination"
+			}
+		}
 		if spec.pop != 0 {
 			if !isX87F0(first) || !(memory(last) || spec.width == 'D' && register(last)) {
-				return fail("expects F0 source and memory or x87-register destination")
+				return fail("expects " + storeShape)
 			}
 			return form, true, nil
 		}
@@ -256,7 +265,7 @@ func x86X87ValueProperties(ins Instr, arch string) (x86X87ValueForm, bool, error
 		if (spec.width == 'F' || spec.width == 'D') && isX87F0(first) && (memory(last) || spec.width == 'D' && register(last)) {
 			return form, true, nil
 		}
-		return fail("expects memory,F0, Freg,F0, F0,memory, or F0,Freg")
+		return fail("expects " + loadShape)
 	case x86X87Exchange:
 		if !register(first) || !register(last) || !isX87F0(first) && !isX87F0(last) {
 			return fail("expects x87 registers with one F0 operand")
