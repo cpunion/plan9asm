@@ -2,9 +2,133 @@ package goasmrules
 
 import (
 	"bytes"
+	"fmt"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
+
+func x86LegacyLiteralSIMDSource(entry X86LegacyOpcode) bool {
+	return entry.Ytab == "yxshuf" || entry.Ytab == "yaes"
+}
+
+// Independent source bytes follow Go's prefix switch plus PutOpBytesLit.
+// The matched row's stride is not the zero-terminated literal's length.
+func x86LegacyLiteralSIMDExpected(t *testing.T, entry X86LegacyOpcode) []X86PackedBinaryWitness {
+	t.Helper()
+	prefixes := map[string][]byte{"Pq": {0x66, 0x0f}, "Pf2": {0xf2, 0x0f}, "Pf3": {0xf3, 0x0f}, "Pm": {0x0f}, "Px": {}}
+	prefix, found := prefixes[entry.Prefix]
+	if !found {
+		t.Fatal("unmodeled independent source prefix", entry)
+	}
+	encoding := append([]byte(nil), prefix...)
+	for index, atom := range entry.OpBytes {
+		value, err := strconv.ParseUint(atom, 0, 8)
+		if err != nil || value == 0 && index != len(entry.OpBytes)-1 {
+			t.Fatal("independent source literal changed", entry, index, err)
+		}
+		if value != 0 {
+			encoding = append(encoding, byte(value))
+		}
+	}
+	var cases []X86PackedBinaryWitness
+	for _, source := range []string{"X0", "(AX)"} {
+		modrm := byte(0xc8)
+		if source == "(AX)" {
+			modrm = 0x08
+		}
+		instruction := entry.Opcode + " " + source + ",X1"
+		code := append(append([]byte(nil), encoding...), modrm)
+		if entry.Ytab == "yxshuf" {
+			instruction = entry.Opcode + " $7," + source + ",X1"
+			code = append(code, 7)
+		}
+		cases = append(cases, X86PackedBinaryWitness{Instruction: instruction, Destination: "X1", Encoding: code})
+	}
+	return cases
+}
+
+func TestX86LegacyLiteralSIMDCompleteOriginalInventory(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts, spans, ids := map[string]int{}, map[int]int{}, map[string]bool{}
+	escaped := 0
+	for _, entry := range catalog.Optab {
+		if !x86LegacyLiteralSIMDSource(entry) {
+			continue
+		}
+		if entry.Kind != "encoding" || len(entry.Rows) != 1 {
+			t.Fatal("complete original literal SIMD entry changed", entry)
+		}
+		row := entry.Rows[0]
+		classes, zcase := "Yxm,Yxr", "Zlitm_r"
+		if entry.Ytab == "yxshuf" {
+			classes, zcase = "Yu8,Yxm,Yxr", "Zibm_r"
+		}
+		if strings.Join(row.Classes, ",") != classes || len(row.Classes) != strings.Count(classes, ",")+1 ||
+			row.RowIndex != 0 || row.ZCase != zcase || row.ZOffset != 2 || row.UnmatchedOffset != 0 {
+			t.Fatal("original literal SIMD classes/stride/selection changed", entry)
+		}
+		id := fmt.Sprintf("optab/%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, row.RowIndex)
+		if ids[id] || len(entry.OpBytes) < 2 || len(entry.OpBytes) > 4 {
+			t.Fatal("original literal SIMD identity or span changed", id, entry)
+		}
+		ids[id] = true
+		counts[entry.Ytab]++
+		spans[len(entry.OpBytes)]++
+		zero, err := strconv.ParseUint(entry.OpBytes[len(entry.OpBytes)-1], 0, 8)
+		if err != nil || zero != 0 {
+			t.Fatal("original literal SIMD terminator changed", id, err)
+		}
+		if entry.EscapeAdjustment != 0 {
+			if entry.EscapeAdjustment != 1 || entry.Ytab != "yaes" || entry.Prefix != "Px" || entry.OpBytes[0] != "0x0f" {
+				t.Fatal("original literal SIMD escape traversal changed", id, entry)
+			}
+			escaped++
+		}
+	}
+	if len(ids) != 33 || counts["yxshuf"] != 23 || counts["yaes"] != 10 || spans[2] != 6 || spans[3] != 22 || spans[4] != 5 || escaped != 5 {
+		t.Fatal("complete original literal SIMD union changed", len(ids), counts, spans, escaped)
+	}
+}
+
+func TestX86LegacyLiteralSIMDExistingTransportCompleteBytes(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range catalog.Optab {
+		if !x86LegacyLiteralSIMDSource(entry) {
+			continue
+		}
+		row := entry.Rows[0]
+		id := fmt.Sprintf("optab/%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, row.RowIndex)
+		t.Run(id, func(t *testing.T) {
+			expected := map[string]X86PackedBinaryWitness{}
+			for _, witness := range x86LegacyLiteralSIMDExpected(t, entry) {
+				expected[id+"/"+witness.Instruction] = witness
+			}
+			witnesses, err := x86PackedLegacyRowWitnesses(entry, row)
+			if err != nil || len(witnesses) != 2 {
+				t.Fatal("LEGACY_LITERAL_SIMD_SOURCE_TRANSPORT_FEATURE_GAP", err)
+			}
+			for _, witness := range witnesses {
+				key := id + "/" + witness.Instruction
+				want, found := expected[key]
+				if !found || !bytes.Equal(want.Encoding, witness.Encoding) || want.Destination != witness.Destination {
+					t.Fatal("literal SIMD transport differs from actual-Go source fixture", key, witness, want)
+				}
+				delete(expected, key)
+			}
+			if len(expected) != 0 {
+				t.Fatal("literal SIMD transport omitted original source cases", id, expected)
+			}
+		})
+	}
+}
 
 func TestX86PackedNarrowRowsShareBinaryWitnesses(t *testing.T) {
 	x86CheckPackedRowInventory(t, X86PackedNarrowRows, `^V?PACK`, `DW$`, x86PackedRowCounts{

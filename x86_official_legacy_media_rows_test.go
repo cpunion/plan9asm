@@ -6,11 +6,139 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/xgo-dev/plan9asm/internal/goasmrules"
 )
+
+// These cases follow the original prefix switch and zero-terminated literal
+// span. They are independent of the production witness formatter.
+func x86LegacyLiteralSIMDSourceCases(t *testing.T, catalog goasmrules.X86LegacyCatalog, boundary bool) []x86OfficialPackedCase {
+	t.Helper()
+	var cases []x86OfficialPackedCase
+	seenPrefixes := map[string]bool{}
+	for _, entry := range catalog.Optab {
+		if entry.Ytab != "yxshuf" && entry.Ytab != "yaes" {
+			continue
+		}
+		if boundary && (entry.Ytab != "yxshuf" || seenPrefixes[entry.Prefix]) {
+			continue
+		}
+		seenPrefixes[entry.Prefix] = true
+		prefixes := map[string][]byte{"Pq": {0x66, 0x0f}, "Pf2": {0xf2, 0x0f}, "Pf3": {0xf3, 0x0f}, "Pm": {0x0f}, "Px": {}}
+		prefix, found := prefixes[entry.Prefix]
+		if !found {
+			t.Fatal("independent literal SIMD source prefix changed", entry)
+		}
+		payload := append([]byte(nil), prefix...)
+		for index, atom := range entry.OpBytes {
+			value, err := strconv.ParseUint(atom, 0, 8)
+			if err != nil || value == 0 && index != len(entry.OpBytes)-1 {
+				t.Fatal("independent literal SIMD source atom changed", entry, index, err)
+			}
+			if value != 0 {
+				payload = append(payload, byte(value))
+			}
+		}
+		immediates := []int{7}
+		if boundary {
+			immediates = []int{0, 127, 128, 255}
+		}
+		for _, immediate := range immediates {
+			for _, source := range []string{"X0", "(AX)"} {
+				modrm := byte(0xc8)
+				if source == "(AX)" {
+					modrm = 0x08
+				}
+				instruction := entry.Opcode + " " + source + ",X1"
+				code := append(append([]byte(nil), payload...), modrm)
+				if entry.Ytab == "yxshuf" {
+					instruction = fmt.Sprintf("%s $%d,%s,X1", entry.Opcode, immediate, source)
+					code = append(code, byte(immediate))
+				}
+				cases = append(cases, x86OfficialPackedCase{
+					row:     fmt.Sprintf("optab/%d/%s/%s/0", entry.TableIndex, entry.Opcode, entry.Ytab),
+					witness: goasmrules.X86PackedBinaryWitness{Instruction: instruction, Destination: "X1", Encoding: code},
+				})
+			}
+		}
+	}
+	want := 66
+	if boundary {
+		want = 32 // Four observed prefix classes times two carriers times four Yu8 boundaries.
+	}
+	if len(cases) != want {
+		t.Fatal("complete literal SIMD source/class-boundary inventory changed", len(cases), want)
+	}
+	return cases
+}
+
+func x86LegacyLiteralSIMDCheckGoBatches(t *testing.T, arch string, cases []x86OfficialPackedCase) {
+	t.Helper()
+	for start := 0; start < len(cases); start += 32 {
+		end := start + 32
+		if end > len(cases) {
+			end = len(cases)
+		}
+		t.Run(fmt.Sprintf("%s/batch%d", arch, start/32), func(t *testing.T) {
+			batch := cases[start:end]
+			var source strings.Builder
+			line := 1
+			for index := range batch {
+				fixture := &batch[index]
+				fixture.symbol = fmt.Sprintf("LiteralSIMD%d", start+index)
+				fixture.line = line + 1
+				body := fmt.Sprintf("TEXT ·%s(SB),4,$0-0\n%s\nRET\n", fixture.symbol, fixture.witness.Instruction)
+				source.WriteString(body)
+				line += strings.Count(body, "\n")
+			}
+			listing, err := x86ScalarLiteralGoListing(t, arch, source.String())
+			if err != nil {
+				t.Fatal("actual Go refused complete original literal SIMD source", err)
+			}
+			if err := x86OfficialPackedVerifyListing(listing, batch); err != nil {
+				t.Fatal("actual Go literal SIMD prefix/terminator/immediate bytes differ", err)
+			}
+		})
+	}
+}
+
+func TestX86OfficialLegacyLiteralSIMDOriginalGoBytes(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		x86LegacyLiteralSIMDCheckGoBatches(t, arch, x86LegacyLiteralSIMDSourceCases(t, catalog, false))
+	}
+}
+
+func TestX86OfficialLegacyLiteralSIMDGoImmediateAndModeBoundaries(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		t.Run("unsigned/"+arch, func(t *testing.T) {
+			x86LegacyLiteralSIMDCheckGoBatches(t, arch, x86LegacyLiteralSIMDSourceCases(t, catalog, true))
+		})
+		seen := map[string]bool{}
+		for _, entry := range catalog.Optab {
+			if entry.Ytab != "yxshuf" || seen[entry.Prefix] {
+				continue
+			}
+			seen[entry.Prefix] = true
+			for _, immediate := range []int{-129, -128, -1, 256} {
+				t.Run(fmt.Sprintf("%s/%s/imm%d", arch, entry.Prefix, immediate), func(t *testing.T) {
+					source := fmt.Sprintf("TEXT ·Bad(SB),4,$0-0\n%s $%d,X0,X1\nRET\n", entry.Opcode, immediate)
+					goAssemblerOracleOutput(t, arch, source, "", false)
+				})
+			}
+		}
+	}
+}
 
 func x86Legacy127Targets(arch string) []string {
 	if arch == "386" {
