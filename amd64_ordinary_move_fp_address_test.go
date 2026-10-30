@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -50,7 +51,7 @@ func TestX86OrdinaryMoveNamedFPAddressObjects(t *testing.T) {
 func TestX86OrdinaryMoveNamedFPAddressSourceBoundaries(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		for _, width := range []string{"W", "L", "Q"} {
-			for _, control := range []string{"numeric-FP", "outside-field", "changed-Raw", "changed-operand", "physical-origin"} {
+			for _, control := range []string{"numeric-FP", "outside-field", "changed-Raw", "changed-operand", "changed-name", "physical-origin", "address-as-number"} {
 				t.Run(arch+"/"+width+"/"+control, func(t *testing.T) {
 					address := "$input+0(FP)"
 					if control == "numeric-FP" {
@@ -59,6 +60,14 @@ func TestX86OrdinaryMoveNamedFPAddressSourceBoundaries(t *testing.T) {
 						address = "$input+32(FP)"
 					}
 					source, declaration := x86OrdinaryMoveFPAddressFixture(arch, width, address)
+					if control == "address-as-number" {
+						move, word := "MOVQ", goWordSize(arch)
+						if word == 4 {
+							move = "MOVL"
+						}
+						source = strings.Replace(source, "MOV"+width+" ", move+" $0,BX\nMOV"+width+" ", 1)
+						source = strings.Replace(source, "\n"+move+" $0,BX\n"+move+" AX,ret+", "\n"+move+" BX,ret+", 1)
+					}
 					accepted := control != "numeric-FP" && !(arch == "386" && width == "Q")
 					observed := source
 					if arch == "386" && width == "Q" {
@@ -76,14 +85,16 @@ func TestX86OrdinaryMoveNamedFPAddressSourceBoundaries(t *testing.T) {
 						ins.Raw = "MOV" + width + " $input+8(FP),BX"
 					case "changed-operand":
 						ins.Args[0].FPOffset = 8
+					case "changed-name":
+						ins.Args[0].FPName = "other"
 					case "physical-origin":
 						ins.x86Encoded = true
 					}
 					view, known, err := x86NamedFrameMoveAddressInstruction(ins, arch)
-					if control != "outside-field" && known && err == nil {
+					if control != "outside-field" && control != "address-as-number" && known && err == nil {
 						t.Error("invalid/changed FP spelling or physical role became a named address", view)
 					}
-					if control == "numeric-FP" || control == "outside-field" || arch == "386" && width == "Q" {
+					if control == "numeric-FP" || control == "outside-field" || control == "address-as-number" || arch == "386" && width == "Q" {
 						for _, api := range []string{"text", "module", "Go"} {
 							if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, x86AddressMemoryTargets(arch)[0], api); err == nil || ir != "" {
 								t.Error("invalid/unmapped/mode32-Q FP address produced public IR", api, len(ir), err)
@@ -96,5 +107,54 @@ func TestX86OrdinaryMoveNamedFPAddressSourceBoundaries(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestX86OrdinaryMoveFrameAddressUnicodeNames(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		for _, name := range []string{"参数", "δοκιμή", "pkg·值", "pkg.值"} {
+			t.Run(arch+"/FP/"+name, func(t *testing.T) {
+				source, declaration := x86OrdinaryMoveFPAddressFixture(arch, "W", "$"+name+"+0(FP)")
+				goAssemblerOracleOutput(t, arch, source, "", true)
+				ins := x86ScalarLaneInstruction(t, "MOVW $"+name+"+0(FP),BX")
+				original := fmt.Sprintf("%#v", ins)
+				view, known, err := x86NamedFrameMoveAddressInstruction(ins, arch)
+				if !known || err != nil || view.Args[0].FPName != name || original != fmt.Sprintf("%#v", ins) {
+					t.Error("legitimate Go FP symbol or original identity was lost", known, err, view)
+				}
+				triple := x86AddressMemoryTargets(arch)[0]
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, source, declaration, arch, triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("legitimate Unicode FP address rejected", api, err)
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, triple, ir, level)
+					}
+				}
+			})
+		}
+	}
+	for _, name := range []string{"槽-16", "δοκιμή"} {
+		t.Run("amd64/AUTO/"+name, func(t *testing.T) {
+			source := "TEXT ·UnicodeAuto(SB),4,$16-16\nMOVQ input+0(FP),AX\nMOVQ AX,0(SP)\n" +
+				"MOVW $" + name + "(SP),BX\nMOVQ $0,BX\nMOVQ 0(SP),AX\nMOVQ AX,ret+8(FP)\nRET\n"
+			declaration := "func UnicodeAuto(input uint64) uint64\n"
+			goAssemblerOracleOutput(t, "amd64", source, "", true)
+			triple := "x86_64-unknown-linux-gnu"
+			pkg, request, _, options := x86CMOVFixedLocalFixture(t, source, declaration, "linux/amd64", triple)
+			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
+				if err != nil || ir == "" {
+					t.Fatal("legitimate Unicode AUTO address rejected", err)
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, ir, level)
+				}
+			})
+		})
 	}
 }
