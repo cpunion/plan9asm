@@ -168,9 +168,11 @@ func x86AlignedRawTextGoObject(t *testing.T, source string) {
 	command := exec.CommandContext(ctx, "go", "tool", "asm", "-p", "example.com/forms", "-o", object, assembly)
 	command.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH=amd64")
 	output, err := runtimeOracleCombinedOutput(ctx, command)
-	var exit *exec.ExitError
+	// Joined pipe or cleanup failures are infrastructure errors, even when
+	// they contain the assembler's expected exit status and diagnostic.
+	exit, directExit := err.(*exec.ExitError)
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if !goToolchainAtLeast(runtime.Version(), 1, 22) && ctx.Err() == nil && errors.As(err, &exit) && exit.ExitCode() == 1 &&
+	if !goToolchainAtLeast(runtime.Version(), 1, 22) && ctx.Err() == nil && directExit && exit.ExitCode() == 1 &&
 		len(lines) == 2 && strings.HasPrefix(lines[0], "asm: asmins: missing op ") &&
 		strings.Contains(lines[0], "(<unknown line number>)\tPCALIGN\t$32") && lines[1] == "asm: assembly failed" {
 		t.Logf("GO_PCAlign_BACKEND_DEFECT_OBSERVED compiler=%s target=linux/amd64; no successful Go object claimed: %s", runtime.Version(), output)
