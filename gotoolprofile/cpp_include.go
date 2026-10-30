@@ -31,8 +31,7 @@ type CPPPackageSearchMiss struct {
 }
 
 func CPPLocalSource(file string) bool {
-	return file != "" && file != "." && !path.IsAbs(file) && path.Clean(file) == file &&
-		file != ".." && !strings.HasPrefix(file, "../") && !strings.ContainsAny(file, ":\\\x00\r\n")
+	return sourcepath.CPPLocalSource(file)
 }
 
 // CPPIncludeCandidates follows cmd/asm's fixed original package directory and
@@ -189,26 +188,7 @@ func SortCPPIncludeSearch(misses []CPPPackageSearchMiss) {
 // CPPRegularSource binds a canonical regular source within its actual origin.
 // In particular GOROOT-relative includes cannot redirect through symlinks.
 func CPPRegularSource(root, file string) (string, error) {
-	if !filepath.IsAbs(root) || !CPPLocalSource(file) {
-		return "", fmt.Errorf("unsafe exact CPP source identity")
-	}
-	resolvedRoot, err := sourcepath.Resolve(root)
-	if err != nil {
-		return "", err
-	}
-	name := filepath.Join(resolvedRoot, filepath.FromSlash(file))
-	resolved, err := sourcepath.Resolve(name)
-	if err != nil {
-		return "", fmt.Errorf("CPP source is missing: %s: %w", file, err)
-	}
-	if resolved != name {
-		return "", fmt.Errorf("CPP source is redirected: %s", file)
-	}
-	info, err := os.Lstat(name)
-	if err != nil || !info.Mode().IsRegular() || info.Size() > 64<<20 {
-		return "", fmt.Errorf("CPP source must be a bounded regular file: %s", file)
-	}
-	return name, nil
+	return sourcepath.CPPRegularSource(root, file)
 }
 
 func cppLiteralInclude(data []byte, wanted string) bool {

@@ -12,8 +12,8 @@ import (
 // inactive candidates and child-directory identities. Child contents belong
 // to separate packages/generators, not the selected compiler package. Any
 // selected dependency retains its independent complete original source/export
-// graph; active relative CPP includes remain unsupported. Root membership and
-// child identities are rechecked before/after commands. The ordinary owned
+// graph; selected relative CPP headers retain their own bounded input route.
+// Root membership and child identities are rechecked before/after commands. The ordinary owned
 // flat inventory keeps its 256-member bound. The SDK retains its 16 MiB byte
 // budget and uses the shared original-source membership bound.
 func (source *GoX86SDKASMDataSource) snapshotSDKPrimaryDirectory() error {
