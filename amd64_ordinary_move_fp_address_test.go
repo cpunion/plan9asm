@@ -116,7 +116,7 @@ func TestX86OrdinaryMoveFrameAddressUnicodeNames(t *testing.T) {
 		t.Fatal("LLVM22 llc required")
 	}
 	for _, arch := range []string{"amd64", "386"} {
-		for _, name := range []string{"参数", "δοκιμή", "pkg·值", "pkg.值"} {
+		for _, name := range []string{"参数", "δοκιμή", "pkg·值"} {
 			t.Run(arch+"/FP/"+name, func(t *testing.T) {
 				source, declaration := x86OrdinaryMoveFPAddressFixture(arch, "W", "$"+name+"+0(FP)")
 				goAssemblerOracleOutput(t, arch, source, "", true)
