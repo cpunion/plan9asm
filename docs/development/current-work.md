@@ -1,13 +1,13 @@
 # PR40 closeout
 
-Updated 2026-10-30. Finish amd64 correctness, shared typed families and
+Updated 2026-10-31. Finish amd64 correctness, shared typed families and
 translation efficiency while preserving all five architecture gates. Read
 [architecture](architecture.md), [family development](instructions.md),
 [x86 convergence](x86-convergence.md) and [validation](validation.md).
 
 ## Published CI and local revisions
 
-[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The preceding
+[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The
 `d6cb9245cd` [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41055685183)
 first ended with 315 successful and ten failed jobs. Seven Go 1.21 source jobs
 lost their runners; one CLI collector lost an artifact download, producing two
@@ -19,14 +19,14 @@ The initial failures remain part of the evidence.
 
 Historical `70ced1b565` completed its own
 [round](https://github.com/xgo-dev/plan9asm/actions/runs/41032133785) with 325/325
-successful jobs. Independent acceptance joins 286 source artifacts, 240
-partitions, Windows/race package logs and 22 coverage profiles: 88.1% total and
-92.52% patch coverage. These results do not certify another head. Both review
-threads are resolved; no formal approval has been recorded.
+successful jobs, 88.1% total and 92.52% patch coverage. At D6, both review
+threads were resolved and no formal approval was recorded. Historical results
+do not certify another head.
 
-The follow-up's functional code at `aff58904d` adds x87 MOVE, literal SIMD and
-scalar source joins. Its publication requires its own cloud CI, coverage and
-review. The preceding head's accepted recovery does not certify that publication.
+Functional `aff58904d` adds x87 MOVE, literal SIMD and scalar source joins,
+published at `d905e3682` with its own
+[round](https://github.com/xgo-dev/plan9asm/actions/runs/41082550177).
+Each later publication requires its own cloud CI, coverage and review.
 
 ## Qualified local batches
 
@@ -50,7 +50,7 @@ No case median regresses by five percent; one minimum-Go block ratio
 exceeds that threshold. This measures register-only Translate, excluding Parse
 and live SDK capture, not whole-SDK throughput or generated-code acceleration.
 
-The unpublished x87 MOVE join at `d20cfaab5` retains all 45 original rows across
+The x87 MOVE join at `d20cfaab5` retains all 45 original rows across
 five tables, of which 27 overlap the existing x87 view. Its 18 new rows share
 the existing memory/register transport. Both SDKs pass 210 family nodes and
 3,159 prior controls. A reproduced malformed-class-arity panic is rejected
@@ -74,18 +74,37 @@ snapshot files (18 per SDK) remain byte-exact. TDD reproduces 33 malformed-escap
 panics and 18 invalid byte-width acceptances before early bounds checks close
 them. These are source-formatter fixes, with no new numerical permissions.
 
-After integration at `189be9c80`, the complete rule package passes 15,104 nodes
-across 147 roots on each endpoint SDK, without failures/skips. Node policy passes 573
-tests and Go policy 327 nodes. All ten five-architecture reports remain
+The implicit integer MUL/IMUL/DIV/IDIV join at `5335247d3` retains 16 original
+rows, including three existing IMUL rows and 13 new identities. Both SDKs pass
+623 family nodes, 30 initialized three-API/five-target O0/O2 object calls and
+4,213 prior typed/trap-IR/identity nodes. All 38 previous snapshots are byte-exact.
+One shared validator now checks every scalar schema's original and selected
+roles before offset arithmetic, closing 24 reproduced invalid acceptances and
+two panics. Twelve shared-table state/NOP rows remain separate inventory gaps;
+no numerical or native permission follows from their table membership.
+
+At `5335247d3`, the complete rule package passes 15,550 nodes across 151 roots
+per SDK, without failures/skips. At `af5b97326`, Node policy passes 573 tests
+and Go policy 327 nodes. All ten five-architecture reports remain
 byte-exact against `d6cb9245cd`. The minimum-Go report retains its original
 unmasked `VADDPD.Z X30,X1,X0` refusal; it is not zero unsupported on every SDK.
 
+The `af5b97326` FP dispatch cleanup deletes 24 repeated projection lines while
+retaining all five map checks, their order and original instruction inputs.
+Before and after, current/minimum SDKs pass exactly 168/167 roots plus 5,173
+children, without failures/skips. Controlled 29-case, two-SDK, three-block ABBA
+retains all 696 measurements: across-case median ratios 1.00428/1.00011,
+with no case median reaching 1.05. Minimum Go retains seven individual block
+ratios above 1.05, including 1.49643. Allocations are approximately unchanged;
+no acceleration is established. The earlier pilot overlapped local artifact
+work and remains separate from the controlled trial.
+
 ## Inventory and semantic boundaries
 
-The independently joined source inventory now contains 54 overlapping family
-views and 4,448 records: 3,568 AVX plus 880 legacy records, comprising 862 optab
+At `5335247d3`, the independently joined source inventory has 55 overlapping
+family views and 4,461 records: 3,568 AVX plus 893 legacy, comprising 875 optab
 and 18 ymovtab rows. The legacy denominator remains 1,418 current-SDK /
-1,417 minimum-SDK rows. The 538 / 537 unjoined rows are inventory gaps, not
+1,417 minimum-SDK rows. The 525 / 524 unjoined rows are inventory gaps, not
 unsupported-instruction totals or native execution counts.
 
 Typed forms keep operation, encoding, register carrier, memory tuple, input
@@ -108,9 +127,8 @@ failures. Track individual ordinary-source and special runtime contracts in
 
 ## Remaining work
 
-1. Require the publication's own complete CI, raw/artifact joins, coverage and
-   fresh review. The preceding head's
-   accepted results do not certify this follow-up.
+1. Require each publication's complete CI, raw/artifact joins, coverage and
+   fresh review. Earlier accepted results do not certify a later head.
 2. Continue complete legacy transport groups with original source order and
    modes. Reuse typed effects and bounded object batches; do not enumerate
    individual mnemonics or count encoding-only witnesses as execution.
