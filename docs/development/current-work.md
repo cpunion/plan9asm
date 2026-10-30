@@ -24,7 +24,8 @@ partitions, Windows/race package logs and 22 coverage profiles: 88.1% total and
 92.52% patch coverage. These results do not certify another head. Both review
 threads are resolved; no formal approval has been recorded.
 
-The local follow-up at `df01da10e` adds x87 MOVE and literal SIMD source joins.
+The local follow-up at `aff58904d` adds x87 MOVE, literal SIMD and scalar
+source joins.
 It requires its own publication, cloud CI, coverage and review. The preceding
 head's recovery is accepted; publish only through the allowed fork.
 
@@ -65,18 +66,27 @@ remain byte-exact.
 The original failing object-adapter run and malformed-source RED runs remain
 failed evidence. The accepted adapter invokes the actual typed emitters.
 
-After integration, the complete rule package passes 14,229 nodes across 142
-roots on each endpoint SDK, without failures/skips. Node policy passes 573
+The scalar join at `aff58904d` adds all 24 multiply, immediate-multiply and
+MOVBE source rows through the existing scalar transport. Signed immediate
+selection, W16/LQ32 literals and mode restrictions retain actual-Go observations.
+Both SDKs pass 1,006 family nodes, 48 initialized three-API/five-target O0/O2
+object calls and 2,995 prior typed/effect/identity nodes. All 36 previous JSON
+snapshot files (18 per SDK) remain byte-exact. TDD reproduces 33 malformed-escape
+panics and 18 invalid byte-width acceptances before early bounds checks close
+them. These are source-formatter fixes, with no new numerical permissions.
+
+After integration at `189be9c80`, the complete rule package passes 15,104 nodes
+across 147 roots on each endpoint SDK, without failures/skips. Node policy passes 573
 tests and Go policy 327 nodes. All ten five-architecture reports remain
 byte-exact against `d6cb9245cd`. The minimum-Go report retains its original
 unmasked `VADDPD.Z X30,X1,X0` refusal; it is not zero unsupported on every SDK.
 
 ## Inventory and semantic boundaries
 
-The independently joined source inventory now contains 53 overlapping family
-views and 4,424 records: 3,568 AVX plus 856 legacy records, comprising 838 optab
+The independently joined source inventory now contains 54 overlapping family
+views and 4,448 records: 3,568 AVX plus 880 legacy records, comprising 862 optab
 and 18 ymovtab rows. The legacy denominator remains 1,418 current-SDK /
-1,417 minimum-SDK rows. The 562 / 561 unjoined rows are inventory gaps, not
+1,417 minimum-SDK rows. The 538 / 537 unjoined rows are inventory gaps, not
 unsupported-instruction totals or native execution counts.
 
 Typed forms keep operation, encoding, register carrier, memory tuple, input
@@ -99,9 +109,9 @@ failures. Track individual ordinary-source and special runtime contracts in
 
 ## Remaining work
 
-1. Accept the exact published head's recovery only after all jobs, source
-   artifacts, partitions, raw package outcomes and coverage agree. Publish the
-   qualified follow-up as one batch, then require its own CI and fresh review.
+1. Publish the qualified follow-up as one batch, then require its own complete
+   CI, raw/artifact joins, coverage and fresh review. The preceding head's
+   accepted results do not certify this follow-up.
 2. Continue complete legacy transport groups with original source order and
    modes. Reuse typed effects and bounded object batches; do not enumerate
    individual mnemonics or count encoding-only witnesses as execution.
