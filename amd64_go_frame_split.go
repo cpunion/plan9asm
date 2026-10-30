@@ -17,7 +17,7 @@ func goAMD64FrameSplitListing(listing []byte) bool {
 		if len(line) == 0 || line[0] == '\t' || line[0] == ' ' {
 			continue
 		}
-		if header := goAMD64FrameHeader.FindSubmatch(line); header != nil && len(header[4]) == 0 {
+		if header, valid := parseGoAMD64NativeHeader(string(line)); valid && !header.NoSplit {
 			return true
 		}
 	}

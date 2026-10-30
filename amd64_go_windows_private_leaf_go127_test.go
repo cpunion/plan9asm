@@ -73,6 +73,42 @@ func TestGoAMD64WindowsPrivateLeafSourceRoleBoundaries(t *testing.T) {
 			if _, err := source.observeWindowsUnwind(object); !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("default metadata observation inferred a private source role", err)
 			}
+			for _, change := range nativeHeaderRoleChanges() {
+				t.Run("header-"+change.name, func(t *testing.T) {
+					rows := strings.Split(string(listing), "\n")
+					changed := false
+					for index, row := range rows {
+						if strings.HasPrefix(row, leaves[0].Name+" STEXT ") && strings.Contains(row, change.before) {
+							rows[index] = nativeHeaderChangedRole(row, change.before, change.after)
+							changed = true
+						}
+					}
+					if !changed {
+						t.Fatal("actual private header precondition changed")
+					}
+					mutated := []byte(strings.Join(rows, "\n"))
+					copyData := *data
+					copyData.Member.Texts = append([]gostaticstorage.TextRecord(nil), data.Member.Texts...)
+					for index := range copyData.Member.Texts {
+						text := &copyData.Member.Texts[index]
+						if text.Index == leaves[0].Index {
+							if change.name == "dupok" {
+								text.Flags |= 0x01
+							} else if change.name == "leaf" {
+								text.Flags |= 0x08
+							}
+						}
+					}
+					// These edited observations are mutation controls, not new
+					// Go objects. Matching metadata still grants no private role.
+					if _, err := sdkAMD64FrameNativeRecordsForSource(mutated, copyData.Member.Texts, copyData.TextOrder); err != nil {
+						t.Fatal("role control did not reach the private entry boundary", err)
+					}
+					if _, err := goAMD64WindowsPrivateLeafTexts(file, pkg, mutated, &copyData); !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("special or unknown metadata acquired a Windows private leaf role", err)
+					}
+				})
+			}
 			var root gostaticstorage.TextRecord
 			for _, text := range observed.Texts {
 				if text.Index != leaves[0].Index {

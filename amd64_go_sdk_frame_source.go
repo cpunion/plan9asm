@@ -132,6 +132,9 @@ func (source *GoAMD64FrameSource) sdkFrameRecords() (map[string]goAMD64FrameFunc
 				return nil, nil, goAMD64FrameContext("SDK-primary complete source/TEXT association differs")
 			}
 			record, text := native.Records[index], texts[object.TextOrder[index].ObjectOrdinal]
+			if !record.ordinaryFrameRole() {
+				return nil, nil, goAMD64FrameContext("SDK-primary native header has no ordinary/private frame entry role: %s", fn.Sym)
+			}
 			if leaves[fn.Sym] {
 				if declared || record.Symbol != text.Name || record.Locals != uint64(goAMD64FrameNativeLocals(fn.FrameSize)) || !record.NoSplit ||
 					record.ArgsKnown && record.Args != 0 || record.Static != strings.HasSuffix(fn.Sym, "<>") {

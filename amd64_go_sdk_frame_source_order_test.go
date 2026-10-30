@@ -11,9 +11,9 @@ import (
 
 func TestSDKAMD64NativeFrameMixedNamespaceSourceOrder(t *testing.T) {
 	member := gostaticstorage.ASMDataMember{Flags: 4, Texts: []gostaticstorage.TextRecord{
-		{Name: "private", ABI: 65535, Namespace: gostaticstorage.TextSymbolSelf, Kind: 1, Size: 1, Code: []byte{0xc3}},
-		{Name: "foreign.Entry", ABI: 1, Namespace: gostaticstorage.TextSymbolNonpkgDefinition, Index: 10, Kind: 1, Size: 1, Code: []byte{0xc3}},
-		{Name: "fixture.Own", Namespace: gostaticstorage.TextSymbolNonpkgDefinition, Index: 11, Relative: 1, Kind: 1, Size: 1, Code: []byte{0xc3}},
+		{Name: "private", ABI: 65535, Namespace: gostaticstorage.TextSymbolSelf, Kind: 1, Flags: 0x10, Size: 1, Code: []byte{0xc3}},
+		{Name: "foreign.Entry", ABI: 1, Namespace: gostaticstorage.TextSymbolNonpkgDefinition, Index: 10, Kind: 1, Flags: 0x10, Size: 1, Code: []byte{0xc3}},
+		{Name: "fixture.Own", Namespace: gostaticstorage.TextSymbolNonpkgDefinition, Index: 11, Relative: 1, Kind: 1, Flags: 0x10, Size: 1, Code: []byte{0xc3}},
 	}}
 	source := []byte("TEXT foreign·Entry<ABIInternal>(SB),4,$0-0\nRET\nTEXT private<>(SB),4,$0-0\nRET\nTEXT ·Own(SB),4,$0-0\nRET\n")
 	order, err := gostaticstorage.ASMSourceTextOrder(source, "fixture", member)

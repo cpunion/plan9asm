@@ -1418,7 +1418,6 @@ func (source *GoAMD64FrameSource) preprocess(name string, original []byte) (stri
 	return expand(name, original)
 }
 
-var goAMD64FrameHeader = sdkAMD64FrameNativeHeader
 var goAMD64FrameRow = regexp.MustCompile(`^\s*0x([0-9a-f]+) [0-9]+ \((.+)\)\s+(.+)$`)
 
 // Zero-frame ordinary entries have no automatic saved-BP slot. They remain
@@ -1514,8 +1513,11 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 	}
 	for scanner.Scan() {
 		line := scanner.Text()
-		if header := goAMD64FrameHeader.FindStringSubmatch(line); header != nil {
-			if header[4] == "" && (splitTarget == "" || texts == nil) {
+		if header, valid := parseGoAMD64NativeHeader(line); valid {
+			if !header.ordinaryFrameRole() {
+				return nil, goAMD64FrameContext("native header has no ordinary/private frame entry role")
+			}
+			if !header.NoSplit && (splitTarget == "" || texts == nil) {
 				return nil, goAMD64FrameContext("automatic split layout requires its complete original object")
 			}
 			if metadataName != "" {
@@ -1527,48 +1529,33 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 			if texts != nil {
 				textIndex++
 				relocationIndex = 0
-				if textIndex >= len(texts) || texts[textIndex].Name != header[1] {
+				if textIndex >= len(texts) || texts[textIndex].Name != header.Symbol {
 					return nil, goAMD64FrameContext("reordered or foreign complete object/listing TEXT")
 				}
-				kind := uint8(1)
-				if header[2] == "STEXTFIPS" {
-					kind = 2
-				}
 				abi := uint16(0)
-				if header[3] != "" {
+				if header.Static {
 					abi = 65535
 				}
-				if texts[textIndex].Kind != kind || texts[textIndex].ABI != abi {
+				if texts[textIndex].Kind != header.Kind || texts[textIndex].ABI != abi ||
+					header.objectFlags() != texts[textIndex].Flags&0x19 {
 					return nil, goAMD64FrameContext("complete object/listing TEXT kind or ABI differs")
 				}
-				flags := uint8(0)
-				if header[4] != "" {
-					flags = 16
-				}
-				if splitTarget != "" && texts[textIndex].Flags != flags {
+				if splitTarget != "" && texts[textIndex].Flags != header.objectFlags() {
 					return nil, goAMD64FrameContext("complete object/listing TEXT NOSPLIT flags differ")
 				}
-				objects[header[1]] = texts[textIndex]
-			} else if header[2] != "STEXT" {
+				objects[header.Symbol] = texts[textIndex]
+			} else if header.Kind != 1 {
 				return nil, goAMD64FrameContext("FIPS TEXT needs its complete original object kind")
 			}
 			if name != "" && int64(len(functions[name].code)) != expected {
 				return nil, goAMD64FrameContext("partial native symbol bytes")
 			}
-			name = header[1]
+			name = header.Symbol
 			if _, duplicate := functions[name]; duplicate {
 				return nil, goAMD64FrameContext("duplicate native TEXT")
 			}
-			expected, _ = strconv.ParseInt(header[6], 10, 64)
-			args, argsErr := strconv.ParseUint(header[7], 16, 64)
-			locals, localsErr := goAMD64FrameSignedLocals(header[8])
-			if argsErr != nil || int64(args) < 0 && int64(args) != -0x80000000 {
-				return nil, goAMD64FrameContext("invalid original native argument-size observation")
-			}
-			if localsErr != nil {
-				return nil, goAMD64FrameContext("invalid original native local-size observation: %v", localsErr)
-			}
-			functions[name] = goAMD64FrameFunction{locals: locals, args: int64(args), split: header[4] == "", positions: make(map[int]string), sourcePositions: make(map[int][]goAMD64FrameSourcePosition)}
+			expected = int64(header.Size)
+			functions[name] = goAMD64FrameFunction{locals: int64(header.Locals), args: header.Args, split: !header.NoSplit, positions: make(map[int]string), sourcePositions: make(map[int][]goAMD64FrameSourcePosition)}
 			continue
 		}
 		if header, exists := metadataHeaders[line]; exists {

@@ -59,7 +59,7 @@ func goAMD64WindowsPrivateLeafTexts(file *File, pkg GoPackage, listing []byte,
 			abi, namespace = 65535, gostaticstorage.TextSymbolSelf
 		}
 		if text.Name != strings.TrimSuffix(fn.Sym, "<>") || text.ABI != abi || text.Namespace != namespace ||
-			records[index].Locals != uint64(goAMD64FrameNativeLocals(fn.FrameSize)) {
+			!records[index].ordinaryFrameRole() || records[index].Locals != uint64(goAMD64FrameNativeLocals(fn.FrameSize)) {
 			return nil, goAMD64FrameContext("Windows private leaf changed its exact source symbol/ABI/namespace")
 		}
 		result = append(result, text)

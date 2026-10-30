@@ -55,6 +55,8 @@ func TestSDKAMD64NativeHeaderCompleteWriterForms(t *testing.T) {
 		{"leaf", "nosplit asm", "size=1 align=0x0 args=0x0 locals=0x0 funcid=0x0 leaf", 1, 0x18, 0},
 		{"all-current", "static dupok cfunc nosplit topframe asm", "size=1 align=0x0 args=0xffffffff80000000 locals=0xfffffffffffffff8 funcid=0xff leaf", 2, 0x19, 65535},
 		{"all-legacy-format", "static dupok cfunc nosplit topframe asm", "size=1 args=0xffffffff80000000 locals=0xfffffffffffffff8 funcid=0xff align=0x0 leaf", 2, 0x19, 65535},
+		{"current-width-boundaries", "nosplit asm", "size=1 align=0x7fff args=0x7fffffff locals=0x7fffffff funcid=0xff", 1, 0x10, 0},
+		{"legacy-width-boundaries", "nosplit asm", "size=1 args=0x7fffffff locals=0x7fffffff funcid=0xff align=0x7fffffff", 1, 0x10, 0},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			kind := "STEXT"
@@ -70,6 +72,16 @@ func TestSDKAMD64NativeHeaderCompleteWriterForms(t *testing.T) {
 			if strings.Contains(row.tail, "locals=0xfffffffffffffff8") &&
 				(record.Locals != ^uint64(7) || record.ArgsKnown || record.Args != -0x80000000) {
 				t.Fatal("writer attributes changed signed locals or the independent argument sentinel", record)
+			}
+			if strings.Contains(row.tail, "args=0x7fffffff") {
+				align := uint64(0x7fff)
+				if row.name == "legacy-width-boundaries" {
+					align = 0x7fffffff
+				}
+				if !record.ArgsKnown || record.Args != 0x7fffffff || record.Locals != 0x7fffffff ||
+					!record.HasFuncID || record.FuncID != 0xff || !record.HasAlign || record.Align != align {
+					t.Fatal("official writer numeric boundary metadata changed", record)
+				}
 			}
 		})
 	}
@@ -90,6 +102,7 @@ func TestSDKAMD64NativeHeaderRetainsObservedMetadata(t *testing.T) {
 		{"alignment", strings.Replace(nativeHeaderCurrent, "align=0x0", "align=0x4", 1), 1, 0x10},
 		{"absent-funcid", strings.Replace(nativeHeaderCurrent, " funcid=0x0", "", 1), 1, 0x10},
 		{"absent-alignment", strings.Replace(nativeHeaderCurrent, " align=0x0", "", 1), 1, 0x10},
+		{"legacy-alignment-position", "fixture.Entry STEXT nosplit asm size=1 args=0x0 locals=0x0 funcid=0x0 align=0x0", 1, 0x10},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			changed := nativeHeaderRecord(t, row.header, row.kind, row.flags, 0)
