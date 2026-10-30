@@ -137,6 +137,16 @@ func TestX86OfficialOrdinaryMoveCompleteOriginalGo(t *testing.T) {
 }
 
 func TestX86OfficialOrdinaryMoveImmediateFirstMatch(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	historicalSignedRow := false
+	for _, entry := range catalog.Optab {
+		if entry.Opcode == "MOVQ" {
+			historicalSignedRow = len(entry.Rows) == 15
+		}
+	}
 	for _, arch := range []string{"amd64", "386"} {
 		var cases []x86OrdinaryMoveOriginalCase
 		for _, row := range []struct{ instruction, code string }{
@@ -146,11 +156,22 @@ func TestX86OfficialOrdinaryMoveImmediateFirstMatch(t *testing.T) {
 			cases = append(cases, x86OrdinaryMoveOriginalCase{x86OfficialPackedCase: x86OfficialPackedCase{row: "independent immediate selector", witness: goasmrules.X86PackedBinaryWitness{Instruction: row.instruction, Encoding: code}}, original: row.instruction})
 		}
 		if arch == "amd64" {
-			for _, row := range []struct{ instruction, code string }{
-				{"MOVQ $0,BX", "bb00000000"}, {"MOVQ $2147483648,BX", "bb00000080"}, {"MOVQ $4294967295,BX", "bbffffffff"},
-				{"MOVQ $-1,BX", "48c7c3ffffffff"}, {"MOVQ $4294967296,BX", "48bb0000000001000000"},
+			for _, row := range []struct{ instruction, current, historical string }{
+				{"MOVQ $0,BX", "bb00000000", "48c7c300000000"},
+				{"MOVQ $1,BX", "bb01000000", "48c7c301000000"},
+				{"MOVQ $2147483647,BX", "bbffffff7f", "48c7c3ffffff7f"},
+				{"MOVQ $2147483648,BX", "bb00000080", "bb00000080"},
+				{"MOVQ $4294967295,BX", "bbffffffff", "bbffffffff"},
+				{"MOVQ $4294967296,BX", "48bb0000000001000000", "48bb0000000001000000"},
+				{"MOVQ $-1,BX", "48c7c3ffffffff", "48c7c3ffffffff"},
+				{"MOVQ $-2147483648,BX", "48c7c300000080", "48c7c300000080"},
+				{"MOVQ $-2147483649,BX", "48bbffffff7fffffffff", "48bbffffff7fffffffff"},
 			} {
-				code, _ := hex.DecodeString(row.code)
+				encoding := row.current
+				if historicalSignedRow {
+					encoding = row.historical
+				}
+				code, _ := hex.DecodeString(encoding)
 				cases = append(cases, x86OrdinaryMoveOriginalCase{x86OfficialPackedCase: x86OfficialPackedCase{row: "independent MOVQ shortening", witness: goasmrules.X86PackedBinaryWitness{Instruction: row.instruction, Encoding: code}}, original: row.instruction})
 			}
 		}
