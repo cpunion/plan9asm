@@ -72,38 +72,14 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		if _, recognized := amd64HorizontalFloatingSpecs[Op(base)]; recognized {
 			return c.lowerHorizontalFloating(op, ins)
 		}
-	}
-	if raw := strings.ToUpper(string(op)); raw != "" {
-		base := raw
-		if dot := strings.IndexByte(raw, '.'); dot >= 0 {
-			base = raw[:dot]
-		}
 		if _, recognized := amd64BinaryFloatingSpecs[Op(base)]; recognized {
 			return c.lowerBinaryFloating(op, ins)
-		}
-	}
-	if raw := strings.ToUpper(string(op)); raw != "" {
-		base := raw
-		if dot := strings.IndexByte(raw, '.'); dot >= 0 {
-			base = raw[:dot]
 		}
 		if _, recognized := amd64FMA3Specs[Op(base)]; recognized {
 			return c.lowerFMA3(op, ins)
 		}
-	}
-	if raw := strings.ToUpper(string(op)); raw != "" {
-		base := raw
-		if dot := strings.IndexByte(raw, '.'); dot >= 0 {
-			base = raw[:dot]
-		}
 		if _, recognized := x86PackedLogicalSpecs[Op(base)]; recognized {
 			return c.lowerPackedFloatingLogical(op, ins)
-		}
-	}
-	if raw := strings.ToUpper(string(op)); raw != "" {
-		base := raw
-		if dot := strings.IndexByte(raw, '.'); dot >= 0 {
-			base = raw[:dot]
 		}
 		if _, known := x86ScalarPrecisionSpecs[Op(base)]; known {
 			return c.lowerScalarPrecisionConvert(op, ins)
