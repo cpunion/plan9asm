@@ -58,14 +58,42 @@ func TestCrossLinuxRuntimeMatrixX86ScalarMoveNativeResultsAndFaults(t *testing.T
 	if count != 14 {
 		t.Fatal("incomplete scalar native read family", count)
 	}
-	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
+	// Keep every original live/dead kernel. The additional ordinary register
+	// entry has no result at all; its C adapter supplies the comparison value,
+	// so both value and protected-page checks still require the native load.
+	// This compares instruction effects, not a C-to-Go ABIInternal call bridge.
+	source.WriteString("TEXT ·VoidLoad<ABIInternal>(SB),4,$0-8\nMOVQ (AX),BX\nRET\n")
+	declarations.WriteString("func VoidLoad(p *uint64)\n")
+	prototypes.WriteString(`extern void VoidLoad(const uint8_t*);
+static uint64_t VoidAdapter(const uint8_t *p) {
+    VoidLoad(p);
+    return UINT64_C(0x87654321fedcba98);
+}
+`)
+	voidCode := x86OrderingHintGoBytes(t, "amd64", "TEXT native(SB),4,$0-0\nMOVQ (DI),AX\nMOVQ $0x87654321fedcba98,AX\nRET\n")
+	var voidBytes []string
+	for _, value := range voidCode {
+		voidBytes = append(voidBytes, fmt.Sprintf("0x%02x", value))
+	}
+	voidSymbol := "OriginalVoid"
+	if strings.Contains(execution.triple, "apple") {
+		voidSymbol = "_" + voidSymbol
+	}
+	fmt.Fprintf(&originals, "__asm__(%q);\n", ".text\n.globl "+voidSymbol+"\n"+voidSymbol+":\n.byte "+strings.Join(voidBytes, ",")+"\n")
+	prototypes.WriteString("extern uint64_t OriginalVoid(const uint8_t*);\n")
+	rows.WriteString("{VoidAdapter,OriginalVoid,8,8,0,1},\n")
+	count++
+	if count != 15 {
+		t.Fatal("Void removed a previous native scalar kernel", count)
+	}
+	requireAMD64RegisterResultGoObject(t, source.String())
 	// Reuse the independent fork/guard-page harness, not the implementation's
 	// operand/effect descriptors. Add byte preservation and room for an
 	// unaligned full-qword input to its scalar value reference.
 	driverTemplate := strings.NewReplacer(
 		"if(k.destination==2)", "if(k.destination==1) return (seed&~UINT64_C(0xff))|(value&0xff);\n    if(k.destination==2)",
 		"uint8_t bytes[8];", "uint8_t bytes[16];",
-		"28 extension kernels", "14 scalar move kernels",
+		"28 extension kernels", "15 scalar move kernels",
 	).Replace(x86ExtensionNativeRuntimeC)
 	driver := fmt.Sprintf(driverTemplate, prototypes.String(), originals.String(), rows.String())
 	for _, api := range []string{"text", "module", "Go"} {
@@ -81,7 +109,7 @@ func TestCrossLinuxRuntimeMatrixX86ScalarMoveNativeResultsAndFaults(t *testing.T
 						text, level = x86MulDivRoundOptimize(t, ir), "-O2"
 					}
 					output := execution.compileAndRunLLVM(t, "scalar-move-native", text, driver, level)
-					if string(output) != "14 scalar move kernels: numerical 1792, fault 168, tripwires 2; failures 0\n" {
+					if string(output) != "15 scalar move kernels: numerical 1920, fault 180, tripwires 2; failures 0\n" {
 						t.Fatal("original Go/LLVM native reads differ", string(output))
 					}
 					t.Log(strings.TrimSpace(string(output)))
