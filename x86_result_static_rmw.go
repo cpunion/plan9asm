@@ -1,5 +1,49 @@
 package plan9asm
 
+import "strings"
+
+// Only this module's actual writable numeric bytes supply the memory input
+// to the paired XADD/XCHG emitter. Symbol syntax, opaque pointer data and a
+// declaration alone cannot supply storage or numerical register outputs.
+func (c *amd64Ctx) scalarStaticExchangeTransfer(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	name := Op(strings.ToUpper(string(ins.Op)))
+	spec, known := amd64ExchangeSpecs[name]
+	if !known {
+		return false, false
+	}
+	symbolic := false
+	for _, operand := range ins.Args {
+		if operand.Kind == OpSym || operand.Kind == OpMem && operand.Mem.Sym != "" {
+			symbolic = true
+			break
+		}
+	}
+	if !symbolic {
+		return false, false // Cost query only; ordinary native/register forms keep their existing parser.
+	}
+	form, err := parseAMD64ExchangeForm(arch, name, spec, ins)
+	if err != nil {
+		return false, true
+	}
+	address, static := x86StaticSBReadAddress(form.other, arch)
+	if !static {
+		return false, false // The native pointer, register and physical frame routes keep their own inputs.
+	}
+	values := c.fpStaticAddressValues
+	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil ||
+		values == nil || state == nil || c.resolve == nil {
+		return false, true
+	}
+	width := int64(spec.bits / 8)
+	symbol := resolveAssemblyDataSymbol(address.symbol, c.resolve)
+	index, _, valid := x86ResultGP(form.register.Reg, width, arch)
+	if !values.objects[symbol] || !values.writable[symbol] || c.fpScalarData[address] < width ||
+		!valid || state.pointerGP[index] || !x86ResultRead(form.register, width, state, owned, arch) {
+		return false, true
+	}
+	return x86ResultExchangeWriteback(spec, []Operand{form.register}, state, owned, arch), true
+}
+
 // Consume only the actual emitted module's numeric storage and address values.
 // The complete shared scalar grammar owns widths, byte views and FLAGS effects;
 // the unchanged emitter owns paired volatile accesses. No external symbol or

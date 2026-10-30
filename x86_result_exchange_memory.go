@@ -42,20 +42,32 @@ func x86LoweredExchangeResultStepWithAddressBits(ins Instr, state *x86ResultStat
 	} else if !x86ResultNativeRMWAddress(ins, form.other, state, owned, arch) {
 		return false, true // No FP/AUTO, SB or numerical base witness.
 	}
-	for _, operand := range outputs {
-		if _, _, valid := x86ResultGP(operand.Reg, width, arch); !valid {
-			return false, true
-		}
+	if !x86ResultExchangeWriteback(spec, outputs, state, owned, arch) {
+		return false, true
 	}
-	// Snapshot every dependency before any partial or aliased writeback.
-	for _, operand := range outputs {
-		index, mask, _ := x86ResultGP(operand.Reg, width, arch)
-		x86ResultStore(operand, width, state, owned, 0, arch)
-		if !numeric {
+	if !numeric {
+		for _, operand := range outputs {
+			index, mask, _ := x86ResultGP(operand.Reg, width, arch)
 			// The complete caller word may be copied as opaque data. Its
 			// unknown native replacement supplies neither NUM nor a pointer.
 			state.gp[index] &^= mask
 		}
+	}
+	return true, true // XCHG preserves arithmetic FLAGS; both preserve DF.
+}
+
+// Each paired consumer checks its actual inputs/storage before this shared
+// numerical output step. Validate every destination before any aliased write.
+func x86ResultExchangeWriteback(spec amd64ExchangeSpec, outputs []Operand, state *x86ResultState, owned []bool, arch string) bool {
+	width := int64(spec.bits / 8)
+	for _, operand := range outputs {
+		if _, _, valid := x86ResultGP(operand.Reg, width, arch); operand.Kind != OpReg || !valid {
+			return false
+		}
+	}
+	for _, operand := range outputs {
+		index, mask, _ := x86ResultGP(operand.Reg, width, arch)
+		x86ResultStore(operand, width, state, owned, 0, arch)
 		state.canonicalGP[index] &^= mask
 		state.callerAddressGP[index] = false
 		state.callerAddressOrigin[index] = 0
@@ -67,5 +79,5 @@ func x86LoweredExchangeResultStepWithAddressBits(ins Instr, state *x86ResultStat
 	if spec.kind == amd64ExchangeAdd {
 		state.flags = x86ByteFlagsAll
 	}
-	return true, true // XCHG preserves arithmetic FLAGS; both preserve DF.
+	return true
 }
