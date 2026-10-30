@@ -24,6 +24,19 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 	if len(ins.Args) != 2 {
 		return true, false, fmt.Errorf("amd64 %s expects 2 operands: %q", op, ins.Raw)
 	}
+	if view, known, err := x86NamedFrameMoveAddressInstruction(ins, c.goarch); known {
+		if err != nil {
+			return true, false, err
+		}
+		dispatch := ins
+		dispatch.Op = op
+		if x86GoMOVQSourceInstruction(dispatch).Op != x86GoMOVQSourceInstruction(ins).Op {
+			return true, false, fmt.Errorf("named frame MOV address dispatch disagrees with original instruction")
+		}
+		// Reuse LEA's actual bound address and W/L/Q writeback. The source,
+		// frame proof and stored original instruction remain unchanged.
+		return c.lowerArith(view.Op, view)
+	}
 	if known, err := c.lowerGoReadOnlyLoad(ins); known {
 		return true, false, err
 	}
