@@ -30,7 +30,7 @@ TEXT ·Duplicate(SB),6,$16-0
 	RET
 TEXT ·Top(SB),2052,$16-0
 	RET
-TEXT private<>(SB),6,$0-0
+TEXT private<>(SB),4,$0-0
 	RET
 TEXT ·Combined(SB),2054,$16-0
 	RET
