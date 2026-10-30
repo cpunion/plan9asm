@@ -8,6 +8,14 @@ translation efficiency while preserving all five architecture gates. Read
 ## Published CI and local revisions
 
 [PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The
+published `d905e3682` [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41082550177)
+completed naturally on attempt one: 325/325 successful jobs, no reruns or job
+skips. Fresh acceptance joins all 286 source artifacts, 240 partitions,
+Windows/race raw outcomes for 22 packages each and 22 profiles: 88.2% statements
+and 93.40% patch coverage. Test and hardware skips remain separate from passes.
+Both existing threads are resolved; no formal approval is recorded.
+
+The historical
 `d6cb9245cd` [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41055685183)
 first ended with 315 successful and ten failed jobs. Seven Go 1.21 source jobs
 lost their runners; one CLI collector lost an artifact download, producing two
@@ -24,8 +32,7 @@ threads were resolved and no formal approval was recorded. Historical results
 do not certify another head.
 
 Functional `aff58904d` adds x87 MOVE, literal SIMD and scalar source joins,
-published at `d905e3682` with its own
-[round](https://github.com/xgo-dev/plan9asm/actions/runs/41082550177).
+published at `d905e3682`.
 Each later publication requires its own cloud CI, coverage and review.
 
 ## Qualified local batches
@@ -99,13 +106,26 @@ ratios above 1.05, including 1.49643. Allocations are approximately unchanged;
 no acceleration is established. The earlier pilot overlapped local artifact
 work and remains separate from the controlled trial.
 
+The extension MOV join at worker `809e7edf9`, integrated at `1732b74ac`,
+retains all 14 source rows: six overlap prior views and eight are new.
+It shares the scalar schemas and prefix/ModRM transport, without changing
+numerical lowering. Both SDKs pass 649 family nodes, 15,861 complete rule nodes
+and 317 prior typed/input/physical-register controls. All 40 previous snapshots
+remain byte-exact. The two Darwin runtime roots skip on this host; their fresh
+Linux/amd64 Docker counterparts each pass 11 nodes without skips, including
+all three APIs and O0/O2 numerical and fault comparisons against original Go.
+These are emulated executions, not native hardware acceptance. MOVSWW/MOVZWW
+retain word reads, and mode32 MOVLQZX retains its actual 32-bit write.
+
 ## Inventory and semantic boundaries
 
-At `5335247d3`, the independently joined source inventory has 55 overlapping
-family views and 4,461 records: 3,568 AVX plus 893 legacy, comprising 875 optab
+At `1732b74ac`, the independently joined source inventory has 56 overlapping
+family views and 4,469 records: 3,568 AVX plus 901 legacy, comprising 883 optab
 and 18 ymovtab rows. The legacy denominator remains 1,418 current-SDK /
-1,417 minimum-SDK rows. The 525 / 524 unjoined rows are inventory gaps, not
-unsupported-instruction totals or native execution counts.
+1,417 minimum-SDK rows. It excludes exactly 13 Go Zpseudo rows and four Zbyte
+data rows; their identities remain retained separately. The 517 / 516 unjoined
+rows are inventory gaps, not unsupported-instruction totals or native execution
+counts.
 
 Typed forms keep operation, encoding, register carrier, memory tuple, input
 roles, old destinations and machine-state effects distinct. ROUNDSS/ROUNDSD
@@ -135,8 +155,9 @@ failures. Track individual ordinary-source and special runtime contracts in
 3. Retain explicit native386, AVX512/AVX512ER, RCP14/MXCSR, MMX-state,
    BF16 active-memory fault and floating MIN/MAX execution gaps. Preserve
    ARM64, ARM and WASM object/control gates and all 14 strict-SDK failures.
-4. Integrate an accepted public translator into
-   [LLGo2694](https://github.com/xgo-dev/llgo/pull/2694) with normal public-module
-   verification and fresh compile/link/run owners. A fork pin does not resolve
-   the P1 official upstream dependency requirement. Coordinate one heavy local
-   Go/LLVM/Node invocation at a time.
+4. [LLGo2694](https://github.com/xgo-dev/llgo/pull/2694) now publishes `f1c1571a1`,
+   rebased onto main `277e5b280` and pinning accepted translator `d905e3682`.
+   Normal public-module verification, fresh host checks and Linux Docker
+   compile/link/run probes pass; its own fresh cloud CI remains under observation.
+   A fork pin does not resolve the P1 tagged upstream release requirement.
+   Coordinate one heavy local Go/LLVM/Node invocation at a time.
