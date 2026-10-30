@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -13,7 +14,7 @@ func TestAMD64NamedStackConstantExpressions(t *testing.T) {
 	ADDL tmpdig-(1*4)(SP), BX
 	RET
 `
-	requireX86GoAssemblerResult(t, "amd64", source, true)
+	goAssemblerOracleOutput(t, "amd64", source, "", true)
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
@@ -24,21 +25,70 @@ func TestAMD64NamedStackConstantExpressions(t *testing.T) {
 	if got := file.Funcs[0].Instrs[2].Args[1]; got.Kind != OpMem || got.Mem.Off != -4 {
 		t.Fatalf("second named stack slot parsed as %+v, want offset -4 memory", got)
 	}
-	ll, err := Translate(file, Options{
-		Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs: map[string]FuncSig{"namedStackExpressions": {Name: "namedStackExpressions", Ret: Void}},
-	})
-	if err != nil {
-		t.Fatal(err)
+	// These original operands establish constant-expression grammar only.
+	// AX/BX have no inputs, and NAME_AUTO offset zero is not a logical
+	// four-byte local within [-64,-4]. Keep the complete source as Context.
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run("unbound/"+api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, source, "func namedStackExpressions()",
+				"amd64", "x86_64-unknown-linux-gnu", api)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original grammar supplied entry NUM or native frame storage", err)
+			}
+		})
 	}
-	if !strings.Contains(ll, "add i32") {
-		t.Fatalf("named stack loads omitted from IR:\n%s", ll)
+
+	// Preserve the four exact operations and their original offsets. The
+	// actual source-bound frame and temporary SP relocation put their reads
+	// and writes inside the 64-byte local; both input values are initialized.
+	const initialized = `TEXT ·namedStackExpressions(SB),4,$64-24
+	MOVQ a+0(FP), AX
+	MOVQ b+8(FP), BX
+	MOVQ SP, R11
+	ADDQ $-16, SP
+	MOVL AX, tmpdig-(0*4)(SP)
+	MOVL BX, tmpdig-(1*4)(SP)
+	ADDL tmpdig-(0*4)(SP), AX
+	ADDL tmpdig-(1*4)(SP), BX
+	MOVQ R11, SP
+	ADDQ BX, AX
+	MOVQ AX, ret+16(FP)
+	RET
+`
+	x86StackExpressionBoundObjects(t, initialized, "func namedStackExpressions(a,b uint64) uint64")
+}
+
+// Observe actual complete Go sources for each API, then compile their emitted
+// IR at both optimization levels. A previous API cannot extend the source lease.
+func x86StackExpressionBoundObjects(t *testing.T, source, declaration string) {
+	t.Helper()
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run("initialized-without-binding/"+api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, source, declaration,
+				"amd64", "x86_64-unknown-linux-gnu", api)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("initialized source spelling supplied native frame authority", err)
+			}
+		})
 	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
-	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "named-stack-expressions.ll", "named-stack-expressions.o", ll)
+	for _, goos := range []string{"linux", "darwin", "windows"} {
+		t.Run("bound/"+goos, func(t *testing.T) {
+			triple := testTargetTriple(goos, "amd64")
+			pkg, request, _, options := x86CMOVFixedLocalFixture(t, source, declaration, goos+"/amd64", triple)
+			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
+				if err != nil || !strings.Contains(ir, "fixed_local_native") {
+					t.Fatal("initialized exact expression lost its source-bound local frame", err)
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, ir, level)
+				}
+			})
+		})
+	}
 }
 
 func TestNamedStackConstantOffsetRejectsUnresolvedExpressions(t *testing.T) {

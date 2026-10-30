@@ -1828,17 +1828,52 @@ func TestTranslateAMD64LegacyPrefetchFamilyRejectsNonMemoryForms(t *testing.T) {
 }
 
 func TestTranslateAMD64ArithmeticDisplacementExpression(t *testing.T) {
-	ll := translateAMD64EcosystemCase(t, `
+	const source = `
 TEXT arithmeticdisplacement(SB),NOSPLIT,$32-0
 	ADDQ 0+(1*16)(BP), R10
 	MOVQ (-16+8)(SP), AX
 	RET
-`, "arithmeticdisplacement")
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
+`
+	goAssemblerOracleOutput(t, "amd64", "#define NOSPLIT 4\n"+source, "", true)
+	file, err := Parse(ArchAMD64, source)
+	if err != nil {
+		t.Fatal(err)
 	}
-	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "arithmetic-displacement.ll", "arithmetic-displacement.o", ll)
+	if got := file.Funcs[0].Instrs[1].Args[0]; got.Kind != OpMem || got.Mem.Base != BP || got.Mem.Off != 16 {
+		t.Fatalf("BP arithmetic displacement parsed as %+v, want offset 16", got)
+	}
+	if got := file.Funcs[0].Instrs[2].Args[0]; got.Kind != OpMem || got.Mem.Base != SP || got.Mem.Off != -8 {
+		t.Fatalf("SP arithmetic displacement parsed as %+v, want offset -8", got)
+	}
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run("unbound/"+api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, source, "func arithmeticdisplacement()",
+				"amd64", "x86_64-unknown-linux-gnu", api)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original displacement grammar supplied BP/R10 or physical stack input", err)
+			}
+		})
+	}
+
+	// The exact original memory expressions now address initialized local
+	// bytes: BP is an explicit private-frame pointer and SP is restored before
+	// returning. Neither expression grants a physical entry register value.
+	const initialized = `TEXT ·arithmeticdisplacement(SB),4,$32-24
+	MOVQ SP, BP
+	MOVQ a+0(FP), AX
+	MOVQ b+8(FP), R10
+	MOVQ AX, 16(SP)
+	MOVQ AX, 8(SP)
+	MOVQ SP, R11
+	ADDQ $16, SP
+	ADDQ 0+(1*16)(BP), R10
+	MOVQ (-16+8)(SP), AX
+	MOVQ R11, SP
+	ADDQ R10, AX
+	MOVQ AX, ret+16(FP)
+	RET
+`
+	x86StackExpressionBoundObjects(t, initialized, "func arithmeticdisplacement(a,b uint64) uint64")
 }
 
 func TestTranslateAMD64GoTLSPseudoRegisterForms(t *testing.T) {
