@@ -337,3 +337,39 @@ func TestX86LegacyX87MoveViewPreservesOriginalProjection(t *testing.T) {
 		}
 	}
 }
+
+func TestX86LegacyX87MoveRejectsMalformedClassTuples(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, original := range catalog.Optab {
+		if x86X87MoveSourceSchemas[original.Ytab] == nil {
+			continue
+		}
+		for _, selected := range original.Rows {
+			for _, owner := range []string{"original", "selected"} {
+				t.Run(fmt.Sprintf("%s/%d/%s", original.Opcode, selected.RowIndex, owner), func(t *testing.T) {
+					entry, row := original, selected
+					entry.Rows = append([]X86LegacyOperand(nil), original.Rows...)
+					// Joining class names is not injective. This malformed
+					// single class has the same text as the two-class schema.
+					malformed := []string{strings.Join(selected.Classes, ",")}
+					if owner == "original" {
+						entry.Rows[selected.RowIndex].Classes = malformed
+					} else {
+						row.Classes = malformed
+					}
+					defer func() {
+						if value := recover(); value != nil {
+							t.Fatal("X87_MOVE_MALFORMED_CLASS_TUPLE_PANIC", owner, value)
+						}
+					}()
+					if witnesses, err := x86X87RowWitnesses(entry, row); err == nil || len(witnesses) != 0 {
+						t.Fatal("malformed class tuple acquired a source witness", owner, witnesses, err)
+					}
+				})
+			}
+		}
+	}
+}
