@@ -33,6 +33,11 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 		if x86GoMOVQSourceInstruction(dispatch).Op != x86GoMOVQSourceInstruction(ins).Op {
 			return true, false, fmt.Errorf("named frame MOV address dispatch disagrees with original instruction")
 		}
+		if view.Args[0].Kind == OpFP {
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return true, false, err
+			}
+		}
 		// Reuse LEA's actual bound address and W/L/Q writeback. The source,
 		// frame proof and stored original instruction remain unchanged.
 		return c.lowerArith(view.Op, view)

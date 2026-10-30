@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -109,7 +110,12 @@ func x86NamedFrameMoveAddressInstruction(ins Instr, arch string) (Instr, bool, e
 	var address Operand
 	switch source := ins.Args[0]; source.Kind {
 	case OpFPAddr:
-		address = Operand{Kind: OpFP, FPOffset: source.FPOffset}
+		if !validPPIdentifier(source.FPName) || x86SymbolGoRegisterName(source.FPName) ||
+			source.FPName == "FP" || source.FPName == "SB" || source.FPName == "PC" || arch == "amd64" && source.FPName == "g" {
+			return ins, true, fmt.Errorf("%w: named MOV FP address requires an original Go symbol", ErrProbeNeedsContext)
+		}
+		address = source
+		address.Kind = OpFP
 	case OpSym:
 		body := strings.TrimSpace(source.Sym)
 		if !strings.HasPrefix(body, "$") {
@@ -135,6 +141,19 @@ func x86NamedFrameMoveAddressInstruction(ins Instr, arch string) (Instr, bool, e
 		}
 	default:
 		return ins, false, nil
+	}
+	// A local opcode view cannot repair stale parsed operands or discard the
+	// descriptive Go name. Replay the complete original two-operand spelling.
+	rawOp, rest := splitOpcode(ins.Raw)
+	literals := splitTopLevelCSV(rest)
+	if !strings.EqualFold(rawOp, string(ins.Op)) || len(literals) != len(ins.Args) {
+		return ins, true, fmt.Errorf("%w: named MOV frame address lacks its original spelling", ErrProbeNeedsContext)
+	}
+	for index, literal := range literals {
+		parsed, err := parseOperandForArch(Arch(arch), literal)
+		if err != nil || !reflect.DeepEqual(parsed, ins.Args[index]) {
+			return ins, true, fmt.Errorf("%w: named MOV frame address differs from its original operands", ErrProbeNeedsContext)
+		}
 	}
 	view := ins
 	view.Op = Op("LEA" + string(op)[3:])

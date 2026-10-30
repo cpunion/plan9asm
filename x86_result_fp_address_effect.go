@@ -4,6 +4,13 @@ package plan9asm
 // observer separately needs mapped typed storage; the post-consumer uses the
 // same shape only to revoke the exact destination's old identities.
 func x86LogicalFPLEAWriteShape(ins Instr, arch string) (int, uint8, int64, bool) {
+	if len(ins.Args) == 2 && ins.Args[0].Kind == OpFPAddr {
+		view, known, err := x86NamedFrameMoveAddressInstruction(ins, arch)
+		if !known || err != nil {
+			return 0, 0, 0, false
+		}
+		ins = view
+	}
 	if !x86ResultNamedPredicateInstruction(ins) || len(ins.Args) != 2 ||
 		ins.Args[0].Kind != OpFP || ins.Args[0].Mem != (MemRef{}) {
 		return 0, 0, 0, false

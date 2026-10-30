@@ -1316,6 +1316,9 @@ func parseMem(s string) (MemRef, bool) {
 // here, so an unresolved macro cannot silently become offset zero.
 func parseNamedStackConstantOffset(prefix string) (int64, bool) {
 	prefix = strings.TrimSpace(prefix)
+	if validPPIdentifier(prefix) {
+		return 0, true // Go's descriptive NAME_AUTO may omit its zero offset.
+	}
 	if len(prefix) < 3 {
 		return 0, false
 	}
@@ -1323,7 +1326,7 @@ func parseNamedStackConstantOffset(prefix string) (int64, bool) {
 	if sep == 0 || sep >= len(prefix)-1 {
 		return 0, false
 	}
-	if _, ok := parseIdent(prefix[:sep]); !ok {
+	if !validPPIdentifier(prefix[:sep]) {
 		return 0, false
 	}
 	offset, ok := parseImmExpr(prefix[sep:])
