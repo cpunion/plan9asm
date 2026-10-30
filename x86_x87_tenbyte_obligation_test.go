@@ -230,32 +230,34 @@ func TestX86X87TenByteRawAliasObservationAndInputBoundary(t *testing.T) {
 					if origin.op != ins.Op || !reflect.DeepEqual(origin.args, ins.Args) || origin.addressBits != ins.x86AddressBits {
 						t.Fatal("normalized raw identity differs", row.code, ins)
 					}
-					form, known, err := x86X87ValueProperties(ins, arch)
-					if row.op == x86asm.FBLD || row.op == x86asm.FBSTP {
-						if len(ins.Args) != 1 {
-							t.Fatal("BCD decoder alias lost its single original memory operand", row.code, ins)
+					t.Run("typed", func(t *testing.T) {
+						form, known, err := x86X87ValueProperties(ins, arch)
+						if row.op == x86asm.FBLD || row.op == x86asm.FBSTP {
+							if len(ins.Args) != 1 {
+								t.Fatal("BCD decoder alias lost its single original memory operand", row.code, ins)
+							}
+							wantPop := uint8(0)
+							if row.store {
+								wantPop = 1
+							}
+							if !known || err != nil || form.memoryBytes() != 10 || form.push == row.store || form.spec.pop != wantPop {
+								t.Fatal("X87_TEN_BYTE_RAW_TYPED_ALIAS_FEATURE_GAP", row.code, known, err)
+							}
+							memory, f0 := ins.Args[0], Operand{Kind: OpReg, Reg: "F0"}
+							wantSource, wantDestination := memory, f0
+							if row.store {
+								wantSource, wantDestination = f0, memory
+							}
+							if !reflect.DeepEqual(form.source, wantSource) || !reflect.DeepEqual(form.destination, wantDestination) {
+								t.Fatal("derived typed alias changed exact source/destination", row.code, form)
+							}
+							if !x86TypedFPResultNeedsProof(normalized.Funcs[0], FuncSig{Name: "Raw", Ret: Void}, arch) {
+								t.Fatal("X87_TEN_BYTE_RAW_VOID_OBLIGATION_MISSING", row.code)
+							}
+						} else if opcode != "FLD" && opcode != "FSTP" {
+							t.Fatal("extended decoder boundary acquired an invented source alias", row.code, opcode)
 						}
-						wantPop := uint8(0)
-						if row.store {
-							wantPop = 1
-						}
-						if !known || err != nil || form.memoryBytes() != 10 || form.push == row.store || form.spec.pop != wantPop {
-							t.Fatal("X87_TEN_BYTE_RAW_TYPED_ALIAS_FEATURE_GAP", row.code, known, err)
-						}
-						memory, f0 := ins.Args[0], Operand{Kind: OpReg, Reg: "F0"}
-						wantSource, wantDestination := memory, f0
-						if row.store {
-							wantSource, wantDestination = f0, memory
-						}
-						if !reflect.DeepEqual(form.source, wantSource) || !reflect.DeepEqual(form.destination, wantDestination) {
-							t.Fatal("derived typed alias changed exact source/destination", row.code, form)
-						}
-						if !x86TypedFPResultNeedsProof(normalized.Funcs[0], FuncSig{Name: "Raw", Ret: Void}, arch) {
-							t.Fatal("X87_TEN_BYTE_RAW_VOID_OBLIGATION_MISSING", row.code)
-						}
-					} else if opcode != "FLD" && opcode != "FSTP" {
-						t.Fatal("extended decoder boundary acquired an invented source alias", row.code, opcode)
-					}
+					})
 					if !reflect.DeepEqual(before, ins) {
 						t.Fatal("typed alias query changed original raw source", row.code)
 					}
