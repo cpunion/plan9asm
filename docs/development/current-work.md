@@ -2,284 +2,136 @@
 
 Updated 2026-10-30. Finish amd64 correctness, shared typed families and
 translation efficiency while preserving all five architecture gates.
-Start with [architecture](architecture.md), [family development](instructions.md),
+Use [architecture](architecture.md), [family development](instructions.md),
 [x86 convergence](x86-convergence.md) and [validation](validation.md).
-Original qualification, failures and host exclusions remain in their reports.
+Original failures, source identities and host exclusions remain in their reports.
 
-## Published and local revisions
+## Published CI and local revisions
 
-[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The
-`798cf56ee` [round](https://github.com/xgo-dev/plan9asm/actions/runs/40999892704)
-finished naturally: 191 successful and 134 failed jobs. The failures comprise
-fourteen source-test owners, eleven truncated source partitions and dependent
-collectors. The original failed reports remain failed; local repairs need
-their own complete CI acceptance.
-The preceding `3551c62a5` [round](https://github.com/xgo-dev/plan9asm/actions/runs/40925324365)
-passed all 325 jobs. Those results do not certify later revisions. Let each
-published round finish naturally before another batch push; acceptance requires
-the new head's complete package logs, coverage and external review.
+[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. Public
+`70ced1b565` has its own [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41032133785),
+which remains pending. The recorded snapshot contains 315 actually created jobs
+out of 325 expected; this is an inventory count, not 315 passes or complete CI
+acceptance. Final source partitions, package logs, profile summaries, coverage
+and fresh review must close at this head before publication advances.
 
-Previous `137945fdf` completed its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40904358535)
-with 292 successful and 33 failed jobs: two source-test owners across eleven
-profiles, plus eleven dependent collectors. The tests mutated private access
-certificates but expected normalization to accept the edited sealed snapshot.
-The tests-only repair retains rejection and adds fresh original-source capture
-and LLVM-object positives. Original failed reports remain failed evidence.
+The preceding public `67c4446bcc` completed 325/325 jobs. Those results and its
+coverage belong to that head. The original `798cf56ee`
+[round](https://github.com/xgo-dev/plan9asm/actions/runs/40999892704) ended with
+191 successful and 134 failed jobs; repaired local tests do not change those
+failures into passes. Older completed rounds remain separate historical evidence.
 
-The preceding batch `fad14e2e1` completed its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40872759334)
-with 280 successful and 45 failed jobs. The failures comprise formatting,
-eleven jobs each for private MULX context, bare raw ADDSUB and legacy ROUND
-memory, plus eleven derived collectors. Local repairs require their own CI.
-The public baseline `5616f67d8` completed its
-[own round](https://github.com/xgo-dev/plan9asm/actions/runs/40851464196)
-with 325/325 successful jobs. Those results certify that baseline. Every newly
-published head needs its own complete CI, coverage and external review.
-The previous `18492758d` [round](https://github.com/xgo-dev/plan9asm/actions/runs/40820775107)
-passed 325/325 jobs with 88.1% statement coverage; those results belong to that
-previous head. External review remains outstanding.
+The local follow-up includes signed native-frame metadata (`612b6d1f0`), the
+x87 source-row closure (`924458b6b`) and typed native headers (`4581004bf`).
+These commits are newer than public `70ced1b565`; component checks below do not
+certify their cloud CI, whole-SDK execution or an accepted LLGo dependency pin.
 
-The local follow-up has the following source-table ownership:
+## Local qualification
 
-| Local inventory | Count and meaning |
-|---|---|
-| Family views | 50; overlapping views retain explicit identity |
-| AVX source rows | 3,568 / 3,568 original table rows |
-| Mixed-mode source records | 4,300 = 3,568 AVX + 732 legacy/fallback records |
-| Previous canonical witness union | 14,560; separate from all runtime forms |
-| New 127-row batch | 208 AMD64 witnesses; independently observed 104-witness 386 subset |
-| Source/object batching | At most 32 complete functions per original-Go/LLVM batch |
-| Inherited identity | All 26 preceding JSON snapshots byte-exact |
+Public `70ced1b565` replaces temporary LLVM IR files with copied memory buffers.
+Unique buffer identities preserve independent default ModuleID/source filenames;
+explicit IR source filenames remain intact. The fresh 148-owner scope passes
+12,091 nodes per endpoint SDK, with three explicit host-inapplicable runtime
+skips. Both SDKs pass the five-architecture gates; Node policy passes 573 tests
+and Go policy 327 nodes. These results belong to `70ced1b565`.
 
-Complete AVX table ownership preserves original SDK rows, first-match choices,
-shadow alternatives, source modes and terminal forms. It does not establish
-all-ISA support, every named syntax alternative or native numerical execution.
-Legacy has its own denominator: 1,306 current-SDK / 1,305 minimum-SDK machine
-candidates, plus 112 separate `ymovtab` records. The 732 joined records comprise
-714 `optab` and 18 `ymovtab` entries; 686 current / 685 minimum records remain
-unjoined. These are inventory gaps, not counts of unsupported translations.
-Two PADDD aliases remain separate from rows.
+CLI evidence retains 2,670 unchanged inherited nodes plus six fresh boundary
+nodes at `70ced1b565`; it is not a complete CLI rerun there. The CLI modules'
+minimum is Go 1.24, so their results do not establish Go 1.20 CLI execution.
+Minimum-Go PCALIGN retains its exact observed assembler defect as a distinct
+outcome, never a successful Go object; all three LLVM target objects remain
+required for that owner.
 
-The new CMOV join adds all 16 conditions across W/L/Q: 48 original rows and
-96 canonical register/memory witnesses. The 386 subset has 32 rows / 64
-witnesses; the 16 Q rows retain actual frontend refusals. The original 22
-identity snapshots remain byte-exact. No CMOV translator or FLAGS rule changes.
+The signed-locals repair preserves canonical uint64 representations of the
+writer's int32 locals. Its frozen boundary checks pass 73 nodes with current
+Go and 49 with minimum Go. Negative locals remain metadata, with no new frame
+size, entry, bounds or local-backing permission.
 
-The remaining non-CMOV `yml_rl` closure adds 28 original legacy rows through
-shared scalar prefix/ModRM transport: 56 AMD64 witnesses and the independently
-observed 34-witness 386 subset. The eleven REX.W rows retain actual Go source
-refusals. All 24 preceding identity snapshots remain byte-exact.
-LAR/LSL selector reads stay m16; extension source and result widths remain
-distinct. BSF/BSR now share their existing strict result step with the paired
-exact-width volatile reader. Continued execution supplies only that input's
-numerical bytes; it supplies no reusable memory, bounds or caller permission.
-Zero-input destination knowledge and portable ZF-only observation stay intact.
-Void and unused bool cannot hide missing scan inputs. Native numerical
-execution remains separate from initialized source and LLVM object evidence.
+The x87 source/object closure has 1,056 fresh passing nodes per SDK. Its
+1,750-node initialized/state/object scope is inherited only across the small
+source-identity output hook, not rerun after it. The prior 30 JSON identities
+remain byte-exact. Source formatting and LLVM objects are not numerical or
+native x87 execution evidence.
 
-The next closure adds 96 MMX/SSE and 31 CMP/TEST rows without overlap in the
-previous source-record union. Shared carrier, direction, prefix and immediate
-transports derive bytes from the original tables. Their 58 named 386 refusals
-are observed with the actual Go assembler. The default packed formatter keeps
-its MMX exclusion; the explicit carrier projection grants no native inputs.
-All initialized witnesses retain original Go bytes and three-API, five-target
-O0/O2 objects. The formatter uses 238 new cold lines and a small shared scalar
-extension; the translator adds only three lines of input-proof routing.
+At `4581004bf`, the shared ordered native-header parser passes 71 focused nodes
+with current Go and 67 with minimum Go, without failures or skips. The broader
+frame/SDK/Windows/private-leaf scope passes 1,118 nodes across 118 roots with
+one explicit runtime skip requiring an AMD64 host. Minimum Go passes 568 nodes
+across 75 roots without skips. The other 43 roots have current-SDK build constraints,
+not minimum-SDK passes or skips. Header kind, flags, numeric bounds, field
+presence and alignment layout are retained; special or missing entry roles
+remain Context. Native flag admission remains closed to its existing roles.
 
-The CMP/TEST repair requires the existing complete proof for a faulting memory
-read even when FLAGS die. Nontrapping dead register scratch remains allowed
-without manufacturing numerical bytes. Known-pointer reads retain their exact
-volatile widths after optimization. Across eight source profiles, 23 AMD64
-forms / 70 original statements and two 386 forms / two statements now require
-context. All 576 original statement observations retain their identities;
-only 48 reviewed support/context/fingerprint baseline fields change. Other
-architectures, unsupported entries, runtime and encoder inventories are intact.
+The original strict 55-source run at `612b6d1f0` still reports 41 passes and
+14 failures, with no unattempted sources or newly passing files. Three runtime
+TEXT diagnostics advance to the native-header boundary. Header qualification
+has not yet established a new complete strict55 outcome. Track the failures
+individually in [issue47](https://github.com/xgo-dev/plan9asm/issues/47).
 
-## Current class repairs
+## Source inventory and semantic boundaries
 
-The remaining formats share typed source, result, mask, carrier and tuple roles.
-GP/BMI objects retain actual source selection and mode boundaries. MULX now
-preserves implicit DX and both output dependencies through observable results;
-memory, raw and physical-frame roles keep their existing proof requirements.
+The joined inventory has 51 overlapping family views and 4,379 source records:
+3,568 AVX rows plus 811 legacy records (793 optab and 18 ymovtab). The legacy
+denominator remains 1,418 current-SDK / 1,417 minimum-SDK records, including
+112 ymovtab records. Its 607 / 606 unjoined records are inventory gaps, not
+unsupported-instruction totals. Snapshot-file counts are not family-view counts.
 
-Gather, scatter and prefetch share one VSIB grammar through lowering and result
-analysis. Index NUM, data/merge bytes, mask state and the original pointer base
-stay independent. Active gather loads remain volatile so a dead result cannot
-erase its fault. Mode32 high data/mask banks retain separate numerical rejection;
-legacy Void-format objects do not certify hardware execution or native entry.
-The paired access grants no contiguous extent or later-read authority.
+The x87 join retains 79 original row identities in each x86 mode, 158 canonical
+witnesses and 316 mode instances. Eight first-match shadows retain their own
+identity, giving 166 actual-Go byte cases per mode. This is source-table closure,
+not native extended80, packed BCD or arbitrary caller-state support. The separate
+ten-byte dead-input safety class remains under qualification; no numerical
+precision follows from a valid ten-byte encoding or initialized pointer.
 
-Every data gather/scatter now enters complete input validation even with a
-dead Void result. Eight source profiles retain exactly 128 classification
-changes over 517 original statements: 209 unclosed effects, 272 undefined
-inputs and 36 SP/AUTO contexts. No prefetch, unsupported entry or other
-architecture changes. These probe wrappers have no initialized prefix or
-bounded original TEXT. Their Context outcomes do not erase initialized objects.
+Typed families preserve source roles through grammar, effects and lowering.
+MULX keeps implicit DX and both outputs; count, scan, compare and memory RMW
+retain complete input obligations even for Void or dead results. Nontrapping
+dead register scratch remains allowed without manufacturing numerical bytes.
+VSIB index NUM, data/merge bytes, masks and pointer bases remain independent.
+Masking and SAE do not justify eager reads or a larger memory tuple.
 
-The ten-member / twenty-row approximation family reuses the existing native FP
-helper, removing 227 production lines. Masking, SAE and MXCSR remain owned by
-the original instruction; source operands are not eagerly read before masking.
-This is a code-size change, not a measured performance or AVX512ER runtime gain.
+ADDSUB/ROUND retain exact packed or scalar tuples, copied upper bytes and
+machine-state effects. Physical legacy memory uses its original opcode;
+logical paths retain their mathematical emitters. A scalar 4/8-byte access does
+not become a 16-byte carrier read or acquire a new alignment guarantee.
 
-ADDSUB and ROUND share typed grammar, effects, result analysis and lowering.
-Their existing mathematical emitters are unchanged. Observable VEX reads retain
-the original packed or scalar tuple when results die under optimization;
-scalar 4/8-byte access widths do not become 16-byte X carriers. Legacy reads do
-not borrow that VEX native-read premise or a new alignment/fault guarantee.
-Go scalar ROUND uses Yu8 and rejects ordinary mode32 four-operand syntax;
-normalized raw physical forms keep their own identity and NUM restrictions.
+Raw normalization replays its sealed source before deriving another lowering
+view. Original bytes, operands, mode, prefixes and literal tails remain intact.
+Bare uninitialized inputs retain Context alongside independent initialized
+three-API/O0/O2 objects. FS/GS reads retain their physical segment and actual
+numerical offsets. Static XADD/XCHG require actual module-owned writable numeric
+storage and sufficient extent; pointer values do not become NUM. Stack positives
+use actual source-bound frames, not rewritten raw or AUTO permissions.
 
-Physical legacy memory now executes the original SSE ADDSUB/ROUND opcode with
-its exact memory tuple, immediate, copied upper bytes and machine-state effects.
-This supplies numerical bytes only on continuation, with no extent or later-read
-permission. Its SSE3/SSE4.1 carrier, matching target and source inputs remain
-explicit. Logical FP and register paths retain their mathematical emitters.
-Initialized raw ADDSUB uses the existing exact source identity and whole-source
-replay; the bare original bytes retain public Context and private format objects.
+SDK capture uses bounded directory membership, relative headers and complete
+compiler/assembler object joins. It preserves namespace/index identity, every
+DUPok body and actual initialized or zero-filled storage facts without choosing
+a winning body or granting entry permission. Mutation, closure, aliases and
+changed source/profile metadata revoke the original observation. Do not cache
+mutable source verification or treat parsed header attributes as authority.
 
-Repeated raw normalization checks the existing sealed checkpoint before making
-a new lowering view. Text fallback starts from that source rather than an
-already rewritten address view. Default AMD64 and explicit AMD64 remain the
-same decoding mode without changing retained source spelling; 386 stays distinct.
+## Performance and remaining work
 
-ROUND RIP literals reuse the existing exact decoder, source replay, DATA and
-raw-return binding. Self-contained packed literals retain public translation.
-Bare scalar upper inputs remain Context; genuinely initialized raw and named
-counterparts retain positive objects. Edited source, DATA or read metadata
-cannot borrow the original proof. No generic raw or incoming-pointer permission
-is added. The original fixture bytes and literal tails remain observable.
+The unchanged 29-case, two-SDK, three-block ABBA comparison of `70ced1b565`
+against `67c4446bcc` retains all 696 samples. No case median reaches a five
+percent regression; all case medians are below baseline. This measures complete
+register-only Translate, excluding source Parse and live SDK capture. It proves
+neither whole-SDK throughput nor generated-code acceleration. Earlier failed
+attempts and historical performance comparisons remain separate evidence.
 
-## Qualification boundary
-
-Go 1.27.3 and Go 1.20.14 use LLVM22. Each passes the local repair scope of
-35 roots / 1,268 children without skips. The complete original ROUND runtime
-assembly and opaque five-pointer frame also pass a separate root / 30 children
-through three targets and three APIs at O0/O2. The original assembly, native
-guard and C driver remain byte-identical. This is source/object evidence;
-actual native execution retains its existing independent runtime owner.
-
-The complete cold rule package passes 128 roots / 12,083 children per SDK.
-The final 127-row family scope passes 1,520 nodes across 29 roots / 1,492
-children, with one existing MMX host-inapplicable runtime skip. Both complete
-five-architecture gates pass; Node policy passes 573 tests and Go policy passes
-327 nodes without skips. All 26 preceding identity snapshots remain byte-exact.
-The preceding BSF/BSR repair changed twelve bare probe forms from IR
-acceptance to Context: all eight source profiles retain the same 48 original
-statements, now rejected for undefined inputs. Initialized counterparts retain
-three-API, five-target objects. The reviewed baseline changes only the support,
-context and fingerprint fields; unsupported and runtime counts do not change.
-Retain the original failing reports and rerun the normative five-architecture
-checks and policies on the integrated head. Component results certify neither
-that head's CI nor its unexecuted hardware.
-
-SDK-primary inventories now reuse the existing complete bounded directory
-snapshot. Ordinary packages retain their flat 256-member limit; SDK file
-bytes retain the 16 MiB budget. Capture, verification and frame cloning retain
-the same physical membership observation. Member mutation, closure, aliases
-and shared graph limits remain checked. Current Go passes 148 roots / 1,673
-children; minimum Go selects 72 roots / 1,373 children, all passing without
-skips. The other 76 roots are current-SDK build-tag owners, not minimum passes.
-The strict 55-source benchmark still reports 41 passes and fourteen failures.
-Five diagnostics progress from directory capacity to an unsupported relative
-SDK include; generic Void ABI barriers remain. This is no full-SDK acceptance.
-
-The terminal-prefix class retains all prior input obligations before UD2 and
-all reachable ordinary return obligations. Its official Linux/amd64
-[staging run](https://github.com/cpunion/plan9asm/actions/runs/40828444104)
-passed one root / 25 children without skips. Portable fault/canary execution,
-LLVM object success and actual native execution remain separate evidence.
-Original semantic REDs, fixture/setup failures and ordinary skips are retained.
-
-The qualified raw-prefix cleanup shares 44 identical scanners, removing 816
-production lines. Paired decoder measurements show no stable speedup and no
-allocation change. A prior result-routing candidate was withdrawn after a
-minimum-SDK regression. Complete translation needs its own paired measurement;
-neither a smaller helper nor a microbenchmark proves faster SDK compilation.
-
-The final `3551c62a5` comparison uses the unchanged 29-case harness, three ABBA
-blocks and both SDKs against `5616f67d8`: no median or three-block sustained
-regression reaches five percent. Timing directions and allocations remain mixed.
-These measure complete register-only translation, excluding Parse and live SDK
-capture. They establish neither whole-SDK nor native generated-code acceleration
-and do not qualify the later local head.
-
-## Local GP and SDK repairs
-
-The GP memory-read repair, hardware-segment backend guard, six-member counter
-family and static bit-string effects are locally committed. Their precise
-241-root regression union passes 104,095 nodes per endpoint SDK, with four
-existing host-inapplicable runtime skips retained separately. These results
-are not a new public-head CI or native x86 execution certificate.
-
-SDK capture now observes bounded relative headers through the shared source
-path implementation. Compiler object limits follow actual definition namespaces,
-exact index sentinels and physical payload blocks within the original byte
-budget. Same-member Nonpkg DUPok definitions keep every original index. An
-empty compiler BSS declaration may accompany a same-size ASM initializer;
-collision checking retains both records and grants no winning-body, numerical
-or storage permission. Two initialized non-DUPok bodies still fail.
-
-The complete static-storage package passes 1,768 nodes with Go 1.27.3 and 480
-with Go 1.20.14, without skips. Current-Go actual runtime capture, verification
-and source-revocation tests pass for both amd64 and 386. These are complete
-source/object observations, not execution of the translated runtime.
-
-The unchanged strict 55-file benchmark at `4e94a9f42` reports 41 passes and
-fourteen failures, without new failing files or unattempted sources. Six
-diagnostics advance to subsequent TEXT, frame, ABI or literal-initialization
-checks. This complete run took 134 seconds; the earlier local run took 169
-seconds and the historical comparison 116 seconds. These are separate runs,
-not a paired efficiency acceptance. SDK throughput remains unaccepted.
-The local current-Go profile package also retains one Rosetta
-preflight failure on an ARM64 host; no program executed in that failed owner.
-
-## Remaining closeout
-
-Local CI repairs preserve the original Go formats while distinguishing missing
-inputs from initialized source. Raw FS/GS reads retain exact decoder identity
-and numerical offset inputs. XADD/XCHG share output effects across native and
-actual module-owned numeric static storage, with writable extents still checked.
-Stack-expression positives use actual source-bound frames. The integrated
-134-root scope passes with current Go. Minimum Go has one old assembler
-PCALIGN backend defect; its exact diagnostic is observed separately from a
-successful Go object. The changed owner passes on both endpoint SDKs and still
-requires all three LLVM target objects. Unchanged owners retain their frozen
-run identities. These are local results, not cloud passes; the three explicit
-host-inapplicable runtime owners still require native CI execution. The combined
-evidence comprises 12,056 passes and three host skips per SDK, inherited for
-133 owners and freshly rerun for the changed owner; it is not a complete rerun
-at the latest revision. Both complete current-Go CLIs pass without skips:
-38 roots / 77 nodes and 401 roots / 2,599 nodes respectively. Their declared
-minimum is Go 1.24; these CLI results do not certify Go 1.20 execution.
-
-The segment input matrix now uses bounded scenario batches instead of a separate
-subtest for every API call. All 17,056 source/declaration/role identities and
-51,168 API checks remain, alongside original Go byte, scale, IR and object
-checks. Both SDKs complete all five owners under the unchanged 64 MiB capture
-bound with approximately 1.6 MiB of output. Planned, failed and incomplete
-partition counts must still be checked independently in CI artifacts.
-
-1. The preceding accepted Plan9asm and LLGo pin completed their CI rounds.
-   Finish the latest Plan9asm round and publish local repairs through the
-   allowed fork after final gates;
-   require fresh complete CI, coverage and review at each new public head.
-2. Finish final GP classification review across five architectures and eight
-   source profiles, the policy suites and the unchanged complete-translation
-   benchmark. Do not replace initialized object or execution evidence with
-   bare instruction Context outcomes. Preserve the original REDs and skips.
-3. Continue legacy families using original literal prefixes, modes and selection
-   order. Keep source-row ownership distinct from complete semantic acceptance.
-   Do not add another opcode registry or cache mutable source verification.
-4. Integrate the accepted public translator into
+1. Finish the public head's complete CI naturally, including source partitions,
+   package/coverage collectors and fresh review. Publish only through the allowed
+   fork after fresh integrated gates; preserve original failures and host skips.
+2. Continue the 607 / 606 legacy inventory using original prefixes, modes and
+   selection order. Keep row ownership, initialized objects and native execution
+   separate, with at most 32 complete functions per source/object batch.
+3. Close ten-byte safety obligations without claiming extended80/BCD numerical
+   semantics. Retain native386, AVX512/AVX512ER, RCP14/MXCSR, MMX-state,
+   BF16 active-memory fault and floating MIN/MAX execution gaps.
+4. Preserve ARM64, ARM and WASM object/control boundaries and all 14 strict-SDK
+   failures. Special runtime entries, callbacks and library compatibility need
+   their own source contracts and independent compile/link/run owners.
+5. Integrate an accepted public translator into
    [LLGo2694](https://github.com/xgo-dev/llgo/pull/2694) with normal public-module
-   verification and fresh compile/link/run owners. A fork pin does not resolve
-   the P1 official upstream dependency requirement.
-5. Preserve native386, AVX512/AVX512ER, RCP14/MXCSR and other explicit hardware
-   gaps. MMX state, BF16 optimized active-memory faults, floating MIN/MAX and
-   unexecuted native owners require their own acceptance evidence.
-6. Preserve ARM64, ARM, WASM and their known object/control gaps. Classify the
-   fourteen strict-SDK failures in [issue47](https://github.com/xgo-dev/plan9asm/issues/47)
-   individually: the repaired include and DATA parsing paths expose further
-   TEXT, literal-initialization and generic ABI gaps, alongside the separately
-   tracked special runtime contracts. None of these failures is a pass.
-   Broader callbacks and library compatibility retain independent execution
-   owners. Coordinate one heavy local Go/LLVM/Node invocation at a time.
+   verification. A fork pin does not resolve the P1 official upstream dependency
+   requirement. Coordinate one heavy local Go/LLVM/Node invocation at a time.
