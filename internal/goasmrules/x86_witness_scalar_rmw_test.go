@@ -189,6 +189,47 @@ func TestX86ScalarMultiplyMOVBERejectsMalformedSource(t *testing.T) {
 	}
 }
 
+func TestX86ScalarMultiplyMOVBEEscapeBoundsBeforePayload(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	maxInt := int(^uint(0) >> 1)
+	entries := 0
+	for _, entry := range catalog.Optab {
+		if entry.Ytab != "yimul" && entry.Ytab != "yimul3" && entry.Ytab != "ymovbe" {
+			continue
+		}
+		entries++
+		for _, escape := range []int{-4, -3, -1, 2, maxInt - 1, maxInt} {
+			t.Run(fmt.Sprintf("%s/escape%d", entry.Opcode, escape), func(t *testing.T) {
+				changed := entry
+				changed.EscapeAdjustment = escape
+				changed.Rows = append([]X86LegacyOperand(nil), entry.Rows...)
+				offset := 0
+				for index := range changed.Rows {
+					changed.Rows[index].UnmatchedOffset = offset
+					offset += changed.Rows[index].ZOffset + escape
+				}
+				// Offsets intentionally remain consistent with the malformed
+				// adjustment. An earlier unrelated row mismatch must not hide
+				// a negative slice length or overflowing span calculation.
+				defer func() {
+					if failure := recover(); failure != nil {
+						t.Error("SCALAR_MULTIPLY_MOVBE_ESCAPE_PANIC", escape, failure)
+					}
+				}()
+				if _, err := x86ScalarRMWRowWitnesses(changed, changed.Rows[0], "amd64"); err == nil {
+					t.Fatal("SCALAR_MULTIPLY_MOVBE_MALFORMED_ACCEPTED", escape)
+				}
+			})
+		}
+	}
+	if entries != 9 {
+		t.Fatal("escape bounds control lost complete source entries", entries)
+	}
+}
+
 func TestX86ScalarRMWCompleteOrderedRowsAndModes(t *testing.T) {
 	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {
