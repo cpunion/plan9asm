@@ -183,13 +183,29 @@ func TestX86X87TenByteRawAliasObservationAndInputBoundary(t *testing.T) {
 		} {
 			t.Run(fmt.Sprintf("%s/%x", arch, row.code), func(t *testing.T) {
 				decoded, err := x86asm.Decode(row.code, mode)
-				if err != nil || decoded.Op != row.op || decoded.Len != len(row.code) || decoded.MemBytes != 10 {
-					t.Fatal("original raw ten-byte decoder observation", decoded, err)
+				// x/arch v0.14.0 omits all M80 forms from its MemBytes table.
+				// Preserve that actual metadata; the original opcode/ModRM tuple
+				// above establishes the ten-byte format independently.
+				base := x86asm.RAX
+				if arch == "386" {
+					base = x86asm.EAX
+				}
+				if err != nil || decoded.Op != row.op || decoded.Len != len(row.code) || decoded.MemBytes != 0 ||
+					decoded.Args[0] != (x86asm.Mem{Base: base}) || decoded.Args[1] != nil {
+					t.Fatalf("original raw decoder observation: %+v, MemBytes=%d, args=%v, err=%v", decoded, decoded.MemBytes, decoded.Args, err)
 				}
 				var raw strings.Builder
 				for _, code := range row.code {
 					fmt.Fprintf(&raw, "BYTE $0x%02x\n", code)
 				}
+				body := fmt.Sprintf("FINIT\n%s p+0(FP),AX\n", move)
+				if row.store {
+					body += "FLDPI\n"
+				}
+				body += raw.String()
+				body += "FINIT\nRET\n"
+				source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s", word, body)
+				goAssemblerOracleOutput(t, arch, source, "", true)
 				original, err := Parse(ArchAMD64, "TEXT ·Raw(SB),4,$0-0\n"+raw.String()+"RET\n")
 				if err != nil {
 					t.Fatal(err)
@@ -247,14 +263,6 @@ func TestX86X87TenByteRawAliasObservationAndInputBoundary(t *testing.T) {
 				if found != 1 {
 					t.Fatal("exact two-byte raw source did not retain one decoded instruction", row.code, found)
 				}
-				body := fmt.Sprintf("FINIT\n%s p+0(FP),AX\n", move)
-				if row.store {
-					body += "FLDPI\n"
-				}
-				body += raw.String()
-				body += "FINIT\nRET\n"
-				source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\n%s", word, body)
-				goAssemblerOracleOutput(t, arch, source, "", true)
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(api, func(t *testing.T) {
 						ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *[10]byte)", arch, testTargetTriple("linux", arch), api)
