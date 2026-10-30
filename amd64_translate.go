@@ -650,18 +650,29 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 	if c.fixedLocal != nil {
 		c.fixedMemRoles = make(map[MemRef]MemRef)
 		defer func() { c.fixedMemRoles = nil }()
-		for index, operand := range ins.Args {
+		addressView := ins
+		if view, known, err := x86NamedFrameMoveAddressInstruction(ins, c.goarch); known {
+			if err != nil {
+				return false, err
+			}
+			addressView = view
+		}
+		for index, operand := range addressView.Args {
 			if operand.Kind != OpMem {
 				continue
 			}
 			access, certified := c.fixedLocalMemoryAccess(ins, index)
 			if !certified {
-				if fixedLocalGPAddressOnly(ins, index) {
-					continue
+				if !fixedLocalGPAddressOnly(addressView, index) {
+					return false, goAMD64FrameContext("fixed local storage consumer lacks an exact native access certificate")
 				}
-				return false, goAMD64FrameContext("fixed local storage consumer lacks an exact native access certificate")
+				if x86LEAWidth(addressView.Op, c.goarch) == 0 {
+					continue // Sized NOP does not consume an effective address.
+				}
 			}
 			if !access.nativeInput {
+				// Address formation consumes the same original NAME_AUTO bias
+				// as an access, without receiving any DATA-read certificate.
 				physical, err := fixedLocalMemoryAddress(ins, index, c.fixedLocal.frame)
 				if err != nil {
 					return false, err
