@@ -7,6 +7,7 @@ typedef struct LLVMOpaqueModule *LLVMModuleRef;
 typedef struct LLVMOpaqueValue *LLVMValueRef;
 typedef struct LLVMOpaqueType *LLVMTypeRef;
 typedef struct LLVMOpaqueContext *LLVMContextRef;
+typedef struct LLVMOpaqueMemoryBuffer *LLVMMemoryBufferRef;
 extern const char *LLVMGetModuleInlineAsm(LLVMModuleRef M, size_t *Len);
 extern LLVMValueRef LLVMIsAAtomicCmpXchgInst(LLVMValueRef Val);
 extern LLVMValueRef LLVMIsAAtomicRMWInst(LLVMValueRef Val);
@@ -16,6 +17,11 @@ extern LLVMTypeRef LLVMScalableVectorType(LLVMTypeRef ElementType, unsigned Elem
 extern int LLVMGetTypeKind(LLVMTypeRef Ty);
 extern char *LLVMNormalizeTargetTriple(const char *Triple);
 extern void LLVMDisposeMessage(char *Message);
+extern LLVMMemoryBufferRef LLVMCreateMemoryBufferWithMemoryRangeCopy(const char *InputData, size_t InputDataLength, const char *BufferName);
+
+static void plan9asmIRMemoryBuffer(const char *Text, size_t Length, LLVMMemoryBufferRef *Out) {
+    *Out = LLVMCreateMemoryBufferWithMemoryRangeCopy(Text, Length, "<plan9asm>");
+}
 */
 import "C"
 
@@ -24,6 +30,18 @@ import (
 
 	"github.com/xgo-dev/llvm"
 )
+
+// The pinned binding only constructs IR buffers from files or stdin. LLVM22's
+// copying constructor keeps the exact byte length, including embedded NULs.
+// The caller owns this buffer until ParseIR consumes it, even on parse failure.
+func llvmIRMemoryBuffer(text string) llvm.MemoryBuffer {
+	input := C.CString(text)
+	defer C.free(unsafe.Pointer(input))
+	var buffer llvm.MemoryBuffer
+	C.plan9asmIRMemoryBuffer(input, C.size_t(len(text)),
+		(*C.LLVMMemoryBufferRef)(unsafe.Pointer(&buffer.C)))
+	return buffer
+}
 
 // LLVM22 llvm-c/Core.h exposes LLVMGetModuleInlineAsm, but llvm v0.10.1
 // only binds its setter. Replace this length-only bridge with the official

@@ -3,7 +3,6 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/xgo-dev/llvm"
 )
@@ -255,23 +254,9 @@ func parseIRModule(ir string) (llvm.Module, error) {
 }
 
 func parseIRModuleInContext(ctx llvm.Context, ir string) (llvm.Module, error) {
-	f, err := os.CreateTemp("", "plan9asm-*.ll")
-	if err != nil {
-		return llvm.Module{}, fmt.Errorf("create temp ir file: %w", err)
-	}
-	name := f.Name()
-	_ = f.Close()
-	defer os.Remove(name)
-
-	if err := os.WriteFile(name, []byte(ir), 0644); err != nil {
-		return llvm.Module{}, fmt.Errorf("write temp ir file: %w", err)
-	}
-	buf, err := llvm.NewMemoryBufferFromFile(name)
-	if err != nil {
-		return llvm.Module{}, fmt.Errorf("open temp ir file: %w", err)
-	}
-	// NOTE: do not dispose MemoryBuffer here. In this llvm binding, ParseIR
-	// may take ownership and disposing the buffer can crash.
+	buf := llvmIRMemoryBuffer(ir)
+	// LLVM22 ParseIR consumes this buffer on both success and error. The caller
+	// still owns a successful module and must dispose it before its context.
 	mod, err := (&ctx).ParseIR(buf)
 	if err != nil {
 		return llvm.Module{}, fmt.Errorf("parse generated ir: %w", err)
