@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -177,6 +178,75 @@ func TestX86OfficialOrdinaryMoveCompleteSourceJoin(t *testing.T) {
 		Source goasmrules.X86LegacyCatalog
 		Modes  map[string][]goasmrules.X86OrdinaryMoveRow
 	}{catalog, modes})
+}
+
+// All preserved GP/XMM bytes and typed pointer extents are independently
+// initialized. An MMX operand opens a real MMX region and is closed by EMMS.
+// The source-row descriptor supplies none of those facts.
+func x86OrdinaryMoveInitializedFunction(name, operation, arch string) (string, string) {
+	word, move := goWordSize(arch), "MOVQ"
+	if word == 4 {
+		move = "MOVL"
+	}
+	source := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\n%s out+0(FP),DX\n%s p+%d(FP),SI\n"+
+		"%s old+%d(FP),BX\n%s input+%d(FP),CX\nMOVOU (SI),X0\nMOVOU (SI),X1\nCMPL CX,CX\n",
+		name, 2*word+16, move, move, word, move, 2*word, move, 2*word+8)
+	mmx := strings.Contains(operation, "M1")
+	if mmx {
+		source += "MOVQ (SI),M1\n"
+	}
+	source += operation + "\n"
+	if mmx {
+		source += "MOVQ M1,32(DX)\nEMMS\n"
+	}
+	source += fmt.Sprintf("MOVOU X1,0(DX)\nMOVOU (SI),X2\nMOVOU X2,16(DX)\n"+
+		"%s BX,48(DX)\n%s CX,56(DX)\nSETCS 62(DX)\nSETEQ 63(DX)\nRET\n", move, move)
+	return source, fmt.Sprintf("func %s(out *[64]byte,p *[16]byte,old,input uint64)\n", name)
+}
+
+func TestX86OfficialOrdinaryMoveInitializedThreeAPIFiveObjects(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := x86OrdinaryMoveOriginalCases(t, catalog)
+	for _, arch := range []string{"amd64", "386"} {
+		var cases []x86OfficialPackedCase
+		for _, fixture := range all {
+			if arch == "386" && fixture.mode64 || strings.Contains(fixture.original, "$slot+") {
+				continue
+			}
+			cases = append(cases, fixture.x86OfficialPackedCase)
+		}
+		x86Legacy127Objects(t, arch, cases, x86OrdinaryMoveInitializedFunction)
+	}
+}
+
+func TestX86OfficialOrdinaryMoveSourceRowsDoNotSupplyInputAuthority(t *testing.T) {
+	for _, row := range []struct{ operation, initialization string }{
+		{"MOVB CL,BL", "MOVQ old+0(FP),BX\n"},
+		{"MOVW CX,BX", "MOVQ input+8(FP),CX\n"},
+		{"MOVL M1,CX", ""},
+		{"MOVQ X0,M1", ""},
+		{"MOVB 0(SI),BL", "MOVQ old+0(FP),BX\n"},
+		{"MOVQ CX,0(SI)", "MOVQ input+8(FP),CX\n"},
+		{"MOVW $slot+0(SP),BX", "MOVQ old+0(FP),BX\n"},
+		{"MOVL $slot+0(SP),BX", ""},
+		{"MOVQ $slot+0(SP),BX", ""},
+	} {
+		t.Run(row.operation, func(t *testing.T) {
+			source := "TEXT ·MissingMovInput(SB),4,$0-24\n" + row.initialization + row.operation + "\nMOVQ BX,ret+16(FP)\nRET\n"
+			declaration := "func MissingMovInput(old,input uint64) uint64\n"
+			// The source spelling remains Go-valid even when a numerical input,
+			// bank/state input, pointer or independently owned frame is absent.
+			goAssemblerOracleOutput(t, "amd64", source, "", true)
+			for _, api := range []string{"text", "module", "Go"} {
+				if ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original MOV syntax supplied absent input/source authority", api, ir, err)
+				}
+			}
+		})
+	}
 }
 
 func TestX86OfficialOrdinaryMoveImmediateFirstMatch(t *testing.T) {
