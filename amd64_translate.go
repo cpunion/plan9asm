@@ -670,7 +670,7 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 					continue // Sized NOP does not consume an effective address.
 				}
 			}
-			if !access.nativeInput {
+			if !certified || !access.nativeInput {
 				// Address formation consumes the same original NAME_AUTO bias
 				// as an access, without receiving any DATA-read certificate.
 				physical, err := fixedLocalMemoryAddress(ins, index, c.fixedLocal.frame)
