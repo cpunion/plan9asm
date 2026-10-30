@@ -230,6 +230,35 @@ func TestX86ScalarMultiplyMOVBEEscapeBoundsBeforePayload(t *testing.T) {
 	}
 }
 
+func TestX86ScalarMultiplyMOVBERejectsByteWidthTableMutation(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, entry := range catalog.Optab {
+		if entry.Ytab != "yimul" && entry.Ytab != "yimul3" && entry.Ytab != "ymovbe" {
+			continue
+		}
+		for _, row := range entry.Rows {
+			count++
+			t.Run(fmt.Sprintf("%s/%d", entry.Opcode, row.RowIndex), func(t *testing.T) {
+				changed := entry
+				changed.Opcode = entry.Opcode[:len(entry.Opcode)-1] + "B"
+				changed.Prefix = "Pb"
+				// Keep all original rows and bytes coherent. IMULB belongs to
+				// the independent ydivb table, not the W/L/Q carrier grammar.
+				if _, err := x86ScalarRMWRowWitnesses(changed, row, "amd64"); err == nil {
+					t.Fatal("SCALAR_MULTIPLY_MOVBE_BYTE_WIDTH_ACCEPTED", entry.Ytab)
+				}
+			})
+		}
+	}
+	if count != 24 {
+		t.Fatal("width mutation lost complete original source rows", count)
+	}
+}
+
 func TestX86ScalarRMWCompleteOrderedRowsAndModes(t *testing.T) {
 	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {
