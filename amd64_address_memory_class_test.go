@@ -212,8 +212,8 @@ func TestX86AddressClassPreservesActualMemoryAndRelocationObjects(t *testing.T) 
 		}{
 			{move + " $·cell(SB),AX", false},
 			{move + " $16(AX),BX", false},
-			{"XADDL CX,·cell(SB)", false},
-			{"XCHGL CX,16(AX)", false},
+			{"XADDL CX,·cell(SB)", true},
+			{"XCHGL CX,16(AX)", true},
 			{"INCL ·cell(SB)", true},
 			{"NEGL 16(AX)", true},
 			{"STMXCSR ·cell(SB)", true},
@@ -253,6 +253,33 @@ func TestX86AddressClassPreservesActualMemoryAndRelocationObjects(t *testing.T) 
 				}
 			}
 		}
+	}
+}
+
+func TestX86AddressClassInitializedExchangeObjects(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			move, word := "MOVQ", 8
+			if target.arch == "386" {
+				move, word = "MOVL", 4
+			}
+			// Keep the discovering operands. The static counterpart supplies
+			// its actual mutable DATA; the pointer counterpart binds its entry
+			// parameter. Both independently define the numerical CX input.
+			fixtures := []x86OriginalGPInitializedFormat{
+				{
+					source: "DATA ·cell+0(SB)/4,$0\nGLOBL ·cell(SB),16,$4\n" +
+						"TEXT ·AddressStatic(SB),4,$0-0\nMOVL $7,CX\nXADDL CX,·cell(SB)\nRET\n",
+					declaration: "func AddressStatic()",
+				},
+				{
+					source: fmt.Sprintf("TEXT ·AddressPointer(SB),4,$0-%d\n%s p+0(FP),AX\n"+
+						"MOVL $7,CX\nXCHGL CX,16(AX)\nRET\n", word, move),
+					declaration: "func AddressPointer(p *[32]byte)",
+				},
+			}
+			x86OriginalGPInitializedFormatObjects(t, fixtures, target.arch, target.triple)
+		})
 	}
 }
 

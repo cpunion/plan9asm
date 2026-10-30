@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -73,14 +74,16 @@ func TestTranslateX86XCHGCompleteGo127FormsAcrossTargets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			signatures := map[string]FuncSig{"xchgforms": {Name: "xchgforms", Ret: Void}}
 			ll, err := Translate(file, Options{
 				Goarch:       target.goarch,
 				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"xchgforms": {Name: "xchgforms", Ret: Void}},
+				Sigs:         signatures,
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ll != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original uninitialized exchange formats acquired source inputs", err)
 			}
+			ll = x86ScalarFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0)
 			for _, want := range []string{"asm sideeffect \"xchg", "i8", "i16", "i32"} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("XCHG lowering omitted %q:\n%s", want, ll)
@@ -90,6 +93,8 @@ func TestTranslateX86XCHGCompleteGo127FormsAcrossTargets(t *testing.T) {
 				t.Fatalf("XCHGQ lowering omitted i64 operations:\n%s", ll)
 			}
 			compileLLVMToObject(t, llc, target.triple, "xchg-"+target.name+".ll", "xchg-"+target.name+".o", ll)
+			fixture := x86InitializedExchangeFixture(t, source, file, target.goarch, "xchgforms")
+			x86OriginalGPInitializedFormatObjects(t, []x86OriginalGPInitializedFormat{fixture}, target.goarch, target.triple)
 		})
 	}
 }

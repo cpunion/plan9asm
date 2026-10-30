@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -146,6 +147,13 @@ RET
 			resolve := func(name string) string { return strings.TrimPrefix(name, "·") }
 			options := Options{Goarch: target.arch, TargetTriple: target.triple, ResolveSym: resolve,
 				Sigs: map[string]FuncSig{"Value": {Name: "Value", Ret: Void}}}
+			// Resolving OFFSET proves its displacement, not that integer 32
+			// denotes readable storage. Retain the original format object
+			// separately from the three public source-context observations.
+			format := x86ScalarFormatObjectUnit(t, file, options.Sigs, target.arch, target.triple, 0)
+			for _, level := range []string{"-O0", "-O2"} {
+				x86PackedStringCompileObject(t, llc, target.triple, format, level)
+			}
 			pkg := mustGoPackage(t, "memory", "package memory\nfunc Value()\n")
 			for _, api := range []string{"text", "module", "GoModule"} {
 				t.Run(api, func(t *testing.T) {
@@ -172,12 +180,19 @@ RET
 							ir = result.Module.String()
 						}
 					}
-					if err != nil || ir == "" {
-						t.Fatalf("resolved macro lost its existing object path: %v", err)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatalf("resolved displacement authorized an unbound numerical address: %v", err)
 					}
-					compileLLVMToObject(t, llc, target.triple, "resolved-memory.ll", "resolved-memory.o", ir)
 				})
 			}
+			move, word := "MOVQ", 8
+			if target.arch == "386" {
+				move, word = "MOVL", 4
+			}
+			bound := fmt.Sprintf("#define OFFSET (3*8)\nTEXT ·Value(SB),4,$0-%d\n"+
+				"%s p+0(FP),AX\nMOVL OFFSET(AX),BX\nRET\n", word, move)
+			fixture := x86OriginalGPInitializedFormat{bound, "func Value(p *[32]byte)"}
+			x86OriginalGPInitializedFormatObjects(t, []x86OriginalGPInitializedFormat{fixture}, target.arch, target.triple)
 		})
 	}
 }

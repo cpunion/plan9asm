@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -188,16 +189,30 @@ TEXT stack_top(SB),$0
 		{name: "windows", triple: "x86_64-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			ir, err := Translate(file, Options{
+			options := Options{
 				Goarch:       "amd64",
 				TargetTriple: target.triple,
 				Sigs: map[string]FuncSig{
 					"trampoline_start": {Name: "trampoline_start", Ret: Void},
 					"stack_top":        {Name: "stack_top", Ret: Void},
 				},
-			})
+			}
+			ir, err := Translate(file, options)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("addressing four raw TEXT bytes authorized an eight-byte read", err)
+			}
+			// The original source and blob checks above remain unchanged.
+			// This separate address-only program checks alignment and emitted
+			// bytes without pretending that the original load had an owner.
+			addressOnly := strings.Replace(source, "\tMOVQ (AX), AX\n", "", 1)
+			goAssemblerOracleOutput(t, "amd64", addressOnly, "", true)
+			addressFile, err := Parse(ArchAMD64, addressOnly)
 			if err != nil {
 				t.Fatal(err)
+			}
+			ir, err = Translate(addressFile, options)
+			if err != nil || ir == "" {
+				t.Fatal("separate address-only raw TEXT program lost its object path", err)
 			}
 			if !strings.Contains(ir, "define void @stack_top()") || !strings.Contains(ir, " align 32 {") {
 				t.Fatal("aligned raw TEXT declaration missing")

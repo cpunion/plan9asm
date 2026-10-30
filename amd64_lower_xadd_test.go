@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"runtime"
 	"strings"
 	"testing"
@@ -151,14 +152,16 @@ TEXT xaddforms(SB),$0-0
 			if err != nil {
 				t.Fatal(err)
 			}
+			signatures := map[string]FuncSig{"xaddforms": {Name: "xaddforms", Ret: Void}}
 			ll, err := Translate(file, Options{
 				Goarch:       target.goarch,
 				TargetTriple: target.triple,
-				Sigs:         map[string]FuncSig{"xaddforms": {Name: "xaddforms", Ret: Void}},
+				Sigs:         signatures,
 			})
-			if err != nil {
-				t.Fatal(err)
+			if ll != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original uninitialized exchange formats acquired source inputs", err)
 			}
+			ll = x86ScalarFormatObjectUnit(t, file, signatures, target.goarch, target.triple, 0)
 			for _, want := range []string{"add i8", "add i16", "add i32", "store i1"} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("XADD lowering omitted %q:\n%s", want, ll)
@@ -168,6 +171,8 @@ TEXT xaddforms(SB),$0-0
 				t.Fatalf("XADDQ lowering omitted add i64:\n%s", ll)
 			}
 			compileLLVMToObject(t, llc, target.triple, "xadd-"+target.name+".ll", "xadd-"+target.name+".o", ll)
+			fixture := x86InitializedExchangeFixture(t, target.source, file, target.goarch, "xaddforms")
+			x86OriginalGPInitializedFormatObjects(t, []x86OriginalGPInitializedFormat{fixture}, target.goarch, target.triple)
 		})
 	}
 }
