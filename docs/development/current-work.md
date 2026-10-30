@@ -7,8 +7,8 @@ translation efficiency while preserving all five architecture gates. Read
 
 ## Published CI and local revisions
 
-[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft at
-`d6cb9245cd`. Its [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41055685183)
+[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The preceding
+`d6cb9245cd` [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41055685183)
 first ended with 315 successful and ten failed jobs. Seven Go 1.21 source jobs
 lost their runners; one CLI collector lost an artifact download, producing two
 dependent collector failures. Recovery completed with 325/325 successful jobs:
@@ -24,10 +24,9 @@ partitions, Windows/race package logs and 22 coverage profiles: 88.1% total and
 92.52% patch coverage. These results do not certify another head. Both review
 threads are resolved; no formal approval has been recorded.
 
-The local follow-up at `aff58904d` adds x87 MOVE, literal SIMD and scalar
-source joins.
-It requires its own publication, cloud CI, coverage and review. The preceding
-head's recovery is accepted; publish only through the allowed fork.
+The follow-up's functional code at `aff58904d` adds x87 MOVE, literal SIMD and
+scalar source joins. Its publication requires its own cloud CI, coverage and
+review. The preceding head's accepted recovery does not certify that publication.
 
 ## Qualified local batches
 
@@ -109,8 +108,8 @@ failures. Track individual ordinary-source and special runtime contracts in
 
 ## Remaining work
 
-1. Publish the qualified follow-up as one batch, then require its own complete
-   CI, raw/artifact joins, coverage and fresh review. The preceding head's
+1. Require the publication's own complete CI, raw/artifact joins, coverage and
+   fresh review. The preceding head's
    accepted results do not certify this follow-up.
 2. Continue complete legacy transport groups with original source order and
    modes. Reuse typed effects and bounded object batches; do not enumerate
