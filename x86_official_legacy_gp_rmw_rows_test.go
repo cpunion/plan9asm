@@ -140,16 +140,18 @@ func TestX86OfficialImplicitMulDivByteAliasesOriginalGo(t *testing.T) {
 			extension, _ := strconv.ParseUint(entry.OpBytes[1], 0, 3)
 			for _, alias := range aliases {
 				instruction := entry.Opcode + " " + alias.name
-				if arch == "386" && alias.rex != 0 {
-					accepted := alias.name == "BP" || alias.name == "SI" || alias.name == "DI"
+				if alias.name == "SPB" || arch == "386" && alias.rex != 0 {
+					accepted := arch == "386" && (alias.name == "BP" || alias.name == "SI" || alias.name == "DI")
 					if accepted {
 						synthesized++
 					} else {
 						refused++
 					}
-					t.Run("386-special/"+instruction, func(t *testing.T) {
+					t.Run(arch+"-special/"+instruction, func(t *testing.T) {
 						// Go synthesizes the three physical byte sources in mode32.
 						// Acceptance is separate from the direct-byte expectations.
+						// Explicit SPB is rejected in both modes; SP remains its
+						// separate legal low-byte spelling in AMD64.
 						goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+instruction+"\nRET\n", "", accepted)
 					})
 					continue
@@ -163,8 +165,8 @@ func TestX86OfficialImplicitMulDivByteAliasesOriginalGo(t *testing.T) {
 					witness: goasmrules.X86PackedBinaryWitness{Instruction: instruction, Encoding: code}})
 			}
 		}
-		if len(aliases) != 36 || len(cases) != map[string]int{"amd64": 144, "386": 48}[arch] ||
-			synthesized != map[string]int{"amd64": 0, "386": 12}[arch] || refused != map[string]int{"amd64": 0, "386": 84}[arch] {
+		if len(aliases) != 36 || len(cases) != map[string]int{"amd64": 140, "386": 48}[arch] ||
+			synthesized != map[string]int{"amd64": 0, "386": 12}[arch] || refused != map[string]int{"amd64": 4, "386": 84}[arch] {
 			t.Fatal("complete byte-bank/mode inventory changed", arch, len(cases), synthesized, refused)
 		}
 		x86ImplicitMulDivOriginalByteBatches(t, arch, cases)

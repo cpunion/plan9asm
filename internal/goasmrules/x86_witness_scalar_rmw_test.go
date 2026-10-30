@@ -128,6 +128,94 @@ func TestX86ScalarImplicitMulDivMalformedSourceIsBounded(t *testing.T) {
 	}
 }
 
+func TestX86ScalarCompleteOriginalSchemaBeforeSelectedPayload(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var entry X86LegacyOpcode
+	for _, candidate := range catalog.Optab {
+		if candidate.Opcode == "ADDL" {
+			entry = candidate
+		}
+	}
+	if len(entry.Rows) != 5 || entry.Ytab != "yaddl" {
+		t.Fatal("independent original multi-row scalar fixture changed")
+	}
+	if witnesses, err := x86ScalarRMWRowWitnesses(entry, entry.Rows[1], "amd64"); err != nil || len(witnesses) != 1 {
+		t.Fatal("original complete source positive was not accepted", err)
+	}
+	maxInt := int(^uint(0) >> 1)
+	minInt := -maxInt - 1
+	check := func(t *testing.T, changed X86LegacyOpcode, selected X86LegacyOperand) {
+		t.Helper()
+		defer func() {
+			if failure := recover(); failure != nil {
+				t.Error("SCALAR_SHARED_SCHEMA_PANIC", failure)
+			}
+		}()
+		if _, err := x86ScalarRMWRowWitnesses(changed, selected, "amd64"); err == nil {
+			t.Fatal("SCALAR_SHARED_SCHEMA_INVALID_ACCEPTED")
+		}
+	}
+	for index := range entry.Rows {
+		for _, field := range []string{"index", "zcase", "stride", "offset", "arity"} {
+			t.Run(fmt.Sprintf("original%d/%s", index, field), func(t *testing.T) {
+				changed := entry
+				changed.Rows = append([]X86LegacyOperand(nil), entry.Rows...)
+				original := &changed.Rows[index]
+				switch field {
+				case "index":
+					original.RowIndex++
+				case "zcase":
+					original.ZCase = "Zunknown"
+				case "stride":
+					original.ZOffset = 0
+				case "offset":
+					original.UnmatchedOffset = -1
+				case "arity":
+					original.Classes = []string{strings.Join(original.Classes, ",")}
+				}
+				check(t, changed, entry.Rows[1])
+			})
+		}
+	}
+	for _, field := range []string{"arity", "index", "zcase", "stride", "offset"} {
+		t.Run("selected/"+field, func(t *testing.T) {
+			selected := entry.Rows[1]
+			switch field {
+			case "arity":
+				selected.Classes = []string{strings.Join(selected.Classes, ",")}
+			case "index":
+				selected.RowIndex = -1
+			case "zcase":
+				selected.ZCase = "Zunknown"
+			case "stride":
+				selected.ZOffset = -1
+			case "offset":
+				selected.UnmatchedOffset = minInt
+			}
+			check(t, entry, selected)
+		})
+	}
+	for _, value := range []int{0, minInt, maxInt} {
+		t.Run(fmt.Sprintf("consistent-previous-stride%d", value), func(t *testing.T) {
+			changed := entry
+			changed.Rows = append([]X86LegacyOperand(nil), entry.Rows...)
+			changed.Rows[0].ZOffset = value
+			selected := entry.Rows[1]
+			selected.UnmatchedOffset = value
+			if value == maxInt {
+				selected = entry.Rows[2]
+				selected.UnmatchedOffset = value + entry.Rows[1].ZOffset
+			}
+			// Keep the final original payload boundary untouched. The old
+			// selected-offset check alone accepts zero or wrapped offsets.
+			check(t, changed, selected)
+		})
+	}
+}
+
 // This exercises the existing scalar transport before adding a new view. A
 // source-format refusal is a missing projection, not a numerical defect.
 func TestX86ScalarMultiplyMOVBECompleteSourceTransport(t *testing.T) {
