@@ -267,16 +267,20 @@ func TestX86OfficialOrdinaryMoveOriginalAddressCapturedFrameObjects(t *testing.T
 				"MOV" + width + " $slot-16(SP),BX\nMOVQ $0,BX\nMOVQ 0(SP),AX\nMOVQ AX,ret+8(FP)\nRET\n"
 			declaration := "func OrdinaryAddress(input uint64) uint64\n"
 			goAssemblerOracleOutput(t, "amd64", source, "", true)
-			triple := "x86_64-unknown-linux-gnu"
-			pkg, request, _, options := x86CMOVFixedLocalFixture(t, source, declaration, "linux/amd64", triple)
-			fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
-				if err != nil || ir == "" {
-					t.Fatal("original address MOV with independently captured initialized frame rejected", err)
-				}
-				for _, level := range []string{"-O0", "-O2"} {
-					x86PackedStringCompileObject(t, llc, triple, ir, level)
-				}
-			})
+			for _, goos := range []string{"linux", "darwin", "windows"} {
+				t.Run(goos, func(t *testing.T) {
+					triple := testTargetTriple(goos, "amd64")
+					pkg, request, _, options := x86CMOVFixedLocalFixture(t, source, declaration, goos+"/amd64", triple)
+					fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
+						if err != nil || ir == "" {
+							t.Fatal("original address MOV with independently captured initialized frame rejected", err)
+						}
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, triple, ir, level)
+						}
+					})
+				})
+			}
 		})
 	}
 }

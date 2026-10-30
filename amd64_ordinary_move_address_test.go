@@ -68,3 +68,66 @@ func TestGoAMD64FixedLocalOriginalMoveAddressDomains(t *testing.T) {
 		}
 	}
 }
+
+func TestGoAMD64FixedLocalOriginalMoveAddressLiveUses(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, width := range []string{"W", "L", "Q"} {
+		for _, use := range []string{"dereference", "numeric", "escape", "out-of-bounds", "uninitialized-local"} {
+			t.Run(width+"/"+use, func(t *testing.T) {
+				address, initialization := "slot-16", "MOVQ AX,0(SP)\n"
+				tail := "MOVQ (BX),AX\nMOVQ AX,ret+8(FP)\n"
+				switch use {
+				case "numeric":
+					tail = "ADDQ BX,0(SP)\nMOVQ 0(SP),AX\nMOVQ AX,ret+8(FP)\n"
+				case "escape":
+					tail = "MOVQ BX,ret+8(FP)\n"
+				case "out-of-bounds":
+					address = "slot+8"
+				case "uninitialized-local":
+					initialization = ""
+				}
+				source := "TEXT ·AddressUse(SB),4,$16-16\nMOVQ input+0(FP),AX\n" + initialization +
+					"MOV" + width + " $" + address + "(SP),BX\n" + tail + "RET\n"
+				declaration := "func AddressUse(input uint64) uint64\n"
+				goAssemblerOracleOutput(t, "amd64", source, "", true)
+				pkg, request, _, options := x86CMOVFixedLocalFixture(t, source, declaration, "linux/amd64", "x86_64-unknown-linux-gnu")
+				if width == "Q" && use == "dereference" {
+					fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
+						if err != nil || ir == "" {
+							t.Fatal("original full-width MOV lost its independently bounded initialized private pointer", err)
+						}
+						for _, level := range []string{"-O0", "-O2"} {
+							x86PackedStringCompileObject(t, llc, "x86_64-unknown-linux-gnu", ir, level)
+						}
+					})
+					return
+				}
+				ctx, cancel := runtimeOracleStageContext(t)
+				defer cancel()
+				captured, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if err := captured.Close(); err != nil {
+						t.Error(err)
+					}
+				}()
+				expanded, err := captured.preprocess(request.AssemblyFile, []byte(source))
+				if err != nil {
+					t.Fatal(err)
+				}
+				file, err := Parse(ArchAMD64, expanded)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := captured.BindFixedLocal(ctx, pkg, file, options); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original named address acquired absent bytes, numeric bits, escaped pointer or out-of-bounds storage", err)
+				}
+			})
+		}
+	}
+}
