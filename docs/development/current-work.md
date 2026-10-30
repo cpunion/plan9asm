@@ -20,6 +20,10 @@ encountered account cache-egress exhaustion and Go installation timeouts before
 tests ran. Preserve that round's failures. Shared Go setup disables remote
 Actions caches; writable job-local caches and exact compiler verification remain.
 The repair requires its own complete CI rather than inheriting earlier results.
+Published repair `9e48d6747` completed its first
+[round](https://github.com/xgo-dev/plan9asm/actions/runs/41124480505) naturally
+with 325/325 successful jobs and no reruns. Complete raw/profile/Codecov
+acceptance remains separate from the job conclusion.
 
 The historical
 `d6cb9245cd` [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41055685183)
@@ -123,15 +127,51 @@ all three APIs and O0/O2 numerical and fault comparisons against original Go.
 These are emulated executions, not native hardware acceptance. MOVSWW/MOVZWW
 retain word reads, and mode32 MOVLQZX retains its actual 32-bit write.
 
+The ordinary MOV component at `2ec2e7fa0`, integrated locally at `4b59b7399`,
+retains all four ordered MOVB/W/L/Q tables: 32 current and 33 minimum-SDK rows.
+GP, MMX/XMM and address roles remain separate. The minimum SDK's extra signed
+MOVQ immediate row and L/Q address-to-LEA frontend rewrites retain actual Go
+observations. Canonical LEA source IDs are references, not additional MOV rows.
+
+Complete-family tests reproduced a shared named-AUTO bias error in original
+LEAQ and the new MOVQ path: original Go writes through the local address, while
+LLVM previously returned the old input. Both SDKs reproduce and repair that
+actual execution failure. Address formation now shares the validated original
+frame projection with emission, without gaining a DATA-read certificate.
+Failed access metadata cannot select emission. FP names, Unicode and original
+Raw/operand replay remain checked; W/L writes revoke pointer identity and do
+not manufacture numerical address bytes, while Q retains its proved origin.
+
+Both SDKs pass 141 existing semantic roots / 8,260 nodes without failures or
+skips. The complete 157-root rule package passes 16,600 / 16,623 nodes, and the
+17-root family passes 1,003 / 1,027. Six Linux/amd64 Docker runtime roots pass
+22 nodes per SDK, including original Go versus all three APIs at O0/O2.
+The three host-inapplicable roots per SDK remain explicit skips. Runtime was
+executed at `7b36254b4`; only one test changed at `2ec2e7fa0`, with all other
+5,442 tracked files byte-exact. All 42 prior snapshots remain byte-exact.
+
+Controlled comparisons retain the original 29 cases / 696 measurements plus
+24 separate MOV-dense measurements using identical accepted inputs. Original
+across-case median ratios are 0.99949 / 0.99750; no case median reaches 1.05.
+One current-Go VPADDSW.Z block remains at 1.05696, with case median 1.01569.
+MOV-dense medians are 0.98188 / 0.99104; allocations are approximately unchanged.
+These descriptive Translate results establish no SDK or generated-code speedup.
+An earlier 12-sample incomplete overlay attempt remains excluded, not erased.
+
 ## Inventory and semantic boundaries
 
-At `1732b74ac`, the independently joined source inventory has 56 overlapping
-family views and 4,469 records: 3,568 AVX plus 901 legacy, comprising 883 optab
-and 18 ymovtab rows. The legacy denominator remains 1,418 current-SDK /
-1,417 minimum-SDK rows. It excludes exactly 13 Go Zpseudo rows and four Zbyte
-data rows; their identities remain retained separately. The 517 / 516 unjoined
-rows are inventory gaps, not unsupported-instruction totals or native execution
-counts.
+At `2ec2e7fa0`, the independently joined source inventory has 57 overlapping
+family views and 44 identity snapshots:
+
+| SDK | AVX | optab | ymovtab | Total joined | Legacy joined / denominator | Unjoined legacy |
+|---|---:|---:|---:|---:|---:|---:|
+| Current | 3,568 | 915 | 18 | 4,501 | 933 / 1,418 | 485 |
+| Minimum | 3,568 | 916 | 18 | 4,502 | 934 / 1,417 | 483 |
+
+The denominator excludes exactly 13 Go Zpseudo rows and four Zbyte data rows;
+their identities remain retained separately. The ymovtab sentinel also remains
+retained separately from its 112 encoding rows. Unjoined rows are inventory
+gaps, not unsupported-instruction totals or native execution counts.
 
 Typed forms keep operation, encoding, register carrier, memory tuple, input
 roles, old destinations and machine-state effects distinct. ROUNDSS/ROUNDSD
@@ -164,6 +204,8 @@ failures. Track individual ordinary-source and special runtime contracts in
 4. [LLGo2694](https://github.com/xgo-dev/llgo/pull/2694) now publishes `f1c1571a1`,
    rebased onto main `277e5b280` and pinning accepted translator `d905e3682`.
    Normal public-module verification, fresh host checks and Linux Docker
-   compile/link/run probes pass; its own fresh cloud CI remains under observation.
+   compile/link/run probes pass. Its fresh cloud CI is accepted: 13 workflows,
+   140 successful jobs and two exact PR publisher skips, with 97.06% patch
+   coverage against 95.84%. Platform/test skips remain separate from passes.
    A fork pin does not resolve the P1 tagged upstream release requirement.
    Coordinate one heavy local Go/LLVM/Node invocation at a time.
