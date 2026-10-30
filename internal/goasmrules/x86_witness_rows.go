@@ -800,6 +800,16 @@ func x86PackedEncodingAtoms(expression string, required, optional []string) (map
 }
 
 func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([]X86PackedBinaryWitness, error) {
+	if entry.Ytab == "yxshuf" || entry.Ytab == "yaes" {
+		encoding, err := x86LegacyLiteralSIMDEncoding(entry, row)
+		if err != nil {
+			return nil, err
+		}
+		if len(entry.OpBytes) > 2 {
+			return x86LegacyLiteralSIMDWitnesses(entry, encoding), nil
+		}
+		// Keep the original six placeholder-row syntax fields unchanged.
+	}
 	literal := entry.Ytab == "ymmxmm0f38" && entry.Prefix == "Px" && entry.EscapeAdjustment == 1 &&
 		row.RowIndex == 1 && row.ZCase == "Zlitm_r" && row.ZOffset == 5 && row.UnmatchedOffset == 4
 	shift := entry.Ytab == "yps" || entry.Ytab == "ypsdq"
@@ -964,4 +974,123 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 		})
 	}
 	return witnesses, nil
+}
+
+// X86LegacyLiteralSIMDRows retains two complete source tables. The overlap
+// with older shuffle views remains the same original row identity. A carrier
+// width is not a memory tuple, numerical input or native-entry permission.
+func X86LegacyLiteralSIMDRows(catalog X86LegacyCatalog, arch string) ([]X86PackedBinaryRow, error) {
+	if arch != "amd64" && arch != "386" {
+		return nil, fmt.Errorf("literal SIMD source view requires an explicit Go x86 mode")
+	}
+	var rows []X86PackedBinaryRow
+	for _, entry := range catalog.Optab {
+		if entry.Ytab != "yxshuf" && entry.Ytab != "yaes" {
+			continue
+		}
+		for _, operand := range entry.Rows {
+			witnesses, err := x86PackedLegacyRowWitnesses(entry, operand)
+			if err != nil {
+				return nil, fmt.Errorf("%s/%d: %w", entry.Opcode, operand.RowIndex, err)
+			}
+			rows = append(rows, X86PackedBinaryRow{
+				ID:     fmt.Sprintf("optab/%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, operand.RowIndex),
+				Opcode: entry.Opcode, Witnesses: witnesses,
+			})
+		}
+	}
+	if len(rows) != 33 {
+		return nil, fmt.Errorf("incomplete original literal SIMD source view: rows=%d", len(rows))
+	}
+	return rows, nil
+}
+
+// These single-row Z cases use the selected complete zero-terminated span;
+// zoffset is an unmatched-row stride, not the number of literal bytes emitted.
+func x86LegacyLiteralSIMDEncoding(entry X86LegacyOpcode, selected X86LegacyOperand) ([]byte, error) {
+	fail := func() ([]byte, error) { return nil, fmt.Errorf("unmodeled complete literal SIMD source schema") }
+	classes, zcase := []string{"Yxm", "Yxr"}, "Zlitm_r"
+	if entry.Ytab == "yxshuf" {
+		classes, zcase = []string{"Yu8", "Yxm", "Yxr"}, "Zibm_r"
+	} else if entry.Ytab != "yaes" {
+		return fail()
+	}
+	valid := func(row X86LegacyOperand) bool {
+		if row.RowIndex != 0 || row.ZCase != zcase || row.ZOffset != 2 || row.UnmatchedOffset != 0 || len(row.Classes) != len(classes) {
+			return false
+		}
+		for index, class := range classes {
+			if row.Classes[index] != class {
+				return false
+			}
+		}
+		return true
+	}
+	if entry.Kind != "encoding" || len(entry.Rows) != 1 || !valid(entry.Rows[0]) || !valid(selected) || len(entry.OpBytes) < 2 || len(entry.OpBytes) > 4 {
+		return fail()
+	}
+	literal := make([]byte, len(entry.OpBytes))
+	for index, atom := range entry.OpBytes {
+		value, err := strconv.ParseUint(atom, 0, 8)
+		if err != nil || (value == 0) != (index == len(literal)-1) {
+			return fail()
+		}
+		literal[index] = byte(value)
+	}
+	literal = literal[:len(literal)-1]
+	var prefix []byte
+	escape := 0
+	switch {
+	case entry.Ytab == "yxshuf" && len(literal) == 1:
+		switch entry.Prefix {
+		case "Pq":
+			prefix = []byte{0x66, 0x0f}
+		case "Pf2":
+			prefix = []byte{0xf2, 0x0f}
+		case "Pf3":
+			prefix = []byte{0xf3, 0x0f}
+		case "Pm":
+			prefix = []byte{0x0f}
+		default:
+			return fail()
+		}
+	case entry.Prefix == "Pq" && len(literal) == 2:
+		mapByte := byte(0x38)
+		if entry.Ytab == "yxshuf" {
+			mapByte = 0x3a
+		}
+		if literal[0] != mapByte {
+			return fail()
+		}
+		prefix = []byte{0x66, 0x0f}
+	case entry.Ytab == "yaes" && entry.Prefix == "Px" && len(literal) == 3 && literal[0] == 0x0f && literal[1] == 0x38:
+		// Go emits the selected leading 0F before PutOpBytesLit advances;
+		// the combined source span retains it exactly once.
+		escape = 1
+	default:
+		return fail()
+	}
+	if entry.EscapeAdjustment != escape {
+		return fail()
+	}
+	return append(prefix, literal...), nil
+}
+
+func x86LegacyLiteralSIMDWitnesses(entry X86LegacyOpcode, encoding []byte) []X86PackedBinaryWitness {
+	var witnesses []X86PackedBinaryWitness
+	for _, source := range []string{"X0", "(AX)"} {
+		modrm := byte(0xc8)
+		if source == "(AX)" {
+			modrm = 0x08
+		}
+		instruction := entry.Opcode + " " + source + ",X1"
+		code := append(append([]byte(nil), encoding...), modrm)
+		if entry.Ytab == "yxshuf" {
+			instruction = entry.Opcode + " $7," + source + ",X1"
+			code = append(code, 7)
+		}
+		witnesses = append(witnesses, X86PackedBinaryWitness{Instruction: instruction, Generation: "legacy", Width: 128,
+			First: source, Second: "X1", Destination: "X1", Memory: source == "(AX)", Encoding: code})
+	}
+	return witnesses
 }

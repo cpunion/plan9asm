@@ -240,6 +240,35 @@ func TestX86LegacyLiteralSIMDRejectsEveryLiteralAtom(t *testing.T) {
 	}
 }
 
+func TestX86LegacyLiteralSIMDViewKeepsCompleteIDsAndMode(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		rows, err := X86LegacyLiteralSIMDRows(catalog, arch)
+		if err != nil || len(rows) != 33 {
+			t.Fatal("complete literal SIMD view changed", arch, len(rows), err)
+		}
+		seen, witnesses := map[string]bool{}, 0
+		for _, row := range rows {
+			if seen[row.ID] || len(row.Witnesses) != 2 {
+				t.Fatal("literal SIMD original source identity repeated or lost a carrier", row)
+			}
+			seen[row.ID] = true
+			witnesses += len(row.Witnesses)
+		}
+		if witnesses != 66 {
+			t.Fatal("literal SIMD carrier witness union changed", witnesses)
+		}
+	}
+	for _, arch := range []string{"", "arm", "arm64", "wasm"} {
+		if rows, err := X86LegacyLiteralSIMDRows(catalog, arch); err == nil || len(rows) != 0 {
+			t.Fatal("literal SIMD view inferred a missing or foreign x86 mode", arch, rows, err)
+		}
+	}
+}
+
 func TestX86PackedNarrowRowsShareBinaryWitnesses(t *testing.T) {
 	x86CheckPackedRowInventory(t, X86PackedNarrowRows, `^V?PACK`, `DW$`, x86PackedRowCounts{
 		names: 8, mmx: 3, broadcast: 18,

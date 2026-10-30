@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -110,8 +111,38 @@ func TestX86OfficialLegacyLiteralSIMDOriginalGoBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	modes := make(map[string][]goasmrules.X86PackedBinaryRow)
 	for _, arch := range []string{"amd64", "386"} {
-		x86LegacyLiteralSIMDCheckGoBatches(t, arch, x86LegacyLiteralSIMDSourceCases(t, catalog, false))
+		cases := x86LegacyLiteralSIMDSourceCases(t, catalog, false)
+		rows, err := goasmrules.X86LegacyLiteralSIMDRows(catalog, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		modes[arch] = rows
+		expected := map[string]goasmrules.X86PackedBinaryWitness{}
+		for _, fixture := range cases {
+			expected[fixture.row+"/"+fixture.witness.Instruction] = fixture.witness
+		}
+		for _, row := range rows {
+			for _, witness := range row.Witnesses {
+				key := row.ID + "/" + witness.Instruction
+				original, found := expected[key]
+				if !found || !bytes.Equal(original.Encoding, witness.Encoding) || original.Destination != witness.Destination {
+					t.Fatal("literal SIMD transport differs from independent actual-Go source", key, witness, original)
+				}
+				delete(expected, key)
+			}
+		}
+		if len(rows) != 33 || len(expected) != 0 {
+			t.Fatal("literal SIMD row/witness join omitted or repeated source cases", arch, len(rows), expected)
+		}
+		x86LegacyLiteralSIMDCheckGoBatches(t, arch, cases)
+	}
+	if !t.Failed() {
+		x86Legacy127SaveIdentity(t, "PLAN9ASM_LEGACY_LITERAL_SIMD_IDENTITY_OUTPUT", struct {
+			Source goasmrules.X86LegacyCatalog
+			Modes  map[string][]goasmrules.X86PackedBinaryRow
+		}{catalog, modes})
 	}
 }
 
