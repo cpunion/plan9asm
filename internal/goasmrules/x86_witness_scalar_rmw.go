@@ -220,6 +220,66 @@ func x86ScalarImplicitFamily(name string) (string, byte, bool) {
 	return stem, width, stem == "MUL" || stem == "IMUL" || stem == "DIV" || stem == "IDIV"
 }
 
+// X86ScalarMoveExtensionRows retains both complete extension source schemas.
+// Ymb is an encoding class: the two legacy word-to-word spellings still read
+// words. The existing typed semantic forms own those widths and physical views.
+func X86ScalarMoveExtensionRows(catalog X86LegacyCatalog, arch string) ([]X86ScalarRMWRow, error) {
+	if arch != "amd64" && arch != "386" {
+		return nil, fmt.Errorf("extension MOV source rows require a Go x86 mode")
+	}
+	var result []X86ScalarRMWRow
+	seen := map[string]bool{}
+	for _, entry := range catalog.Optab {
+		_, prefix, table := x86ScalarMoveExtensionPrefix(entry.Opcode)
+		if table == "" {
+			continue
+		}
+		if seen[entry.Opcode] || entry.Ytab != table || len(entry.Rows) != 1 {
+			return nil, fmt.Errorf("duplicate or changed complete extension MOV source")
+		}
+		seen[entry.Opcode] = true
+		witnesses, err := x86ScalarRMWRowWitnesses(entry, entry.Rows[0], arch)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", entry.Opcode, err)
+		}
+		row := X86ScalarRMWRow{ID: fmt.Sprintf("optab/%d/%s/%s/0", entry.TableIndex, entry.Opcode, entry.Ytab),
+			Opcode: entry.Opcode, Witnesses: witnesses}
+		if arch == "386" && prefix == "Pw" {
+			row.ModeFiltered, row.Witnesses = "original Go rejects REX.W in 386 mode", nil
+		}
+		result = append(result, row)
+	}
+	if len(seen) != 14 {
+		return nil, fmt.Errorf("incomplete extension MOV source families: names=%d", len(seen))
+	}
+	return result, nil
+}
+
+// The returned width selects the encoding prefix, not a memory-read extent.
+// Source bytes still come from the original table, never a mnemonic-byte map.
+func x86ScalarMoveExtensionPrefix(name string) (byte, string, string) {
+	if len(name) == 6 && name[:3] == "MOV" && (name[3] == 'S' || name[3] == 'Z') && name[4:] == "WW" {
+		return 'W', "Pe", "ymb_rl"
+	}
+	if len(name) != 7 || name[:3] != "MOV" || name[5:] != "SX" && name[5:] != "ZX" {
+		return 0, "", ""
+	}
+	source, destination := name[3], name[4]
+	if source == 'B' && strings.ContainsRune("WLQ", rune(destination)) {
+		return destination, map[byte]string{'W': "Pq", 'L': "Pm", 'Q': "Pw"}[destination], "ymb_rl"
+	}
+	if source == 'W' && (destination == 'L' || destination == 'Q') {
+		return destination, map[byte]string{'L': "Pm", 'Q': "Pw"}[destination], "yml_rl"
+	}
+	if source == 'L' && destination == 'Q' {
+		if name[5:] == "ZX" {
+			return 'L', "Px", "yml_rl" // Ordinary MOVL, including mode32.
+		}
+		return 'Q', "Pw", "yml_rl"
+	}
+	return 0, "", ""
+}
+
 // Validate every original row before selecting a byte offset. The selected
 // row alone cannot establish the stride, arity or identity of earlier rows.
 // Exact schemas and a 0/1 source escape bound all subsequent offset arithmetic.
@@ -271,6 +331,7 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		"yscond": {"Zo_m/2/Ymb"},
 		"ybtl":   {"Zibo_m/2/Yi8,Yml", "Zr_m/1/Yrl,Yml"},
 		"yml_rl": {"Zm_r/1/Yml,Yrl"},
+		"ymb_rl": {"Zmb_r/1/Ymb,Yrl"},
 		"ycmpb":  {"Z_ib/1/Yal,Yi32", "Zm_ibo/2/Ymb,Yi32", "Zm_r/1/Ymb,Yrb", "Zr_m/1/Yrb,Ymb"},
 		"ycmpl":  {"Zm_ibo/2/Yml,Yi8", "Z_il/1/Yax,Yi32", "Zm_ilo/2/Yml,Yi32", "Zm_r/1/Yml,Yrl", "Zr_m/1/Yrl,Yml"},
 		"ytestl": {"Zil_/1/Yi32,Yax", "Zilo_m/2/Yi32,Yml", "Zr_m/1/Yrl,Yml", "Zm_r/1/Yml,Yrl"},
@@ -303,6 +364,12 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		width, remainingPrefix = x86ScalarYmlRegisterPrefix(entry.Opcode)
 		if remainingPrefix == "" {
 			return nil, fmt.Errorf("scalar source family does not own this table")
+		}
+	} else if entry.Ytab == "ymb_rl" {
+		var table string
+		width, remainingPrefix, table = x86ScalarMoveExtensionPrefix(entry.Opcode)
+		if table != "ymb_rl" {
+			return nil, fmt.Errorf("extension MOV source class does not own this table")
 		}
 	}
 	expectedPrefix := map[byte]string{'B': "Pb", 'W': "Pe", 'L': "Px", 'Q': "Pw"}[width]
@@ -445,8 +512,8 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 			operands = append(operands, [2]string{src, dst})
 		}
 		operands = append(operands, [2]string{src, "0(SI)"})
-	case "Zm_r":
-		if entry.Ytab == "yml_rl" || entry.Ytab == "yimul" || compare {
+	case "Zm_r", "Zmb_r":
+		if entry.Ytab == "yml_rl" || entry.Ytab == "ymb_rl" || entry.Ytab == "yimul" || compare {
 			operands = append(operands, [2]string{src, dst})
 		}
 		operands = append(operands, [2]string{"0(SI)", dst})
@@ -473,14 +540,14 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 			rm = 6
 		} else {
 			rm |= 0xc0
-			if row.ZCase == "Zm_r" || row.ZCase == "Zibm_r" || row.ZCase == "Zm_o" {
+			if row.ZCase == "Zm_r" || row.ZCase == "Zmb_r" || row.ZCase == "Zibm_r" || row.ZCase == "Zm_o" {
 				rm = 0xc1
 			} // CX source, BX destination.
 		}
 		switch row.ZCase {
 		case "Zr_m":
 			code = append(code, rm|1<<3)
-		case "Zm_r":
+		case "Zm_r", "Zmb_r":
 			code = append(code, rm|3<<3)
 		case "Zib_rr", "Zil_rr", "Zibm_r":
 			code = append(code, rm|3<<3)
@@ -537,14 +604,11 @@ func x86ScalarYmlRegisterPrefix(name string) (byte, string) {
 		return 0, ""
 	}
 	if strings.HasPrefix(name, "MOV") {
-		if len(name) != 7 || name[5:] != "SX" && name[5:] != "ZX" ||
-			!(name[3] == 'W' && (name[4] == 'L' || name[4] == 'Q') || name[3] == 'L' && name[4] == 'Q') {
+		width, prefix, table := x86ScalarMoveExtensionPrefix(name)
+		if table != "yml_rl" {
 			return 0, ""
 		}
-		if name[3] == 'L' && name[5:] == "ZX" {
-			return 'L', "Px" // Ordinary MOVL encoding; AMD64 zero-extends its GP result.
-		}
-		return name[4], map[byte]string{'L': "Pm", 'Q': "Pw"}[name[4]]
+		return width, prefix
 	}
 	width, stem := name[len(name)-1], name[:len(name)-1]
 	switch stem {

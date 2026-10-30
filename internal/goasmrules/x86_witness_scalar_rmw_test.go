@@ -32,6 +32,59 @@ func TestX86ScalarMoveExtensionOriginalTransport(t *testing.T) {
 	}
 }
 
+func TestX86ScalarMoveExtensionCompleteRowsAndModes(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		rows, err := X86ScalarMoveExtensionRows(catalog, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen, filtered, witnesses := map[string]bool{}, 0, 0
+		for _, row := range rows {
+			if row.ID == "" || seen[row.ID] || row.Opcode == "MOVLQZX" && row.ModeFiltered != "" {
+				t.Fatal("source identity or legal mode32 MOVLQZX lost", row)
+			}
+			seen[row.ID] = true
+			if row.ModeFiltered != "" {
+				filtered++
+				if len(row.Witnesses) != 0 {
+					t.Fatal("mode32 Pw form acquired selected syntax")
+				}
+			}
+			witnesses += len(row.Witnesses)
+		}
+		if len(rows) != 14 || filtered != map[string]int{"amd64": 0, "386": 5}[arch] || witnesses != map[string]int{"amd64": 28, "386": 18}[arch] {
+			t.Fatal("complete extension source/mode closure changed", arch, len(rows), filtered, witnesses)
+		}
+	}
+	for _, arch := range []string{"", "arm64", "wasm"} {
+		if _, err := X86ScalarMoveExtensionRows(catalog, arch); err == nil {
+			t.Fatal("foreign mode acquired x86 extension source rows", arch)
+		}
+	}
+	if _, err := X86ScalarMoveExtensionRows(X86LegacyCatalog{}, "amd64"); err == nil {
+		t.Fatal("empty extension source silently passed")
+	}
+	for index, entry := range catalog.Optab {
+		if entry.Opcode != "MOVSWW" {
+			continue
+		}
+		changed := catalog
+		changed.Optab = append(append([]X86LegacyOpcode(nil), catalog.Optab[:index]...), catalog.Optab[index+1:]...)
+		if _, err := X86ScalarMoveExtensionRows(changed, "amd64"); err == nil {
+			t.Fatal("missing word-word source silently passed")
+		}
+		changed.Optab = append(append([]X86LegacyOpcode(nil), catalog.Optab...), entry)
+		if _, err := X86ScalarMoveExtensionRows(changed, "amd64"); err == nil {
+			t.Fatal("duplicate extension source silently passed")
+		}
+		break
+	}
+}
+
 func TestX86ScalarMoveExtensionCompleteMetadataBoundaries(t *testing.T) {
 	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {

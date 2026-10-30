@@ -65,8 +65,51 @@ func TestX86OfficialMoveExtensionOriginalGoBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	modes := map[string][]goasmrules.X86ScalarRMWRow{}
 	for _, arch := range []string{"amd64", "386"} {
-		x86ImplicitMulDivOriginalByteBatches(t, arch, x86MoveExtensionOriginalCases(t, catalog, arch))
+		cases := x86MoveExtensionOriginalCases(t, catalog, arch)
+		t.Run(arch+"/projection", func(t *testing.T) {
+			rows, err := goasmrules.X86ScalarMoveExtensionRows(catalog, arch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			modes[arch] = rows
+			expected := map[string]goasmrules.X86PackedBinaryWitness{}
+			for _, fixture := range cases {
+				expected[fixture.row+"/"+fixture.witness.Instruction] = fixture.witness
+			}
+			for _, row := range rows {
+				for _, witness := range row.Witnesses {
+					key := row.ID + "/" + witness.Instruction
+					original, found := expected[key]
+					if !found || !bytes.Equal(witness.Encoding, original.Encoding) || witness.Destination != original.Destination {
+						t.Fatal("extension row/instruction/bytes/destination join differs", key, witness, original)
+					}
+					delete(expected, key)
+				}
+			}
+			if len(expected) != 0 {
+				t.Fatal("original extension source witness omitted", expected)
+			}
+		})
+		x86ImplicitMulDivOriginalByteBatches(t, arch, cases)
+	}
+	x86Legacy127SaveIdentity(t, "PLAN9ASM_MOVE_EXTENSION_IDENTITY_OUTPUT", struct {
+		Source goasmrules.X86LegacyCatalog
+		Modes  map[string][]goasmrules.X86ScalarRMWRow
+	}{catalog, modes})
+}
+
+func TestX86OfficialMoveExtensionInitializedThreeAPIFiveObjects(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		x86Legacy127Objects(t, arch, x86MoveExtensionOriginalCases(t, catalog, arch),
+			func(name, instruction, mode string) (string, string) {
+				return x86ScalarRMRegisterInitializedFunction(name, instruction, mode)
+			})
 	}
 }
 
