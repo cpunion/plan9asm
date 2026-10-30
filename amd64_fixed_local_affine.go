@@ -6,28 +6,45 @@ import "math"
 // It does not read memory or initialize numerical bytes; the later access must
 // still establish its width, bounds, alignment and reaching initialized bytes.
 func fixedLocalPrivateAddressStep(ins Instr, state *x86FixedLocalState, proof *x86FixedLocalProof) (bool, error) {
-	if ins.Op != "LEAQ" || len(ins.Args) != 2 || ins.Args[0].Kind != OpMem {
+	view := ins
+	if derived, known, err := x86NamedFrameMoveAddressInstruction(ins, "amd64"); known {
+		if err != nil {
+			return true, goAMD64FrameContext("fixed local original MOV address grammar is not closed")
+		}
+		view = derived
+	}
+	if x86LEAWidth(view.Op, "amd64") == 0 || len(view.Args) != 2 || view.Args[0].Kind != OpMem {
 		return false, nil
 	}
-	if _, private := state.pointers[ins.Args[0].Mem.Base]; !private {
+	if _, private := state.pointers[view.Args[0].Mem.Base]; !private {
 		return false, nil
 	}
 	if proof == nil || ins.x86AddressBits != 0 {
 		return true, goAMD64FrameContext("fixed local LEA requires the original native address width and frame")
 	}
-	width, err := x86LEAOperandWidth(ins, "amd64")
+	width, err := x86LEAOperandWidth(view, "amd64")
 	address, addressErr := fixedLocalMemoryAddress(ins, 0, proof.frame)
 	offset, known := fixedLocalPrivateOffset(address, state)
 	destination := ins.Args[1].Reg
-	if err != nil || width != 8 || addressErr != nil || !known || destination == SP {
-		return true, goAMD64FrameContext("fixed local LEA requires a full private address and checked numerical displacement")
+	if err != nil || addressErr != nil || !known || destination == SP {
+		return true, goAMD64FrameContext("fixed local LEA requires an original private address and checked numerical displacement")
 	}
 	delete(state.opaque, destination)
 	delete(state.constants, destination)
 	delete(state.booleans, destination)
 	state.revokeRange(destination)
-	state.known[destination] = 0
-	state.pointers[destination] = offset
+	if width == 8 {
+		state.known[destination] = 0
+		state.pointers[destination] = offset
+	} else {
+		// Truncated address bytes remain unknown. They cannot be reused as
+		// NUM or as a pointer; W preserves old upper bytes and L zeroes them.
+		delete(state.pointers, destination)
+		state.known[destination] &^= x86CallerByteMask(destination, width)
+		if width == 4 {
+			state.known[destination] = 0xf0
+		}
+	}
 	return true, nil
 }
 

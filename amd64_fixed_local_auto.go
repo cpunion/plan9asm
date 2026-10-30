@@ -16,10 +16,23 @@ func fixedLocalMemoryAddress(ins Instr, index int, frame int64) (MemRef, error) 
 	fail := func() (MemRef, error) {
 		return MemRef{}, goAMD64FrameContext("fixed local original memory address role is not closed")
 	}
-	if index < 0 || index >= len(ins.Args) || ins.Args[index].Kind != OpMem {
+	if index < 0 || index >= len(ins.Args) {
 		return fail()
 	}
-	memory := ins.Args[index].Mem
+	operand := ins.Args[index]
+	addressMove := false
+	if index == 0 {
+		if view, known, err := x86NamedFrameMoveAddressInstruction(ins, "amd64"); known {
+			if err != nil {
+				return fail()
+			}
+			operand, addressMove = view.Args[0], true
+		}
+	}
+	if operand.Kind != OpMem {
+		return fail()
+	}
+	memory := operand.Mem
 	if memory.Base != SP {
 		if memory.OffRaw != "" {
 			return fail()
@@ -35,7 +48,11 @@ func fixedLocalMemoryAddress(ins Instr, index int, frame int64) (MemRef, error) 
 	if err != nil || !reflect.DeepEqual(parsed, ins.Args[index]) {
 		return fail()
 	}
-	literal := x86ResultAUTOLiteral.FindStringSubmatch(strings.TrimSpace(literals[index]))
+	spelling := strings.TrimSpace(literals[index])
+	if addressMove {
+		spelling = strings.TrimSpace(strings.TrimPrefix(spelling, "$"))
+	}
+	literal := x86ResultAUTOLiteral.FindStringSubmatch(spelling)
 	if literal == nil {
 		// Indexing/segment/symbol roles are independently validated by the
 		// native observer; none may be relabeled as a named local offset.

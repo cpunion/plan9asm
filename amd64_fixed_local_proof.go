@@ -1019,6 +1019,9 @@ func fixedLocalStepWithGP(ins *Instr, state *x86FixedLocalState, sig FuncSig, pr
 	if known, err := fixedLocalGPSIMDTransferStep(ins, state, sig, proof, residue); known {
 		return err
 	}
+	if known, err := fixedLocalPrivateAddressStep(*ins, state, proof); known {
+		return err
+	}
 	if width := x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(*ins).Op); width != 0 {
 		return fixedLocalMove(ins, state, sig, proof, residue, width)
 	}
@@ -1062,9 +1065,6 @@ func fixedLocalStepWithGP(ins *Instr, state *x86FixedLocalState, sig FuncSig, pr
 		}
 	}
 	if known, err := fixedLocalConditionalMoveStep(ins, state, sig, proof, residue); known {
-		return err
-	}
-	if known, err := fixedLocalPrivateAddressStep(*ins, state, proof); known {
 		return err
 	}
 	if known, err := fixedLocalInputAddressStep(ins, state, sig, proof, residue); known {

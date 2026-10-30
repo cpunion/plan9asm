@@ -94,6 +94,45 @@ func x86LEASourceInstruction(ins Instr) Instr {
 	return ins
 }
 
+// Named TYPE_ADDR PARAM/AUTO moves form addresses, never DATA reads. Go's
+// progedit rewrites L/Q before table selection; W's Zaut_r emits word LEA.
+// This local view keeps the actual Op/Raw untouched for source replay. It
+// supplies syntax/width only, not a frame, initialized data or numerical bits.
+func x86NamedFrameMoveAddressInstruction(ins Instr, arch string) (Instr, bool, error) {
+	op := x86GoMOVQSourceInstruction(ins).Op
+	if (op != "MOVW" && op != "MOVL" && op != "MOVQ") || len(ins.Args) != 2 || !x86ResultNamedPredicateInstruction(ins) {
+		return ins, false, nil
+	}
+	var address Operand
+	switch source := ins.Args[0]; source.Kind {
+	case OpFPAddr:
+		address = Operand{Kind: OpFP, FPOffset: source.FPOffset}
+	case OpSym:
+		body := strings.TrimSpace(source.Sym)
+		if !strings.HasPrefix(body, "$") {
+			return ins, false, nil
+		}
+		body = strings.TrimSpace(strings.TrimPrefix(body, "$"))
+		literal := x86ResultAUTOLiteral.FindStringSubmatch(body)
+		if literal == nil {
+			return ins, false, nil // SB and unnamed addresses retain their own consumers.
+		}
+		var err error
+		address, err = parseOperandForArch(ArchAMD64, body)
+		if err != nil || address.Kind != OpMem || address.Mem.Base != SP {
+			return ins, true, fmt.Errorf("named MOV frame address has no complete AUTO operand")
+		}
+	default:
+		return ins, false, nil
+	}
+	view := ins
+	view.Op = Op("LEA" + string(op)[3:])
+	view.Args = append([]Operand(nil), ins.Args...)
+	view.Args[0] = address
+	_, err := x86LEAOperandWidth(view, arch)
+	return view, true, err
+}
+
 func x86CallerLEAStep(ins *Instr, state *x86SourceStackState) bool {
 	form := x86LEASourceInstruction(*ins)
 	width, err := x86LEAOperandWidth(form, "amd64")
