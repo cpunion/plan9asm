@@ -7,6 +7,10 @@ import "strings"
 // ordering. It grants no reusable pointee, write envelope, alignment, frame,
 // caller, raw-entry or declaration-query permission.
 func x86LoweredExchangeResultStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	return x86LoweredExchangeResultStepWithAddressBits(ins, state, owned, arch, false)
+}
+
+func x86LoweredExchangeResultStepWithAddressBits(ins Instr, state *x86ResultState, owned []bool, arch string, addressBits bool) (bool, bool) {
 	name := Op(strings.ToUpper(string(ins.Op)))
 	spec, known := amd64ExchangeSpecs[name]
 	if !known {
@@ -20,8 +24,14 @@ func x86LoweredExchangeResultStep(ins Instr, state *x86ResultState, owned []bool
 		return false, false // Keep the independent register/opaque/NOP consumer.
 	}
 	width := int64(spec.bits / 8)
-	if !x86ResultRead(form.register, width, state, owned, arch) {
-		return false, true
+	numeric := x86ResultRead(form.register, width, state, owned, arch)
+	if !numeric {
+		root, _, valid := x86ResultGP(form.register.Reg, width, arch)
+		if !addressBits || spec.kind != amd64ExchangeSwap || form.other.Kind != OpMem ||
+			width != x86ResultPointerWord(arch) || !valid || x86LogicalSourceFrameRegister(form.register.Reg, arch) ||
+			!state.pointerGP[root] || !state.callerAddressGP[root] {
+			return false, true
+		}
 	}
 	outputs := []Operand{form.register}
 	if form.other.Kind == OpReg {
@@ -41,6 +51,11 @@ func x86LoweredExchangeResultStep(ins Instr, state *x86ResultState, owned []bool
 	for _, operand := range outputs {
 		index, mask, _ := x86ResultGP(operand.Reg, width, arch)
 		x86ResultStore(operand, width, state, owned, 0, arch)
+		if !numeric {
+			// The complete caller word may be copied as opaque data. Its
+			// unknown native replacement supplies neither NUM nor a pointer.
+			state.gp[index] &^= mask
+		}
 		state.canonicalGP[index] &^= mask
 		state.callerAddressGP[index] = false
 		state.callerAddressOrigin[index] = 0

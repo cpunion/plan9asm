@@ -594,7 +594,7 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if accepted, known := x86LoweredCompareExchangeResultStepWithAddressBits(ins, state, owned, arch, addressBitStores); known {
 			return accepted
 		}
-		if accepted, known := x86LoweredExchangeResultStep(ins, state, owned, arch); known {
+		if accepted, known := x86LoweredExchangeResultStepWithAddressBits(ins, state, owned, arch, addressBitStores); known {
 			return accepted
 		}
 		if accepted, known := x86LoweredCRC32NativeRead(ins, state, owned, resultOffset, arch); known {
