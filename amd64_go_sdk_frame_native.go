@@ -47,6 +47,20 @@ func (source *GoX86SDKASMDataSource) retainSDKFrameListingBytes(bytes int) error
 // none of these fields is a local backing or source-entry transport permission.
 var sdkAMD64FrameNativeHeader = regexp.MustCompile(`^(\S+) (STEXT|STEXTFIPS)(?: (static))?(?: (nosplit))?(?: (asm))? size=([0-9]+) (?:align=0x[0-9a-f]+ )?args=0x([0-9a-f]+) locals=0x([0-9a-f]+)(?: funcid=0x[0-9a-f]+)?(?: align=0x[0-9a-f]+)?$`)
 
+// FuncInfo.Locals is int32, but the official listing writer prints uint64.
+// Decode its canonical sign extension without interpreting it as an extent.
+func goAMD64FrameSignedLocals(raw string) (int64, error) {
+	bits, err := strconv.ParseUint(raw, 16, 64)
+	if err != nil {
+		return 0, err
+	}
+	value := int64(int32(bits))
+	if uint64(value) != bits {
+		return 0, fmt.Errorf("noncanonical signed int32 locals: %s", raw)
+	}
+	return value, nil
+}
+
 func sdkAMD64FrameNativeRecords(listing []byte, texts []gostaticstorage.TextRecord) ([]sdkAMD64FrameNativeRecord, error) {
 	return sdkAMD64FrameNativeRecordsInOrder(listing, texts, nil)
 }
@@ -96,7 +110,7 @@ func sdkAMD64FrameNativeRecordsInOrder(listing []byte, texts []gostaticstorage.T
 		}
 		size, sizeErr := strconv.ParseUint(header[6], 10, 64)
 		args, argsErr := strconv.ParseUint(header[7], 16, 64)
-		locals, localsErr := strconv.ParseUint(header[8], 16, 32)
+		locals, localsErr := goAMD64FrameSignedLocals(header[8])
 		index := len(records)
 		if indices != nil {
 			index = indices[index]
@@ -111,7 +125,7 @@ func sdkAMD64FrameNativeRecordsInOrder(listing []byte, texts []gostaticstorage.T
 			return nil, sdkASMDataContext("SDK-primary native listing static/ABI source role differs")
 		}
 		records = append(records, sdkAMD64FrameNativeRecord{Symbol: header[1], Static: header[3] != "", NoSplit: header[4] != "", ASM: header[5] != "",
-			Size: size, Args: int64(args), Locals: locals, ArgsKnown: int64(args) != -0x80000000})
+			Size: size, Args: int64(args), Locals: uint64(locals), ArgsKnown: int64(args) != -0x80000000})
 	}
 	if err := scanner.Err(); err != nil || len(records) != len(texts) {
 		return nil, sdkASMDataContext("SDK-primary native frame inventory is incomplete: %v", err)

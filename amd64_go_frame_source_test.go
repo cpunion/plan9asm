@@ -367,6 +367,17 @@ func TestGoAMD64FrameSourceObjectListingMutations(t *testing.T) {
 			}
 		})
 	}
+	for _, locals := range []string{"fffffffffffffff8", "80000000", "ffffffff", "10000000000000000"} {
+		t.Run("foreign-locals-"+locals, func(t *testing.T) {
+			if bytes.Count(listing, []byte("locals=0xa8")) != 1 {
+				t.Fatal("actual positive-frame precondition changed")
+			}
+			mutated := bytes.Replace(listing, []byte("locals=0xa8"), []byte("locals=0x"+locals), 1)
+			if _, err := goAMD64FrameListing(mutated, file, pkg, source.origins); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("negative, noncanonical or oversized metadata replaced the actual positive frame", locals, err)
+			}
+		})
+	}
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
 	object := filepath.Join(source.owned, request.AssemblyFile+".o")

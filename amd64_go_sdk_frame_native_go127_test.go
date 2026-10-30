@@ -13,6 +13,56 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
 
+func TestSDKAMD64NativeFrameSignedLocalsActualGoObjects(t *testing.T) {
+	_, profile, _, _ := numericalSBFixture(t, "amd64")
+	ctx, cancel := runtimeOracleProofContext(t)
+	defer cancel()
+	root := filepath.Dir(filepath.Dir(profile.GoBinary))
+	builtin, err := os.ReadFile(filepath.Join(root, "src/cmd/internal/goobj/builtinlist.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const source = "TEXT bootstrap(SB),4,$-8\nRET\nTEXT ·Ordinary(SB),4,$0-0\nRET\n"
+	path := filepath.Join(profile.Directory, "signed-locals.s")
+	if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, goos := range []string{"linux", "darwin", "windows"} {
+		t.Run(goos, func(t *testing.T) {
+			env := append([]string(nil), profile.Environment...)
+			for index, pair := range env {
+				if strings.HasPrefix(pair, "GOOS=") {
+					env[index] = "GOOS=" + goos
+				}
+			}
+			objectPath := filepath.Join(t.TempDir(), "signed-locals.o")
+			listing, err := goasmcmd.Run(ctx, profile.Directory, env, profile.GoBinary,
+				"tool", "asm", "-p", "framefixture", "-S", "-o", objectPath, path)
+			if err != nil {
+				t.Fatal("actual Go assembler", err)
+			}
+			object, err := os.ReadFile(objectPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			observed, err := gostaticstorage.ObserveAMD64AssemblyData([]byte(source), object, builtin, "framefixture", goos+"/amd64")
+			if err != nil || len(observed.Member.Texts) != 2 || len(observed.TextOrder) != 2 {
+				t.Fatal("complete actual source/object precondition", err)
+			}
+			if !bytes.Contains(listing, []byte("locals=0xfffffffffffffff8")) {
+				t.Fatalf("actual Go did not emit the independent signed-locals prior:\n%s", listing)
+			}
+			records, err := sdkAMD64FrameNativeRecordsForSource(listing, observed.Member.Texts, observed.TextOrder)
+			if err != nil || len(records) != 2 {
+				t.Fatal("actual signed-locals listing lost its complete original object association", err)
+			}
+			if records[0].Locals != ^uint64(7) || records[1].Locals != 0 || records[0].ArgsKnown || !records[1].ArgsKnown {
+				t.Fatal("signed locals or independent unknown-argument sentinel was rewritten", records)
+			}
+		})
+	}
+}
+
 func TestSDKAMD64NativeFrameKindsActualGoObjects(t *testing.T) {
 	_, profile, _, _ := numericalSBFixture(t, "amd64")
 	ctx, cancel := runtimeOracleProofContext(t)

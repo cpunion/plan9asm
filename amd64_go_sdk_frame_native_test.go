@@ -9,6 +9,43 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
 
+func TestSDKAMD64NativeFrameSignedLocalsRepresentation(t *testing.T) {
+	for _, locals := range []int32{0, 1, 8, 0x7fffffff, -1, -8, -0x80000000} {
+		for _, kind := range []uint8{1, 2} {
+			t.Run(fmt.Sprintf("locals-%d/kind-%d", locals, kind), func(t *testing.T) {
+				label := "STEXT"
+				if kind == 2 {
+					label = "STEXTFIPS"
+				}
+				// The official writer prints uint64(FuncInfo.Locals), whose
+				// source type is int32. Preserve that exact representation.
+				bits := uint64(int64(locals))
+				listing := []byte(fmt.Sprintf("fixture.Entry %s nosplit asm size=1 args=0x0 locals=0x%x\n", label, bits))
+				texts := []gostaticstorage.TextRecord{{Name: "fixture.Entry", Kind: kind, Size: 1, Code: []byte{0xc3}}}
+				records, err := sdkAMD64FrameNativeRecords(listing, texts)
+				if err != nil || len(records) != 1 || records[0].Locals != bits {
+					t.Fatalf("canonical signed int32 locals lost their original metadata bits: records=%v error=%v", records, err)
+				}
+				if records[0].Symbol != texts[0].Name || !records[0].NoSplit || !records[0].ASM || !records[0].ArgsKnown {
+					t.Fatal("signed locals changed an independent native frame role", records[0])
+				}
+			})
+		}
+	}
+}
+
+func TestSDKAMD64NativeFrameRejectsNoncanonicalLocals(t *testing.T) {
+	texts := []gostaticstorage.TextRecord{{Name: "fixture.Entry", Kind: 1, Size: 1, Code: []byte{0xc3}}}
+	for _, locals := range []string{"80000000", "ffffffff", "100000000", "ffffffff7fffffff", "10000000000000000", "nothex", ""} {
+		t.Run("locals-"+locals, func(t *testing.T) {
+			listing := []byte("fixture.Entry STEXT nosplit asm size=1 args=0x0 locals=0x" + locals + "\n")
+			if _, err := sdkAMD64FrameNativeRecords(listing, texts); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("noncanonical or out-of-range signed locals acquired native metadata", locals, err)
+			}
+		})
+	}
+}
+
 func TestSDKAMD64OriginalFrameNativeCompleteMetadata(t *testing.T) {
 	texts := []gostaticstorage.TextRecord{{Name: "private", Kind: 1, Size: 1, Code: []byte{0xc3}}, {Name: "sdk.Entry", Kind: 1, Size: 1, Code: []byte{0xc3}}}
 	listing := []byte("private STEXT static nosplit asm size=1 align=0x0 args=0xffffffff80000000 locals=0x0 funcid=0x0\n" +

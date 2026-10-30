@@ -1561,9 +1561,12 @@ func goAMD64FrameListingRecords(listing []byte, file *File, pkg GoPackage, origi
 			}
 			expected, _ = strconv.ParseInt(header[6], 10, 64)
 			args, argsErr := strconv.ParseUint(header[7], 16, 64)
-			locals, _ := strconv.ParseInt(header[8], 16, 64)
+			locals, localsErr := goAMD64FrameSignedLocals(header[8])
 			if argsErr != nil || int64(args) < 0 && int64(args) != -0x80000000 {
 				return nil, goAMD64FrameContext("invalid original native argument-size observation")
+			}
+			if localsErr != nil {
+				return nil, goAMD64FrameContext("invalid original native local-size observation: %v", localsErr)
 			}
 			functions[name] = goAMD64FrameFunction{locals: locals, args: int64(args), split: header[4] == "", positions: make(map[int]string), sourcePositions: make(map[int][]goAMD64FrameSourcePosition)}
 			continue

@@ -165,6 +165,7 @@ func TestGoAMD64FixedLocalPrivateLeafBoundaries(t *testing.T) {
 		{"callee_SP", strings.Replace(valid, "MOVQ (BP),AX", "MOVQ 16(SP),AX", 1)},
 		{"callee_FP", strings.Replace(valid, "MOVQ (BP),AX", "MOVQ a+0(FP),AX", 1)},
 		{"callee_nonzero_frame", strings.Replace(valid, "TEXT leaf<>(SB),4,$0", "TEXT leaf<>(SB),4,$8", 1)},
+		{"callee_negative_frame", strings.Replace(valid, "TEXT leaf<>(SB),4,$0", "TEXT leaf<>(SB),4,$-8", 1)},
 		{"callee_nonleaf", strings.Replace(valid, "MOVQ (BP),AX", "CALL second<>(SB)", 1) + "TEXT second<>(SB),4,$0\n RET\n"},
 		{"indirect_call", strings.Replace(valid, "CALL leaf<>(SB)", "CALL AX", 1)},
 		{"address_escape", strings.Replace(valid, "CALL leaf<>(SB)", "LEAQ leaf<>(SB),AX\n CALL AX", 1)},
