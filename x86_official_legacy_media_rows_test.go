@@ -228,7 +228,7 @@ func TestX86OfficialLegacyLiteralSIMDOriginalFormatObjects(t *testing.T) {
 							// Reuse the real typed family emitters. This is neither
 							// a raw-byte/inline-assembly substitute nor a public proof.
 							for _, lower := range []func(Op, Instr) (bool, bool, error){
-								consumer.lowerImmediatePackedBlend, consumer.lowerPackedFloatingDot,
+								consumer.lowerPackedFloatShuffle, consumer.lowerImmediatePackedBlend, consumer.lowerPackedFloatingDot,
 								consumer.lowerPackedSumAbsoluteDifferences, consumer.lowerRound,
 								consumer.lowerVec,
 							} {
