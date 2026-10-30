@@ -10,10 +10,11 @@ Original failures, source identities and host exclusions remain in their reports
 
 [PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. Public
 `70ced1b565` has its own [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41032133785),
-which remains pending. The recorded snapshot contains 315 actually created jobs
-out of 325 expected; this is an inventory count, not 315 passes or complete CI
-acceptance. Final source partitions, package logs, profile summaries, coverage
-and fresh review must close at this head before publication advances.
+which completed naturally with 325/325 successful jobs. Independent acceptance
+joins all 286 source artifacts, 240 partitions, Windows/race package logs and
+22 coverage profiles: 88.1% total and 92.52% patch coverage. Both review threads
+are resolved; no formal approval has been recorded. These results certify this
+head's CI, not the unpublished follow-up or unavailable native hardware.
 
 The preceding public `67c4446bcc` completed 325/325 jobs. Those results and its
 coverage belong to that head. The original `798cf56ee`
@@ -21,10 +22,9 @@ coverage belong to that head. The original `798cf56ee`
 191 successful and 134 failed jobs; repaired local tests do not change those
 failures into passes. Older completed rounds remain separate historical evidence.
 
-The local follow-up includes signed native-frame metadata (`612b6d1f0`), the
-x87 source-row closure (`924458b6b`) and typed native headers (`4581004bf`).
-These commits are newer than public `70ced1b565`; component checks below do not
-certify their cloud CI, whole-SDK execution or an accepted LLGo dependency pin.
+The local follow-up includes signed metadata (`612b6d1f0`), x87 source rows
+(`924458b6b`), typed headers (`4581004bf`) and ten-byte input checks (`6805b9362`).
+These newer commits require their own cloud CI and accepted LLGo dependency pin.
 
 ## Local qualification
 
@@ -53,6 +53,13 @@ source-identity output hook, not rerun after it. The prior 30 JSON identities
 remain byte-exact. Source formatting and LLVM objects are not numerical or
 native x87 execution evidence.
 
+The ten-byte family closes 72 reproduced incorrect acceptances. Its five focused
+roots pass 177 nodes per SDK; unknown extended80/BCD precision remains Context.
+At integrated `6805b9362`, 398 current-Go roots pass 25,039 nodes with nine
+explicit host skips; minimum Go passes 24,485 nodes across 354 roots with eight
+host skips. Exact raw test-name/state unions and source/tool hashes are checked.
+These are bounded regression results, not full-SDK or skipped-native acceptance.
+
 At `4581004bf`, the shared ordered native-header parser passes 71 focused nodes
 with current Go and 67 with minimum Go, without failures or skips. The broader
 frame/SDK/Windows/private-leaf scope passes 1,118 nodes across 118 roots with
@@ -79,9 +86,10 @@ unsupported-instruction totals. Snapshot-file counts are not family-view counts.
 The x87 join retains 79 original row identities in each x86 mode, 158 canonical
 witnesses and 316 mode instances. Eight first-match shadows retain their own
 identity, giving 166 actual-Go byte cases per mode. This is source-table closure,
-not native extended80, packed BCD or arbitrary caller-state support. The separate
-ten-byte dead-input safety class remains under qualification; no numerical
-precision follows from a valid ten-byte encoding or initialized pointer.
+not native extended80, packed BCD or arbitrary caller-state support. The safety
+repair retains all 32 original FBLD/FBSTP statements across eight source profiles;
+only 24 reviewed classification fields change. Source profiles are not eight
+executed compiler versions. Encoding or pointer knowledge grants no precision.
 
 Typed families preserve source roles through grammar, effects and lowering.
 MULX keeps implicit DX and both outputs; count, scan, compare and memory RMW
@@ -119,14 +127,14 @@ register-only Translate, excluding source Parse and live SDK capture. It proves
 neither whole-SDK throughput nor generated-code acceleration. Earlier failed
 attempts and historical performance comparisons remain separate evidence.
 
-1. Finish the public head's complete CI naturally, including source partitions,
-   package/coverage collectors and fresh review. Publish only through the allowed
-   fork after fresh integrated gates; preserve original failures and host skips.
+1. Finish the follow-up's policies, CLI, strict55 and efficiency checks. Publish
+   only through the allowed fork, then require its own complete CI, coverage and
+   fresh review. Preserve original failures and host skips.
 2. Continue the 607 / 606 legacy inventory using original prefixes, modes and
    selection order. Keep row ownership, initialized objects and native execution
    separate, with at most 32 complete functions per source/object batch.
-3. Close ten-byte safety obligations without claiming extended80/BCD numerical
-   semantics. Retain native386, AVX512/AVX512ER, RCP14/MXCSR, MMX-state,
+3. Keep ten-byte safety distinct from extended80/BCD numerical semantics.
+   Retain native386, AVX512/AVX512ER, RCP14/MXCSR, MMX-state,
    BF16 active-memory fault and floating MIN/MAX execution gaps.
 4. Preserve ARM64, ARM and WASM object/control boundaries and all 14 strict-SDK
    failures. Special runtime entries, callbacks and library compatibility need
