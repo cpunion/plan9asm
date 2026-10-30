@@ -208,7 +208,11 @@ func TestGoAMD64FixedLocalTypedGPAddressIsNotAccess(t *testing.T) {
 		{"LEAL 7(AX),CX", true},
 		{"NOPL 8(SP)", true},
 		{"NOPW (AX)", true},
-		{"LEAQ 8(SP),AX", true}, // Address-only grammar does not grant private backing or NUM.
+		{"LEAQ 8(SP),AX", true},     // Address-only grammar does not grant private backing or NUM.
+		{"LEAQ slot(SP),AX", false}, // A source owner must resolve the descriptive AUTO role.
+		{"LEAQ δοκιμή(SP),AX", false},
+		{"LEAQ UNKNOWN(RSP),AX", false},
+		{"LEAQ UNKNOWN(AX),AX", false},
 		{"LEAQ.Z (AX),CX", false},
 		{"MOVQ (AX),CX", false},
 		{"CMPQ (AX),CX", false},

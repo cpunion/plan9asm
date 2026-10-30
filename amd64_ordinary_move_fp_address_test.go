@@ -115,6 +115,42 @@ func TestX86OrdinaryMoveNamedFPAddressSourceBoundaries(t *testing.T) {
 	}
 }
 
+func TestX86FixedLocalAddressOnlyBareNamesBatch(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	var source, declarations strings.Builder
+	count := 0
+	for _, op := range []string{"LEAW", "LEAL", "LEAQ", "MOVW", "MOVL", "MOVQ"} {
+		for _, name := range []string{"slot", "δοκιμή", "槽"} {
+			symbol := fmt.Sprintf("BareAddress%d", count)
+			address := name + "(SP)"
+			if strings.HasPrefix(op, "MOV") {
+				address = "$" + address
+			}
+			fmt.Fprintf(&source, "TEXT ·%s(SB),4,$16-16\nMOVQ input+0(FP),AX\nMOVQ AX,0(SP)\n"+
+				"%s %s,BX\nMOVQ $0,BX\nMOVQ 0(SP),AX\nMOVQ AX,ret+8(FP)\nRET\n", symbol, op, address)
+			fmt.Fprintf(&declarations, "func %s(input uint64) uint64\n", symbol)
+			count++
+		}
+	}
+	if count != 18 {
+		t.Fatal("complete address-family/width/name inventory changed", count)
+	}
+	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
+	triple := "x86_64-unknown-linux-gnu"
+	pkg, request, _, options := x86CMOVFixedLocalFixture(t, source.String(), declarations.String(), "linux/amd64", triple)
+	fixedLocalFreshAPIs(t, pkg, request, options, []string{"Translate", "Module", "GoModule"}, func(t *testing.T, ir string, err error) {
+		if err != nil || ir == "" {
+			t.Fatal("original bounded bare AUTO addresses were rejected", err)
+		}
+		for _, level := range []string{"-O0", "-O2"} {
+			x86PackedStringCompileObject(t, llc, triple, ir, level)
+		}
+	})
+}
+
 func TestX86OrdinaryMoveFrameAddressUnicodeNames(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
