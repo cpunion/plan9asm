@@ -17,6 +17,9 @@ func x86LoweredNumericalProducerReplay(fn Func, arch string) error {
 			if ins.x86SourceRaw == nil {
 				continue
 			}
+			if ins.x86SourceRaw.scalarSegmentLoad.arch != "" {
+				return true // A physical segment read cannot outlive its complete sealed source.
+			}
 			if _, known := amd64MaskMoveSpecs[ins.Op]; known {
 				return true // Exact raw KMOV access cannot survive erased or edited producer identity.
 			}

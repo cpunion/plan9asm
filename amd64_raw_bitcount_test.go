@@ -143,6 +143,7 @@ func TestX86RawBitCountCompilesAllForms(t *testing.T) {
 		{"linux-amd64", "amd64", "x86_64-unknown-linux-gnu"},
 		{"darwin-amd64", "amd64", "x86_64-apple-darwin"},
 		{"windows-amd64", "amd64", "x86_64-pc-windows-msvc"},
+		{"windows-386", "386", "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			var source strings.Builder
@@ -161,18 +162,56 @@ func TestX86RawBitCountCompilesAllForms(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
+			// The original complete sequence has no CX producer, and its
+			// partial AX result cannot establish the later memory address.
+			ir := x86UnboundVoidRawScalarFormatObject(t, source.String(), target.goarch, target.triple)
+			for _, level := range []string{"-O0", "-O2"} {
+				x86PackedStringCompileObject(t, llc, target.triple, ir, level)
 			}
-			ir, err := Translate(file, Options{
-				Goarch: target.goarch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawbitcount": {Name: "rawbitcount", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+
+			word, move, typ := 8, "MOVQ", "uint64"
+			if target.goarch == "386" {
+				word, move, typ = 4, "MOVL", "uint32"
 			}
-			compileLLVMToObject(t, llc, target.triple, "raw-bitcount.ll", "raw-bitcount.o", ir)
+			var initialized, declarations strings.Builder
+			forms := 0
+			for _, opcode := range []byte{0xbc, 0xbd} {
+				for _, prefix := range [][]byte{{0x66, 0xf3}, {0xf3}, {0xf3, 0x48}} {
+					if target.goarch == "386" && len(prefix) == 2 && prefix[1] == 0x48 {
+						continue
+					}
+					for _, modRM := range []byte{0xc1, 0x08} {
+						name := fmt.Sprintf("RawCount%d", forms)
+						inputType, input, result := typ, "CX", "AX"
+						if modRM == 0x08 {
+							inputType, input, result = "*"+typ, "AX", "CX"
+						}
+						fmt.Fprintf(&declarations, "func %s(x %s) %s\n", name, inputType, typ)
+						fmt.Fprintf(&initialized, "TEXT ·%s(SB),4,$0-%d\n%s $0,%s\n%s x+0(FP),%s\n",
+							name, 2*word, move, result, move, input)
+						initialized.WriteString(x86RawDisplacementDirectives(append(append([]byte{}, prefix...), 0x0f, opcode, modRM)))
+						fmt.Fprintf(&initialized, "%s %s,ret+%d(FP)\nRET\n", move, result, word)
+						forms++
+					}
+				}
+			}
+			want := 12
+			if target.goarch == "386" {
+				want = 8
+			}
+			if forms != want {
+				t.Fatal("initialized raw count form inventory changed", forms, want)
+			}
+			x86LEAActualTargetGoObject(t, target.goarch, target.triple, initialized.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, initialized.String(), declarations.String(), target.goarch, target.triple, api)
+				if err != nil {
+					t.Fatal("independently initialized original raw count form", api, err)
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+				}
+			}
 		})
 	}
 }

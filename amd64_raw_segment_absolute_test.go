@@ -17,11 +17,12 @@ func TestX86RawSegmentAbsoluteMemory(t *testing.T) {
 		name string
 		code []byte
 		want string
+		base bool
 	}{
 		{name: "gs-absolute", code: []byte{0x65, 0x48, 0x8b, 0x04, 0x25, 0x30, 0, 0, 0}, want: "48(GS)"},
 		{name: "fs-absolute", code: []byte{0x64, 0x48, 0x8b, 0x04, 0x25, 0x30, 0, 0, 0}, want: "48(FS)"},
-		{name: "gs-base", code: []byte{0x65, 0x48, 0x8b, 0x40, 0x30}, want: "48(AX)(GS)"},
-		{name: "fs-base", code: []byte{0x64, 0x48, 0x8b, 0x40, 0x30}, want: "48(AX)(FS)"},
+		{name: "gs-base", code: []byte{0x65, 0x48, 0x8b, 0x40, 0x30}, want: "48(AX)(GS)", base: true},
+		{name: "fs-base", code: []byte{0x64, 0x48, 0x8b, 0x40, 0x30}, want: "48(AX)(FS)", base: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			inst, err := x86asm.Decode(tc.code, 64)
@@ -42,18 +43,23 @@ func TestX86RawSegmentAbsoluteMemory(t *testing.T) {
 				fmt.Fprintf(&source, "BYTE $%#02x\n", value)
 			}
 			source.WriteString("RET\n")
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
+			assembly := source.String()
+			triple := "x86_64-unknown-linux-gnu"
+			if tc.base {
+				ir := x86UnboundVoidRawScalarFormatObject(t, assembly, "amd64", triple)
+				x86PackedStringCompileObject(t, llc, triple, ir, "-O0")
+				assembly = strings.Replace(assembly, "\nBYTE", "\nMOVQ $0,AX\nBYTE", 1)
 			}
-			ir, err := Translate(file, Options{
-				Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
-				Sigs: map[string]FuncSig{"rawSegmentMemory": {Name: "rawSegmentMemory", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			x86LEAActualTargetGoObject(t, "amd64", triple, assembly)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, assembly, "func rawSegmentMemory()", "amd64", triple, api)
+				if err != nil {
+					t.Fatal("raw hardware segment with all explicit numerical offsets", api, err)
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, ir, level)
+				}
 			}
-			compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "raw-segment-memory.ll", "raw-segment-memory.o", ir)
 		})
 	}
 }

@@ -5965,24 +5965,68 @@ func TestTranslateX86ScalarExtensionMoveCompleteGo127Forms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ll, err := Translate(file, Options{
-				TargetTriple: target.triple,
-				Goarch:       target.goarch,
-				Sigs: map[string]FuncSig{
-					"scalar_extension_forms": {
-						Name: "scalar_extension_forms", Args: []LLVMType{I8}, Ret: Void,
-						Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: I8, Index: 0, Field: -1}}},
-					},
-				},
-			})
-			if err != nil {
-				t.Fatal(err)
+			// Keep the original arbitrary BX reads and physical SP write as
+			// Go/emitter formats. Neither syntax grants a source/frame role.
+			x86LEAActualTargetGoObject(t, target.goarch, target.triple, "#include \"textflag.h\"\n"+src.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, src.String(), "func scalar_extension_forms(x uint8)", target.goarch, target.triple, api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original extension formats acquired unbound source/physical SP inputs", api, err)
+				}
 			}
+			ll := x86ScalarFormatObjectUnit(t, file, map[string]FuncSig{
+				"scalar_extension_forms": {
+					Name: "scalar_extension_forms", Args: []LLVMType{I8}, Ret: Void,
+					Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: I8, Index: 0, Field: -1}}},
+				},
+			}, target.goarch, target.triple, 0)
 			llc := findLLVM22Tool("llc")
 			if llc == "" {
 				t.Fatal("LLVM 22 llc not found")
 			}
-			compileLLVMToObject(t, llc, target.triple, "scalar-extension-"+target.name+".ll", "scalar-extension-"+target.name+".o", ll)
+			for _, level := range []string{"-O0", "-O2"} {
+				x86PackedStringCompileObject(t, llc, target.triple, ll, level)
+			}
+			word, move, typ := 8, "MOVQ", "uint64"
+			if target.goarch == "386" {
+				word, move, typ = 4, "MOVL", "uint32"
+			}
+			var initialized, declarations, scratch, scratchDeclarations strings.Builder
+			for index, op := range target.ops {
+				register := "AX"
+				if strings.HasPrefix(op, "MOVB") {
+					register = "AL"
+					if target.goarch == "386" {
+						register = "BP"
+					}
+				}
+				for _, source := range []string{register, "8(BX)"} {
+					name := fmt.Sprintf("Extension%d", initialized.Len())
+					fmt.Fprintf(&declarations, "func %s(x %s,p *[16]byte) %s\n", name, typ, typ)
+					fmt.Fprintf(&initialized, "TEXT ·%s(SB),4,$0-%d\n%s x+0(FP),AX\n%s p+%d(FP),BX\n%s $0,CX\n", name, 3*word, move, move, word, move)
+					if register == "BP" {
+						initialized.WriteString("MOVL AX,BP\n")
+					}
+					fmt.Fprintf(&initialized, "%s %s,CX\n%s CX,ret+%d(FP)\nRET\n", op, source, move, 2*word)
+				}
+				fmt.Fprintf(&scratchDeclarations, "func Scratch%d()\n", index)
+				fmt.Fprintf(&scratch, "TEXT ·Scratch%d(SB),4,$0-0\n%s %s,CX\nRET\n", index, op, register)
+			}
+			for _, fixture := range []struct{ name, source, declarations string }{
+				{"initialized", initialized.String(), declarations.String()},
+				{"dead-register", scratch.String(), scratchDeclarations.String()},
+			} {
+				x86LEAActualTargetGoObject(t, target.goarch, target.triple, fixture.source)
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86ScalarFPBitViewAPI(t, fixture.source, fixture.declarations, target.goarch, target.triple, api)
+					if err != nil {
+						t.Fatal("complete extension counterpart", fixture.name, api, err)
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+					}
+				}
+			}
 		})
 	}
 }

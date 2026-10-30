@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -21,22 +22,68 @@ func TestAMD64RawDirectiveSequenceUsesSemanticLowering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
-	ir, err := Translate(file, Options{
-		Goarch:       "amd64",
-		TargetTriple: "x86_64-unknown-linux-gnu",
-		Sigs: map[string]FuncSig{
-			"rawLoad": {Name: "rawLoad", Ret: Void},
-		},
-	})
-	if err != nil {
-		t.Fatalf("Translate() error = %v", err)
+	triple := "x86_64-unknown-linux-gnu"
+	x86LEAActualTargetGoObject(t, "amd64", triple, "#include \"textflag.h\"\n"+source)
+	for _, api := range []string{"text", "module", "Go"} {
+		ir, err := x86ScalarFPBitViewAPI(t, source, "func rawLoad()", "amd64", triple, api)
+		if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("original indexed physical SP bytes acquired a source/frame role", api, err)
+		}
 	}
+	normalized, err := normalizeX86RawFile(file, "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir := x86ScalarFormatObjectUnit(t, normalized, map[string]FuncSig{"rawLoad": {Name: "rawLoad", Ret: Void}}, "amd64", triple, 256)
 	if strings.Contains(ir, "module asm") {
 		t.Fatalf("raw instructions bypassed semantic lowering:\n%s", ir)
 	}
 	if !strings.Contains(ir, "load i16") || !strings.Contains(ir, "zext i16") {
 		t.Fatalf("decoded MOVWQZX semantics missing:\n%s", ir)
 	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, level := range []string{"-O0", "-O2"} {
+		x86PackedStringCompileObject(t, llc, triple, ir, level)
+	}
+	// This independent source initializes the exact original physical tuple
+	// and attempts a real Go frame capture. The current frame producer has
+	// no raw-extension contract; retain that boundary as Context explicitly.
+	initialized := strings.Replace(source, "TEXT rawLoad(SB), NOSPLIT, $256-0",
+		"TEXT ·RawLoad(SB),4,$256-16\nMOVQ x+0(FP),AX\nMOVW AX,120(SP)", 1)
+	initialized = strings.Replace(initialized, "\tRET", "\tMOVQ R15,ret+8(FP)\n\tRET", 1)
+	x86LEAActualTargetGoObject(t, "amd64", triple, initialized)
+	pkg, request, _, options := fixedLocalTransportFixture(t, initialized, "func RawLoad(x uint64) uint64", "linux/amd64", triple)
+	goAMD64FramePrepareOwnedToolCache(t)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	observation, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+	if err != nil {
+		if !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("initialized raw-SP capture failed outside its source boundary", err)
+		}
+		t.Log("original initialized raw-SP Go object retains source-capture Context; initialized named extension objects have separate owners")
+		return
+	}
+	defer func() {
+		if err := observation.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	expanded, err := observation.preprocess(request.AssemblyFile, []byte(initialized))
+	if err != nil {
+		t.Fatal(err)
+	}
+	initializedFile, err := Parse(ArchAMD64, expanded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := observation.BindFixedLocal(ctx, pkg, initializedFile, options); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("captured frame silently acquired a raw physical-extension consumer", err)
+	}
+	t.Log("original raw-SP formats and captured initialized raw-SP Context remain separate from initialized named-extension objects")
 }
 
 func TestX86RawOnlyFunctionUsesSemanticLowering(t *testing.T) {

@@ -432,6 +432,10 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 			return fn, err
 		}
 		for index := range decoded {
+			scalarSegmentLoad := x86ScalarSegmentLoadRawIdentity(decoded[index], goarch)
+			if scalarSegmentLoad.arch != "" {
+				decoded[index].x86Encoded = true
+			}
 			decoded[index].x86SourceRaw = &x86SourceRawInstruction{
 				op:                 decoded[index].Op,
 				args:               append([]Operand(nil), decoded[index].Args...),
@@ -455,6 +459,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				packedDot:          x86PackedDotRawIdentity(decoded[index], goarch),
 				permute128:         x86Permute128RawIdentity(decoded[index], goarch),
 				zeroExtend:         x86ZeroExtendRawIdentity(decoded[index], goarch),
+				scalarSegmentLoad:  scalarSegmentLoad,
 			}
 		}
 		normalized = append(normalized, decoded...)

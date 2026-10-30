@@ -295,6 +295,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 		if x86RawScalarObserverSource(ins, arch) {
 			continue // Existing typed count/mask effects retain all numerical inputs.
 		}
+		if x86RawScalarSegmentLoadSource(ins, arch) {
+			continue // Paired scalar reads retain hardware segments and exact numerical offsets.
+		}
 		if x86RawVectorZeroSource(ins, arch) {
 			continue // Exact implicit SIMD writes preserve independent native input roles.
 		}

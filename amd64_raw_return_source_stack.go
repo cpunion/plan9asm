@@ -51,6 +51,7 @@ type x86SourceRawInstruction struct {
 	packedDot          x86RawPackedDotIdentity
 	permute128         x86RawPermute128Identity
 	zeroExtend         x86RawZeroExtendIdentity
+	scalarSegmentLoad  x86RawScalarSegmentLoadIdentity
 }
 
 type x86SourceStackAddress struct {

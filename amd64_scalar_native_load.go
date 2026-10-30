@@ -1,6 +1,9 @@
 package plan9asm
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 // Register-addressed memory-to-GP rows of Go's ymovb/ymovw/ymovl/ymovq tables.
 // Register, immediate, static-symbol, FP/AUTO, MMX/X and system-register rows
@@ -10,6 +13,37 @@ type x86ScalarNativeLoadForm struct {
 	source      Operand
 	destination Reg
 	bytes       int64
+}
+
+// The decoder binds mode and physical shape separately from source/ABI
+// permissions. Only the paired volatile scalar reader consumes this identity.
+type x86RawScalarSegmentLoadIdentity struct {
+	arch          string
+	bytes         int64
+	segmentPrefix byte
+}
+
+func x86ScalarSegmentLoadRawIdentity(ins Instr, arch string) x86RawScalarSegmentLoadIdentity {
+	arch = x86SourceStackScalarArch(arch)
+	if arch != "amd64" && arch != "386" {
+		return x86RawScalarSegmentLoadIdentity{}
+	}
+	ins.x86Encoded = true // Physical memory is already normalized by the decoder.
+	form, known, err := x86ScalarNativeLoadProperties(ins.Op, ins, arch)
+	if !known || err != nil || form.source.Mem.Segment != FS && form.source.Mem.Segment != GS {
+		return x86RawScalarSegmentLoadIdentity{}
+	}
+	return x86RawScalarSegmentLoadIdentity{arch, form.bytes, ins.x86SegmentPrefix}
+}
+
+func x86RawScalarSegmentLoadSource(ins Instr, arch string) bool {
+	origin := ins.x86SourceRaw
+	identity := x86ScalarSegmentLoadRawIdentity(ins, arch)
+	return ins.x86Encoded && origin != nil && identity.arch != "" && identity == origin.scalarSegmentLoad &&
+		origin.op == ins.Op && reflect.DeepEqual(origin.args, ins.Args) &&
+		origin.vectorBytes == ins.x86VectorBytes && origin.addressBits == ins.x86AddressBits &&
+		ins.x86AddressBits == 0 && !ins.x86UnboundAddressOverride && ins.x86SegmentPrefix == 0 &&
+		ins.x86RawNearReturn == nil && !ins.x86RIPLiteral && ins.x86NumericalRead == nil
 }
 
 func x86ScalarNativeLoadProperties(op Op, ins Instr, arch string) (x86ScalarNativeLoadForm, bool, error) {
@@ -99,7 +133,7 @@ func x86LoweredScalarNativeLoad(ins Instr, state *x86ResultState, owned []bool, 
 	if !known || err != nil {
 		return false, known
 	}
-	if !x86ResultNamedPredicateInstruction(ins) || ins.x86NumericalRead != nil {
+	if !x86ResultNamedPredicateInstruction(ins) && !x86RawScalarSegmentLoadSource(ins, arch) || ins.x86NumericalRead != nil {
 		return false, true // Physical emission does not grant a named numerical continuation.
 	}
 	if x86LogicalSourceFrameRegister(form.destination, arch) {
@@ -110,9 +144,16 @@ func x86LoweredScalarNativeLoad(ins Instr, state *x86ResultState, owned []bool, 
 		// volatile emitter, not an initialized AS0 pointer or GP zero.
 		// Any explicit offset base still needs its full numerical value;
 		// opaque caller/pointer identities cannot supply those bits.
-		base := form.source.Mem.Base
-		if base != "" && !x86ResultRead(Operand{Kind: OpReg, Reg: base}, x86ResultPointerWord(arch), state, owned, arch) {
-			return false, true
+		for _, register := range []Reg{form.source.Mem.Base, form.source.Mem.Index} {
+			if register == "" {
+				continue
+			}
+			word := x86ResultPointerWord(arch)
+			index, _, valid := x86ResultGP(register, word, arch)
+			if !valid || !state.shapeOnly && state.pointerGP[index] ||
+				!x86ResultRead(Operand{Kind: OpReg, Reg: register}, word, state, owned, arch) {
+				return false, true
+			}
 		}
 		return x86ResultStore(Operand{Kind: OpReg, Reg: form.destination}, form.bytes, state, owned, resultOffset, arch), true
 	}

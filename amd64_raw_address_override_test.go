@@ -658,13 +658,24 @@ func TestX86RawAddressOverrideDefaultCallerControlsAndPhysicalSegments(t *testin
 				t.Fatal("lost segmented MOVL control")
 			}
 			assembly := "TEXT raw(SB),4,$0-0\n" + x86RawDisplacementDirectives(code) + "RET\n"
-			file, err := Parse(ArchAMD64, assembly)
-			if err != nil {
-				t.Fatal(err)
+			triple := "x86_64-unknown-linux-gnu"
+			llc := findLLVM22Tool("llc")
+			if llc == "" {
+				t.Fatal("LLVM22 llc required")
 			}
-			ir, err := Translate(file, Options{Sigs: map[string]FuncSig{"raw": {Name: "raw", Ret: Void}}})
-			if err != nil || !strings.Contains(ir, fmt.Sprintf("addrspace(%d)", segment.space)) {
-				t.Fatalf("default-width physical segment was erased: %v", err)
+			ir := x86UnboundVoidRawScalarFormatObject(t, assembly, "amd64", triple)
+			x86PackedStringCompileObject(t, llc, triple, ir, "-O0")
+			initialized := strings.Replace(assembly, x86RawDisplacementDirectives(code),
+				"MOVQ $0,DI\n"+x86RawDisplacementDirectives(code), 1)
+			x86LEAActualTargetGoObject(t, "amd64", triple, initialized)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, initialized, "func raw()", "amd64", triple, api)
+				if err != nil || !strings.Contains(ir, fmt.Sprintf("load volatile i32, ptr addrspace(%d)", segment.space)) {
+					t.Fatalf("initialized default-width physical segment was erased: %s: %v", api, err)
+				}
+				for _, level := range []string{"-O0", "-O2"} {
+					x86PackedStringCompileObject(t, llc, triple, ir, level)
+				}
 			}
 		})
 	}
