@@ -269,6 +269,36 @@ func TestX86LegacyLiteralSIMDViewKeepsCompleteIDsAndMode(t *testing.T) {
 	}
 }
 
+func TestX86LegacyLiteralSIMDLeadingEscapeRemainsClosed(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := 0
+	for _, original := range catalog.Optab {
+		if original.Ytab != "yxshuf" || len(original.OpBytes) != 2 {
+			continue
+		}
+		rows++
+		for _, escape := range []int{0, 1} {
+			t.Run(fmt.Sprintf("%s/escape%d", original.Opcode, escape), func(t *testing.T) {
+				entry := original
+				entry.OpBytes = []string{"0x0f", "0"}
+				entry.EscapeAdjustment = escape
+				if witnesses, err := x86PackedLegacyRowWitnesses(entry, entry.Rows[0]); err == nil || len(witnesses) != 0 {
+					t.Fatal("closed old view admitted a one-atom leading escape", witnesses, err)
+				}
+				if encoding, err := x86LegacyLiteralSIMDEncoding(entry, entry.Rows[0]); err == nil || len(encoding) != 0 {
+					t.Fatal("LEGACY_LITERAL_SIMD_PRIVATE_ESCAPE_ACCEPTED", escape, encoding, err)
+				}
+			})
+		}
+	}
+	if rows != 6 {
+		t.Fatal("closed placeholder source-row control inventory changed", rows)
+	}
+}
+
 func TestX86PackedNarrowRowsShareBinaryWitnesses(t *testing.T) {
 	x86CheckPackedRowInventory(t, X86PackedNarrowRows, `^V?PACK`, `DW$`, x86PackedRowCounts{
 		names: 8, mmx: 3, broadcast: 18,
