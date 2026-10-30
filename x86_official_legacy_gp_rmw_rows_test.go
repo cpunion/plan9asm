@@ -19,6 +19,99 @@ import (
 
 var legacyGPRMWDraftNames = regexp.MustCompile(`^(ADC|ADD|AND|OR|SBB|SUB|XOR|INC|DEC|NEG|NOT|BTC|BTR|BTS)[BWLQ]$`)
 
+func x86MoveExtensionOriginalCases(t *testing.T, catalog goasmrules.X86LegacyCatalog, arch string) []x86OfficialPackedCase {
+	t.Helper()
+	var cases []x86OfficialPackedCase
+	seen := map[string]bool{}
+	for _, reference := range x86ExtensionNativeOracle {
+		var entry goasmrules.X86LegacyOpcode
+		for _, candidate := range catalog.Optab {
+			if candidate.Opcode == reference.op {
+				entry = candidate
+			}
+		}
+		if entry.Opcode == "" || seen[entry.Opcode] || entry.Ytab != reference.table || entry.Prefix != reference.prefix {
+			t.Fatal("independent original extension source identity changed", reference.op)
+		}
+		seen[entry.Opcode] = true
+		if arch == "386" && reference.amd64Only {
+			continue
+		}
+		prefix := map[string][]byte{"Pm": {0x0f}, "Pq": {0x66, 0x0f}, "Pe": {0x66}, "Pw": {0x48}, "Px": {}}[reference.prefix]
+		code := append([]byte(nil), prefix...)
+		for _, atom := range strings.Split(reference.bytes, ",") {
+			value, err := strconv.ParseUint(strings.TrimSpace(atom), 0, 8)
+			if err != nil {
+				t.Fatal(err)
+			}
+			code = append(code, byte(value))
+		}
+		for _, source := range []struct {
+			operand string
+			modrm   byte
+		}{{"CX", 0xd9}, {"0(SI)", 0x1e}} {
+			cases = append(cases, x86OfficialPackedCase{row: fmt.Sprintf("optab/%d/%s/%s/0", entry.TableIndex, entry.Opcode, entry.Ytab),
+				witness: goasmrules.X86PackedBinaryWitness{Instruction: entry.Opcode + " " + source.operand + ",BX", Destination: "BX", Encoding: append(append([]byte(nil), code...), source.modrm)}})
+		}
+	}
+	if len(seen) != 14 || len(cases) != map[string]int{"amd64": 28, "386": 18}[arch] {
+		t.Fatal("complete extension source/mode union changed", arch, len(seen), len(cases))
+	}
+	return cases
+}
+
+func TestX86OfficialMoveExtensionOriginalGoBytes(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		x86ImplicitMulDivOriginalByteBatches(t, arch, x86MoveExtensionOriginalCases(t, catalog, arch))
+	}
+}
+
+func TestX86OfficialMoveExtensionModePhysicalAliasesActualGo(t *testing.T) {
+	observations := 0
+	for _, arch := range []string{"amd64", "386"} {
+		for _, reference := range x86ExtensionNativeOracle {
+			for _, pair := range [][2]string{{"AL", "BX"}, {"AH", "BX"}, {"AH", "R8"}, {"BP", "BX"}, {"SI", "BX"},
+				{"DI", "BX"}, {"SP", "BX"}, {"SPB", "BX"}, {"R8", "BX"}, {"CX", "R8"}} {
+				observations++
+				instruction := reference.op + " " + pair[0] + "," + pair[1]
+				t.Run(arch+"/"+instruction, func(t *testing.T) {
+					accepted := !(arch == "386" && reference.amd64Only) && pair[0] != "SPB"
+					if reference.table != "ymb_rl" && (pair[0] == "AL" || pair[0] == "AH") ||
+						arch == "386" && (pair[0] == "R8" || pair[1] == "R8" || reference.table == "ymb_rl" && pair[0] == "SP") {
+						accepted = false
+					}
+					goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+instruction+"\nRET\n", "", accepted)
+					if !accepted {
+						return
+					}
+					ins := x86YMMReadSource(t, instruction)
+					form, known, err := x86ScalarExtensionProperties(ins.Op, ins, arch)
+					if !known || err != nil {
+						t.Fatal("Go-valid extension alias lost its existing typed grammar", err)
+					}
+					want := Reg(pair[0])
+					if reference.table == "ymb_rl" && reference.source == 2 && pair[0] == "AL" {
+						want = AX
+					} else if pair[0] == "AH" && (reference.source == 2 || arch == "amd64" && (reference.destination == 8 || pair[1] == "R8")) {
+						want = SP
+					}
+					if form.source.Reg != want || form.spec.sourceBits != reference.source*8 {
+						t.Fatal("physical source/tuple differs from original encoding", form.source.Reg, want, form.spec.sourceBits)
+					}
+					// Syntax/physical projection is not a numerical input proof.
+				})
+			}
+		}
+	}
+	if observations != 280 {
+		t.Fatal("complete source/mode/physical-alias observation matrix changed", observations)
+	}
+}
+
 func x86ImplicitMulDivOriginalCases(t *testing.T, catalog goasmrules.X86LegacyCatalog, arch string) []x86OfficialPackedCase {
 	t.Helper()
 	numeric := regexp.MustCompile(`^(?:I?MUL|I?DIV)[BWLQ]$`)

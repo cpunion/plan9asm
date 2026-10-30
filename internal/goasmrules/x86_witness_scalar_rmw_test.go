@@ -9,6 +9,105 @@ import (
 	"testing"
 )
 
+func TestX86ScalarMoveExtensionOriginalTransport(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, entry := range catalog.Optab {
+		if !strings.HasPrefix(entry.Opcode, "MOV") || entry.Ytab != "ymb_rl" && entry.Ytab != "yml_rl" {
+			continue
+		}
+		count++
+		t.Run(entry.Opcode, func(t *testing.T) {
+			witnesses, err := x86ScalarRMWRowWitnesses(entry, entry.Rows[0], "amd64")
+			if err != nil || len(witnesses) != 2 {
+				t.Fatal("SCALAR_EXTENSION_SOURCE_FEATURE_GAP", err)
+			}
+		})
+	}
+	if count != 14 {
+		t.Fatal("complete extension source family changed", count)
+	}
+}
+
+func TestX86ScalarMoveExtensionCompleteMetadataBoundaries(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	maxInt := int(^uint(0) >> 1)
+	for _, entry := range catalog.Optab {
+		if !strings.HasPrefix(entry.Opcode, "MOV") || entry.Ytab != "ymb_rl" && entry.Ytab != "yml_rl" {
+			continue
+		}
+		for _, field := range []string{"original-arity", "selected-arity", "original-index", "selected-index", "original-offset",
+			"selected-offset", "original-stride", "selected-stride", "zcase", "row-count", "prefix", "source-role", "opcode", "nonbyte", "payload-short", "payload-extra"} {
+			t.Run(entry.Opcode+"/"+field, func(t *testing.T) {
+				changed, row := entry, entry.Rows[0]
+				changed.Rows = append([]X86LegacyOperand(nil), entry.Rows...)
+				changed.OpBytes = append([]string(nil), entry.OpBytes...)
+				switch field {
+				case "original-arity":
+					changed.Rows[0].Classes = []string{strings.Join(row.Classes, ",")}
+				case "selected-arity":
+					row.Classes = []string{strings.Join(row.Classes, ",")}
+				case "original-index":
+					changed.Rows[0].RowIndex++
+				case "selected-index":
+					row.RowIndex = -1
+				case "original-offset":
+					changed.Rows[0].UnmatchedOffset = -1
+				case "selected-offset":
+					row.UnmatchedOffset = maxInt
+				case "original-stride":
+					changed.Rows[0].ZOffset = maxInt
+				case "selected-stride":
+					row.ZOffset = -1
+				case "zcase":
+					changed.Rows[0].ZCase, row.ZCase = "Zr_m", "Zr_m"
+				case "row-count":
+					changed.Rows = append(changed.Rows, row)
+				case "prefix":
+					changed.Prefix = "P32"
+				case "source-role":
+					changed.Ytab, row.ZCase, row.Classes = "yml_rl", "Zm_r", []string{"Yml", "Yrl"}
+					if entry.Ytab == "yml_rl" {
+						changed.Ytab, row.ZCase, row.Classes = "ymb_rl", "Zmb_r", []string{"Ymb", "Yrl"}
+					}
+					changed.Rows[0] = row
+				case "opcode":
+					changed.Opcode += ".BAD"
+				case "nonbyte":
+					changed.OpBytes[0] = "0x100"
+				case "payload-short":
+					changed.OpBytes = changed.OpBytes[:len(changed.OpBytes)-1]
+				case "payload-extra":
+					changed.OpBytes = append(changed.OpBytes, "0")
+				}
+				if _, err := x86ScalarRMWRowWitnesses(changed, row, "amd64"); err == nil {
+					t.Fatal("SCALAR_EXTENSION_MALFORMED_ACCEPTED", field)
+				}
+			})
+		}
+		for _, escape := range []int{-4, -1, 2, maxInt - 1, maxInt} {
+			t.Run(fmt.Sprintf("%s/escape%d", entry.Opcode, escape), func(t *testing.T) {
+				changed := entry
+				changed.EscapeAdjustment = escape
+				defer func() {
+					if failure := recover(); failure != nil {
+						t.Error("SCALAR_EXTENSION_METADATA_PANIC", failure)
+					}
+				}()
+				if _, err := x86ScalarRMWRowWitnesses(changed, changed.Rows[0], "amd64"); err == nil {
+					t.Fatal("SCALAR_EXTENSION_MALFORMED_ACCEPTED", escape)
+				}
+			})
+		}
+	}
+}
+
 func TestX86ScalarImplicitMulDivOriginalSourceTransport(t *testing.T) {
 	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {
