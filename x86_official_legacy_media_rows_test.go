@@ -190,6 +190,67 @@ func TestX86OfficialLegacyLiteralSIMDGoImmediateAndModeBoundaries(t *testing.T) 
 	}
 }
 
+// Exact original source-format units compile independently of initialized
+// public programs. They do not establish NUM, memory bounds, FP control or
+// numerical/native execution. Those stay with the typed family owners.
+func TestX86OfficialLegacyLiteralSIMDOriginalFormatObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects := 0
+	for _, arch := range []string{"amd64", "386"} {
+		cases := x86LegacyLiteralSIMDSourceCases(t, catalog, false)
+		for start := 0; start < len(cases); start += 32 {
+			end := start + 32
+			if end > len(cases) {
+				end = len(cases)
+			}
+			t.Run(fmt.Sprintf("%s/batch%d", arch, start/32), func(t *testing.T) {
+				var source strings.Builder
+				signatures := map[string]FuncSig{}
+				for index, fixture := range cases[start:end] {
+					name := fmt.Sprintf("LiteralSIMDFormat%d", start+index)
+					fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-0\n%s\nRET\n", name, fixture.witness.Instruction)
+					signatures[name] = FuncSig{Name: name, Ret: Void}
+				}
+				file, err := Parse(ArchAMD64, source.String())
+				if err != nil || len(file.Funcs) != end-start {
+					t.Fatal("original literal SIMD format functions changed", err)
+				}
+				for _, triple := range x86Legacy127Targets(arch) {
+					ir := x86SingleInstructionFormatObjectUnits(t, file, signatures, arch, triple,
+						func(consumer *amd64Ctx, instruction Instr) (bool, bool, error) {
+							// Reuse the real typed family emitters. This is neither
+							// a raw-byte/inline-assembly substitute nor a public proof.
+							for _, lower := range []func(Op, Instr) (bool, bool, error){
+								consumer.lowerImmediatePackedBlend, consumer.lowerPackedFloatingDot,
+								consumer.lowerPackedSumAbsoluteDifferences, consumer.lowerRound,
+								consumer.lowerVec,
+							} {
+								if known, terminal, err := lower(instruction.Op, instruction); known {
+									return known, terminal, err
+								}
+							}
+							return false, false, nil
+						})
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, triple, ir, level)
+						objects++
+					}
+				}
+			})
+		}
+	}
+	if objects != 30 {
+		t.Fatal("complete literal SIMD five-target O0/O2 format matrix changed", objects)
+	}
+}
+
 func x86Legacy127Targets(arch string) []string {
 	if arch == "386" {
 		return []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
