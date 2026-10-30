@@ -3,10 +3,130 @@ package goasmrules
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestX86ScalarImplicitMulDivOriginalSourceTransport(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, excluded := 0, 0
+	numeric := regexp.MustCompile(`^(?:I?MUL|I?DIV)[BWLQ]$`)
+	for _, entry := range catalog.Optab {
+		if numeric.MatchString(entry.Opcode) && (entry.Ytab == "ydivb" || entry.Ytab == "ydivl" || entry.Ytab == "yimul") {
+			selected++
+			t.Run(entry.Opcode, func(t *testing.T) {
+				witnesses, err := x86ScalarRMWRowWitnesses(entry, entry.Rows[0], "amd64")
+				if err != nil || len(witnesses) != 2 {
+					t.Fatal("SCALAR_IMPLICIT_MULDIV_SOURCE_FEATURE_GAP", err)
+				}
+			})
+		} else if entry.Ytab == "ydivb" || entry.Ytab == "ydivl" {
+			excluded++
+			t.Run("separate-state-or-nop/"+entry.Opcode, func(t *testing.T) {
+				if _, err := x86ScalarRMWRowWitnesses(entry, entry.Rows[0], "amd64"); err == nil {
+					t.Fatal("descriptor/state/NOP acquired the numerical source transport")
+				}
+			})
+		}
+	}
+	if selected != 16 || excluded != 12 {
+		t.Fatal("complete numerical/state source partition changed", selected, excluded)
+	}
+}
+
+func TestX86ScalarImplicitMulDivMalformedSourceIsBounded(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	numeric := regexp.MustCompile(`^(?:I?MUL|I?DIV)[BWLQ]$`)
+	maxInt := int(^uint(0) >> 1)
+	for _, entry := range catalog.Optab {
+		if !numeric.MatchString(entry.Opcode) || entry.Ytab != "ydivb" && entry.Ytab != "ydivl" && entry.Ytab != "yimul" {
+			continue
+		}
+		for _, mutation := range []string{"original-arity", "selected-arity", "original-index", "selected-index",
+			"original-offset", "selected-offset", "original-stride", "selected-stride", "zcase", "row-count",
+			"prefix", "width-and-prefix", "non-numerical-family", "payload-short", "payload-extra", "nonbyte", "extension"} {
+			if mutation == "non-numerical-family" && entry.Ytab == "yimul" {
+				continue // The old general ytab formatter has no family-name contract.
+			}
+			t.Run(entry.Opcode+"/"+mutation, func(t *testing.T) {
+				changed, row := entry, entry.Rows[0]
+				changed.Rows = append([]X86LegacyOperand(nil), entry.Rows...)
+				changed.OpBytes = append([]string(nil), entry.OpBytes...)
+				switch mutation {
+				case "original-arity":
+					changed.Rows[0].Classes = append(append([]string(nil), row.Classes...), "")
+				case "selected-arity":
+					row.Classes = append(append([]string(nil), row.Classes...), "")
+				case "original-index":
+					changed.Rows[0].RowIndex++
+				case "selected-index":
+					row.RowIndex = -1
+				case "original-offset":
+					changed.Rows[0].UnmatchedOffset = -1
+				case "selected-offset":
+					row.UnmatchedOffset = maxInt
+				case "original-stride":
+					changed.Rows[0].ZOffset = maxInt
+				case "selected-stride":
+					row.ZOffset = -1
+				case "zcase":
+					changed.Rows[0].ZCase, row.ZCase = "Zo_m", "Zo_m"
+				case "row-count":
+					changed.Rows = append(changed.Rows, row)
+				case "prefix":
+					changed.Prefix = "P32"
+				case "width-and-prefix":
+					width, prefix := "B", "Pb"
+					if strings.HasSuffix(entry.Opcode, "B") {
+						width, prefix = "W", "Pe"
+					}
+					changed.Opcode, changed.Prefix = entry.Opcode[:len(entry.Opcode)-1]+width, prefix
+				case "non-numerical-family":
+					changed.Opcode = "NOP" + entry.Opcode[len(entry.Opcode)-1:]
+				case "payload-short":
+					changed.OpBytes = changed.OpBytes[:len(changed.OpBytes)-1]
+				case "payload-extra":
+					changed.OpBytes = append(changed.OpBytes, "0")
+				case "nonbyte":
+					changed.OpBytes[0] = "0x100"
+				case "extension":
+					changed.OpBytes[1] = "8"
+				}
+				if _, err := x86ScalarRMWRowWitnesses(changed, row, "amd64"); err == nil {
+					t.Fatal("SCALAR_IMPLICIT_MULDIV_MALFORMED_ACCEPTED", mutation)
+				}
+			})
+		}
+		for _, escape := range []int{-4, -3, -1, 1, 2, maxInt - 1, maxInt} {
+			t.Run(fmt.Sprintf("%s/escape%d", entry.Opcode, escape), func(t *testing.T) {
+				changed := entry
+				changed.EscapeAdjustment = escape
+				changed.Rows = append([]X86LegacyOperand(nil), entry.Rows...)
+				offset := 0
+				for index := range changed.Rows {
+					changed.Rows[index].UnmatchedOffset = offset
+					offset += changed.Rows[index].ZOffset + escape
+				}
+				defer func() {
+					if failure := recover(); failure != nil {
+						t.Error("SCALAR_IMPLICIT_MULDIV_METADATA_PANIC", escape, failure)
+					}
+				}()
+				if _, err := x86ScalarRMWRowWitnesses(changed, changed.Rows[0], "amd64"); err == nil {
+					t.Fatal("SCALAR_IMPLICIT_MULDIV_MALFORMED_ACCEPTED", escape)
+				}
+			})
+		}
+	}
+}
 
 // This exercises the existing scalar transport before adding a new view. A
 // source-format refusal is a missing projection, not a numerical defect.

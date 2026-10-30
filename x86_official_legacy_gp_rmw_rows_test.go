@@ -19,6 +19,186 @@ import (
 
 var legacyGPRMWDraftNames = regexp.MustCompile(`^(ADC|ADD|AND|OR|SBB|SUB|XOR|INC|DEC|NEG|NOT|BTC|BTR|BTS)[BWLQ]$`)
 
+func x86ImplicitMulDivOriginalCases(t *testing.T, catalog goasmrules.X86LegacyCatalog, arch string) []x86OfficialPackedCase {
+	t.Helper()
+	numeric := regexp.MustCompile(`^(?:I?MUL|I?DIV)[BWLQ]$`)
+	var cases []x86OfficialPackedCase
+	count := 0
+	for _, entry := range catalog.Optab {
+		if !numeric.MatchString(entry.Opcode) || entry.Ytab != "ydivb" && entry.Ytab != "ydivl" && entry.Ytab != "yimul" {
+			continue
+		}
+		count++
+		width := entry.Opcode[len(entry.Opcode)-1]
+		if arch == "386" && width == 'Q' {
+			continue
+		}
+		opcode, err := strconv.ParseUint(entry.OpBytes[0], 0, 8)
+		if err != nil {
+			t.Fatal(err)
+		}
+		extension, err := strconv.ParseUint(entry.OpBytes[1], 0, 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var prefix []byte
+		if width == 'W' {
+			prefix = []byte{0x66}
+		} else if width == 'Q' {
+			prefix = []byte{0x48}
+		}
+		register := "CX"
+		if width == 'B' {
+			register = "CL"
+		}
+		for _, source := range []struct {
+			operand string
+			modrm   byte
+		}{{register, 0xc1}, {"0(SI)", 0x06}} {
+			cases = append(cases, x86OfficialPackedCase{
+				row: fmt.Sprintf("optab/%d/%s/%s/0", entry.TableIndex, entry.Opcode, entry.Ytab),
+				witness: goasmrules.X86PackedBinaryWitness{Instruction: entry.Opcode + " " + source.operand,
+					Destination: "AX", Encoding: append(append([]byte(nil), prefix...), byte(opcode), source.modrm|byte(extension)<<3)},
+			})
+		}
+	}
+	if count != 16 || len(cases) != map[string]int{"amd64": 32, "386": 24}[arch] {
+		t.Fatal("complete implicit integer family/mode inventory changed", count, arch, len(cases))
+	}
+	return cases
+}
+
+func x86ImplicitMulDivOriginalByteBatches(t *testing.T, arch string, cases []x86OfficialPackedCase) {
+	t.Helper()
+	for start := 0; start < len(cases); start += 32 {
+		end := start + 32
+		if end > len(cases) {
+			end = len(cases)
+		}
+		t.Run(fmt.Sprintf("%s/batch%d", arch, start/32), func(t *testing.T) {
+			batch := cases[start:end]
+			var source strings.Builder
+			for index := range batch {
+				batch[index].symbol = fmt.Sprintf("ImplicitRow%d", index)
+				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-0\n", batch[index].symbol)
+				batch[index].line = strings.Count(source.String(), "\n") + 1
+				fmt.Fprintln(&source, batch[index].witness.Instruction)
+				fmt.Fprintln(&source, "RET")
+			}
+			listing, err := x86ScalarLiteralGoListing(t, arch, source.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := x86OfficialPackedVerifyListing(listing, batch); err != nil {
+				t.Fatal("original implicit row/register/byte encoding differs", err)
+			}
+		})
+	}
+}
+
+func TestX86OfficialImplicitMulDivOriginalGoBytes(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		x86ImplicitMulDivOriginalByteBatches(t, arch, x86ImplicitMulDivOriginalCases(t, catalog, arch))
+	}
+}
+
+func TestX86OfficialImplicitMulDivByteAliasesOriginalGo(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliases := []struct {
+		name    string
+		rm, rex byte
+	}{
+		{"AL", 0, 0}, {"CL", 1, 0}, {"DL", 2, 0}, {"BL", 3, 0},
+		{"AH", 4, 0}, {"CH", 5, 0}, {"DH", 6, 0}, {"BH", 7, 0},
+		{"AX", 0, 0}, {"CX", 1, 0}, {"DX", 2, 0}, {"BX", 3, 0},
+		{"SP", 4, 0x40}, {"BP", 5, 0x40}, {"SI", 6, 0x40}, {"DI", 7, 0x40},
+		{"SPB", 4, 0x40}, {"BPB", 5, 0x40}, {"SIB", 6, 0x40}, {"DIB", 7, 0x40},
+	}
+	for index := 8; index < 16; index++ {
+		for _, suffix := range []string{"", "B"} {
+			aliases = append(aliases, struct {
+				name    string
+				rm, rex byte
+			}{fmt.Sprintf("R%d%s", index, suffix), byte(index - 8), 0x41})
+		}
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		var cases []x86OfficialPackedCase
+		synthesized, refused := 0, 0
+		for _, entry := range catalog.Optab {
+			if entry.Ytab != "ydivb" || !regexp.MustCompile(`^(?:I?MUL|I?DIV)B$`).MatchString(entry.Opcode) {
+				continue
+			}
+			opcode, _ := strconv.ParseUint(entry.OpBytes[0], 0, 8)
+			extension, _ := strconv.ParseUint(entry.OpBytes[1], 0, 3)
+			for _, alias := range aliases {
+				instruction := entry.Opcode + " " + alias.name
+				if arch == "386" && alias.rex != 0 {
+					accepted := alias.name == "BP" || alias.name == "SI" || alias.name == "DI"
+					if accepted {
+						synthesized++
+					} else {
+						refused++
+					}
+					t.Run("386-special/"+instruction, func(t *testing.T) {
+						// Go synthesizes the three physical byte sources in mode32.
+						// Acceptance is separate from the direct-byte expectations.
+						goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+instruction+"\nRET\n", "", accepted)
+					})
+					continue
+				}
+				var code []byte
+				if alias.rex != 0 {
+					code = append(code, alias.rex)
+				}
+				code = append(code, byte(opcode), 0xc0|byte(extension)<<3|alias.rm)
+				cases = append(cases, x86OfficialPackedCase{row: entry.Opcode + "/byte-alias",
+					witness: goasmrules.X86PackedBinaryWitness{Instruction: instruction, Encoding: code}})
+			}
+		}
+		if len(aliases) != 36 || len(cases) != map[string]int{"amd64": 144, "386": 48}[arch] ||
+			synthesized != map[string]int{"amd64": 0, "386": 12}[arch] || refused != map[string]int{"amd64": 0, "386": 84}[arch] {
+			t.Fatal("complete byte-bank/mode inventory changed", arch, len(cases), synthesized, refused)
+		}
+		x86ImplicitMulDivOriginalByteBatches(t, arch, cases)
+	}
+}
+
+func TestX86OfficialImplicitMulDivModeAndOperandRefusals(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, fixture := range x86ImplicitMulDivOriginalCases(t, catalog, "amd64") {
+		name := strings.Fields(fixture.witness.Instruction)[0]
+		if strings.HasSuffix(name, "Q") {
+			t.Run("386-Q/"+fixture.witness.Instruction, func(t *testing.T) {
+				goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+fixture.witness.Instruction+"\nRET\n", "", false)
+			})
+		}
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		for _, source := range []string{"$1", "X0"} {
+			t.Run("invalid/"+name+"/"+source, func(t *testing.T) {
+				goAssemblerOracleOutput(t, "amd64", "TEXT f(SB),4,$0-0\n"+name+" "+source+"\nRET\n", "", false)
+			})
+		}
+	}
+	if len(seen) != 16 {
+		t.Fatal("implicit mode/refusal control lost family members", len(seen))
+	}
+}
+
 // Independent original-table fixture construction. The fixed low registers
 // make ModRM direction explicit; the original payload remains the byte source.
 // These cases establish encoding, not input definedness or memory authority.
