@@ -73,7 +73,7 @@ func TestX86OrdinaryMoveNamedFPAddressSourceBoundaries(t *testing.T) {
 					}
 					view, known, err := x86NamedFrameMoveAddressInstruction(ins, arch)
 					if control != "outside-field" && known && err == nil {
-						t.Fatal("invalid/changed FP spelling or physical role became a named address", view)
+						t.Error("invalid/changed FP spelling or physical role became a named address", view)
 					}
 					if control == "numeric-FP" || control == "outside-field" || arch == "386" && width == "Q" {
 						for _, api := range []string{"text", "module", "Go"} {
