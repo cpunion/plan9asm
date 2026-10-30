@@ -1,6 +1,7 @@
 package goasmrules
 
 import (
+	"bytes"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -215,15 +216,42 @@ func TestX86LegacyX87MoveTransportCompleteDirections(t *testing.T) {
 		}
 		for _, row := range entry.Rows {
 			t.Run(fmt.Sprintf("%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, row.RowIndex), func(t *testing.T) {
+				id := fmt.Sprintf("optab/%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, row.RowIndex)
+				expected := map[string]X86ScalarRMWWitness{}
+				opcode, firstErr := strconv.ParseUint(entry.OpBytes[row.UnmatchedOffset], 0, 8)
+				fragment, lastErr := strconv.ParseUint(entry.OpBytes[row.UnmatchedOffset+1], 0, 8)
+				if firstErr != nil || lastErr != nil {
+					t.Fatal("independent original MOVE payload", id, firstErr, lastErr)
+				}
+				for _, lane := range []byte{1, 7} {
+					first, last := fmt.Sprint("F", lane), "F0"
+					code := []byte{byte(opcode), 0xc0 | lane | byte(fragment<<3)}
+					if row.Classes[0] == "Ym" || row.Classes[1] == "Ym" {
+						first, code = "(AX)", []byte{byte(opcode), byte(fragment << 3)}
+						if lane == 7 {
+							first, code = "7(AX)", []byte{byte(opcode), 0x40 | byte(fragment<<3), 7}
+						}
+					}
+					if row.ZCase == "Zo_m" {
+						first, last = last, first
+					}
+					instruction := entry.Opcode + " " + first + "," + last
+					expected[id+"/"+instruction] = X86ScalarRMWWitness{Instruction: instruction, Destination: last, Encoding: code}
+				}
 				witnesses, err := x86X87RowWitnesses(entry, row)
 				if err != nil || len(witnesses) != 2 {
 					t.Fatal("X87_MOVE_SOURCE_TRANSPORT_FEATURE_GAP", err)
 				}
 				for _, witness := range witnesses {
-					if !strings.HasPrefix(witness.Instruction, entry.Opcode+" ") ||
-						len(witness.Encoding) < 2 || len(witness.Encoding) > 3 || witness.Destination == "" {
-						t.Fatal("original MOVE witness lost its direction or payload", row, witness)
+					key := id + "/" + witness.Instruction
+					want, found := expected[key]
+					if !found || !bytes.Equal(witness.Encoding, want.Encoding) || witness.Destination != want.Destination {
+						t.Fatal("MOVE transport differs from the independent actual-Go source cases", key, witness, want)
 					}
+					delete(expected, key)
+				}
+				if len(expected) != 0 {
+					t.Fatal("MOVE transport omitted an independent original source case", id, expected)
 				}
 			})
 		}
