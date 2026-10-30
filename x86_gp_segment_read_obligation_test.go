@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -123,34 +124,69 @@ func x86GPSegmentGoObjects(t *testing.T, arch string, fixtures []x86GPSegmentFix
 		if end > len(fixtures) {
 			end = len(fixtures)
 		}
-		var source strings.Builder
-		var names []string
-		for _, fixture := range fixtures[start:end] {
-			source.WriteString(fixture.source)
-			names = append(names, fixture.name)
-		}
-		listing, err := x86ScalarLiteralGoListing(t, arch, source.String())
-		if err != nil {
-			t.Fatal("original complete segment source must assemble before classification", err)
-		}
-		for name, code := range x86GPSegmentListingBytes(t, listing, names) {
-			all[name] = code
+		// The source/object helpers own TempDirs. Give each bounded batch
+		// its own cleanup scope instead of retaining all objects at the root.
+		if !t.Run(fmt.Sprintf("go-source-batch%d", start/32), func(t *testing.T) {
+			var source strings.Builder
+			var names []string
+			for _, fixture := range fixtures[start:end] {
+				source.WriteString(fixture.source)
+				names = append(names, fixture.name)
+			}
+			listing, err := x86ScalarLiteralGoListing(t, arch, source.String())
+			if err != nil {
+				t.Fatal("original complete segment source must assemble before classification", err)
+			}
+			for name, code := range x86GPSegmentListingBytes(t, listing, names) {
+				all[name] = code
+			}
+		}) {
+			t.Fatal("original complete segment source batch failed", start, end)
 		}
 	}
 	return all
 }
 
 func TestX86GPFaultingReadSegmentInputs(t *testing.T) {
-	x86GPSegmentInputs(t, x86GPFaultingReadCases)
+	x86GPSegmentInputs(t, x86GPFaultingReadCases, map[string]x86GPSegmentInputCount{
+		"amd64": {95, 9112, 1424, 27336},
+		"386":   {67, 6488, 1012, 19464},
+	})
 }
 
-func x86GPSegmentInputs(t *testing.T, rows func(string) []x86GPFaultingReadCase) {
+type x86GPSegmentInputCount struct {
+	rows, fixtures, scaleClasses, apiChecks int
+}
+
+// Hash every original case and role in order, including the source and Go
+// declaration. This is an observation of the test matrix, not a production
+// instruction directory or a substitute for executing its API assertions.
+func x86GPSegmentInputIdentity(fixtures []x86GPSegmentFixture) string {
+	digest := sha256.New()
+	for _, fixture := range fixtures {
+		fmt.Fprintf(digest, "%q\n%q\n%q\n%q\n%q\n%q\n%q\n%t\n%#v\n",
+			fixture.name, fixture.source, fixture.declaration,
+			fixture.segment, fixture.address, fixture.equivalent,
+			fixture.label, fixture.accept, fixture.row)
+	}
+	return fmt.Sprintf("%x", digest.Sum(nil))
+}
+
+func x86GPSegmentInputs(t *testing.T, rows func(string) []x86GPFaultingReadCase, expected map[string]x86GPSegmentInputCount) {
 	t.Helper()
 	for _, arch := range []string{"amd64", "386"} {
 		t.Run(arch, func(t *testing.T) {
+			want, found := expected[arch]
+			if !found || len(expected) != 2 {
+				t.Fatal("missing independent segment matrix count", arch)
+			}
+			originalRows := rows(arch)
+			if len(originalRows) != want.rows {
+				t.Fatal("complete segment source-row denominator changed", len(originalRows), want.rows)
+			}
 			var fixtures []x86GPSegmentFixture
 			addresses := []string{"fixed-zero", "fixed-one", "fixed", "base", "segment-index-scale1", "segment-index-scale2", "segment-index-scale4", "segment-index-scale8"}
-			for _, row := range rows(arch) {
+			for _, row := range originalRows {
 				for _, segment := range []string{"FS", "GS"} {
 					for _, address := range addresses {
 						omissions := []string{""}
@@ -178,6 +214,10 @@ func x86GPSegmentInputs(t *testing.T, rows func(string) []x86GPFaultingReadCase)
 					}
 				}
 			}
+			if len(fixtures) != want.fixtures {
+				t.Fatal("complete segment scenario denominator changed", len(fixtures), want.fixtures)
+			}
+			identity := x86GPSegmentInputIdentity(fixtures)
 			goBytes := x86GPSegmentGoObjects(t, arch, fixtures)
 			groups := make(map[string][]byte)
 			groupCount := make(map[string]int)
@@ -196,37 +236,67 @@ func x86GPSegmentInputs(t *testing.T, rows func(string) []x86GPFaultingReadCase)
 					t.Fatal("incomplete actual Go scale equivalence class", group, count)
 				}
 			}
+			if len(groups) != want.scaleClasses {
+				t.Fatal("complete segment scale-class denominator changed", len(groups), want.scaleClasses)
+			}
 			t.Logf("SEGMENT_ACTUAL_GO_ALL_ACCEPTED arch=%s functions=%d scale_classes=%d", arch, len(fixtures), len(groups))
 			bodies := make(map[string]string)
-			for _, fixture := range fixtures {
-				t.Run(fixture.row.family+"/"+fixture.row.instruction+"/"+fixture.label, func(t *testing.T) {
-					for _, api := range []string{"text", "module", "Go"} {
-						t.Run(api, func(t *testing.T) {
+			executed, verified := 0, 0
+			for start := 0; start < len(fixtures); start += 32 {
+				end := start + 32
+				if end > len(fixtures) {
+					end = len(fixtures)
+				}
+				t.Run(fmt.Sprintf("input-batch%d", start/32), func(t *testing.T) {
+					current := "before first case"
+					t.Cleanup(func() {
+						if t.Failed() {
+							t.Log("SEGMENT_CASE_WHEN_FAILED", current)
+						}
+					})
+					for _, fixture := range fixtures[start:end] {
+						for _, api := range []string{"text", "module", "Go"} {
+							current = fmt.Sprintf("arch=%s function=%s family=%s instruction=%q %s api=%s target=%s",
+								arch, fixture.name, fixture.row.family, fixture.row.instruction, fixture.label, api, testTargetTriple("linux", arch))
 							ir, err := x86ScalarFPBitViewAPI(t, fixture.source, fixture.declaration, arch, testTargetTriple("linux", arch), api)
+							executed++
 							if !fixture.accept {
 								if err == nil && ir != "" {
-									t.Fatal("SEGMENT_MISSING_INPUT_ACCEPTED", fixture.source)
+									t.Error("SEGMENT_MISSING_INPUT_ACCEPTED", current, fixture.source)
 								} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
-									t.Fatal("SEGMENT_NEGATIVE_WRONG_CLASS", err, fixture.source)
+									t.Error("SEGMENT_NEGATIVE_WRONG_CLASS", current, err, fixture.source)
+								} else {
+									verified++
 								}
-								return
+								continue
 							}
 							if err != nil || ir == "" {
-								t.Fatal("SEGMENT_INITIALIZED_POSITIVE_REJECTED", err, fixture.source)
+								t.Error("SEGMENT_INITIALIZED_POSITIVE_REJECTED", current, err, fixture.source)
+								continue
 							}
 							if fixture.equivalent != "" {
 								body := x86StringMemoryFunction(t, ir, fixture.name)
 								body = strings.ReplaceAll(strings.SplitN(body, "\n", 2)[1], fixture.name, "FUNCTION")
 								key := api + "/" + fixture.equivalent
 								if previous, exists := bodies[key]; exists && previous != body {
-									t.Fatal("PUBLIC_SEGMENT_SCALE_IR_DIVERGED", key, previous, body)
+									t.Error("PUBLIC_SEGMENT_SCALE_IR_DIVERGED", current, key, previous, body)
+									continue
 								}
 								bodies[key] = body
 							}
-						})
+							verified++
+						}
 					}
 				})
 			}
+			if executed != want.apiChecks || verified != want.apiChecks {
+				t.Error("segment API matrix incomplete", arch, "executed", executed, "verified", verified, "expected", want.apiChecks)
+			}
+			if after := x86GPSegmentInputIdentity(fixtures); after != identity {
+				t.Error("original segment source matrix changed during execution", identity, after)
+			}
+			t.Logf("SEGMENT_MATRIX_CLOSED arch=%s functions=%d api_checks=%d verified=%d source_sha256=%s",
+				arch, len(fixtures), executed, verified, identity)
 		})
 	}
 }
@@ -320,7 +390,10 @@ func x86GPSegmentCompareRows(arch string) []x86GPFaultingReadCase {
 }
 
 func TestX86GPFaultingReadSegmentCompareInputs(t *testing.T) {
-	x86GPSegmentInputs(t, x86GPSegmentCompareRows)
+	x86GPSegmentInputs(t, x86GPSegmentCompareRows, map[string]x86GPSegmentInputCount{
+		"amd64": {8, 832, 128, 2496},
+		"386":   {6, 624, 96, 1872},
+	})
 }
 
 func TestX86GPFaultingReadSegmentCompareObjects(t *testing.T) {
