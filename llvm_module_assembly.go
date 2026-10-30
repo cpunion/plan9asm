@@ -19,17 +19,28 @@ extern char *LLVMNormalizeTargetTriple(const char *Triple);
 extern void LLVMDisposeMessage(char *Message);
 extern LLVMMemoryBufferRef LLVMCreateMemoryBufferWithMemoryRangeCopy(const char *InputData, size_t InputDataLength, const char *BufferName);
 
-static void plan9asmIRMemoryBuffer(const char *Text, size_t Length, LLVMMemoryBufferRef *Out) {
-    *Out = LLVMCreateMemoryBufferWithMemoryRangeCopy(Text, Length, "<plan9asm>");
+static void plan9asmIRMemoryBuffer(const char *Text, size_t Length, const char *Name, LLVMMemoryBufferRef *Out) {
+    *Out = LLVMCreateMemoryBufferWithMemoryRangeCopy(Text, Length, Name);
 }
 */
 import "C"
 
 import (
+	"os"
+	"strconv"
+	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"github.com/xgo-dev/llvm"
 )
+
+// Preserve independent default module/source identities without creating files.
+// The process prefix is observed once; parsing only increments the sequence.
+var llvmIRBufferPrefix = "plan9asm-" + strconv.Itoa(os.Getpid()) + "-" +
+	strconv.FormatInt(time.Now().UnixNano(), 36) + "-"
+
+var llvmIRBufferSequence atomic.Uint64
 
 // The pinned binding only constructs IR buffers from files or stdin. LLVM22's
 // copying constructor keeps the exact byte length, including embedded NULs.
@@ -37,8 +48,10 @@ import (
 func llvmIRMemoryBuffer(text string) llvm.MemoryBuffer {
 	input := C.CString(text)
 	defer C.free(unsafe.Pointer(input))
+	name := C.CString(llvmIRBufferPrefix + strconv.FormatUint(llvmIRBufferSequence.Add(1), 36) + ".ll")
+	defer C.free(unsafe.Pointer(name))
 	var buffer llvm.MemoryBuffer
-	C.plan9asmIRMemoryBuffer(input, C.size_t(len(text)),
+	C.plan9asmIRMemoryBuffer(input, C.size_t(len(text)), name,
 		(*C.LLVMMemoryBufferRef)(unsafe.Pointer(&buffer.C)))
 	return buffer
 }

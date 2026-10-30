@@ -27,6 +27,12 @@ before expanding another. Existing cross-architecture regression gates remain.
    including special early returns, and disposes rejected modules. The caller
    owns a successful module and must dispose it before its LLVM context.
 
+Generated IR enters LLVM through a copied memory buffer, without temporary
+files. LLVM's parser consumes the buffer on success and error. Default buffer
+identities remain independent through a process prefix and atomic sequence;
+explicit IR `source_filename` values are preserved. These names supply no
+source or memory permissions.
+
 `Goarch` selects source encoding/ABI rules. `TargetTriple` selects the LLVM
 backend. They need not be identical for portable operations. Backend-specific
 requirements remain explicit: SVE needs AArch64; wasm cannot use blockaddress.
