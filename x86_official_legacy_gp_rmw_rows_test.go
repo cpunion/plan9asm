@@ -128,8 +128,33 @@ func TestX86OfficialScalarMultiplyMOVBEOriginalGoBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	modes := map[string][]goasmrules.X86ScalarRMWRow{}
 	for _, arch := range []string{"amd64", "386"} {
 		cases := x86ScalarMultiplyMOVBESourceCases(t, catalog, arch)
+		t.Run(arch+"/projection", func(t *testing.T) {
+			rows, err := goasmrules.X86ScalarMultiplyMOVBERows(catalog, arch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			modes[arch] = rows
+			expected := map[string]goasmrules.X86PackedBinaryWitness{}
+			for _, fixture := range cases {
+				expected[fixture.row+"/"+fixture.witness.Instruction] = fixture.witness
+			}
+			for _, row := range rows {
+				for _, witness := range row.Witnesses {
+					key := row.ID + "/" + witness.Instruction
+					original, found := expected[key]
+					if !found || !bytes.Equal(witness.Encoding, original.Encoding) || witness.Destination != original.Destination {
+						t.Fatal("source row/instruction/encoding/destination join differs", key, witness, original)
+					}
+					delete(expected, key)
+				}
+			}
+			if len(expected) != 0 {
+				t.Fatal("original source witnesses omitted from the production projection", expected)
+			}
+		})
 		for start := 0; start < len(cases); start += 32 {
 			end := start + 32
 			if end > len(cases) {
@@ -155,6 +180,10 @@ func TestX86OfficialScalarMultiplyMOVBEOriginalGoBytes(t *testing.T) {
 			})
 		}
 	}
+	x86Legacy127SaveIdentity(t, "PLAN9ASM_SCALAR_MULTIPLY_MOVBE_IDENTITY_OUTPUT", struct {
+		Source goasmrules.X86LegacyCatalog
+		Modes  map[string][]goasmrules.X86ScalarRMWRow
+	}{catalog, modes})
 }
 
 func TestX86OfficialScalarMultiplyImmediateFirstMatchGoBytes(t *testing.T) {
@@ -234,16 +263,16 @@ func TestX86OfficialScalarMultiplyMOVBEModeAndRegisterRefusals(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	for _, fixture := range x86ScalarMultiplyMOVBESourceCases(t, catalog, "amd64") {
+		instruction := fixture.witness.Instruction
+		if strings.HasSuffix(strings.Fields(instruction)[0], "Q") {
+			t.Run("386-Q/"+fixture.row+"/"+instruction, func(t *testing.T) {
+				goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+instruction+"\nRET\n", "", false)
+			})
+		}
 		if seen[fixture.row] {
 			continue
 		}
 		seen[fixture.row] = true
-		instruction := fixture.witness.Instruction
-		if strings.HasSuffix(strings.Fields(instruction)[0], "Q") {
-			t.Run("386-Q/"+fixture.row, func(t *testing.T) {
-				goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+instruction+"\nRET\n", "", false)
-			})
-		}
 		register := "BX"
 		if strings.Contains(instruction, "CX") {
 			register = "CX"
@@ -261,6 +290,31 @@ func TestX86OfficialScalarMultiplyMOVBEModeAndRegisterRefusals(t *testing.T) {
 	}
 	if len(seen) != 24 {
 		t.Fatal("mode and register observation lost an original row", len(seen))
+	}
+}
+
+func x86ScalarMultiplyMOVBEInitializedFunction(name, operation, arch string) (string, string) {
+	word, move := goWordSize(arch), "Q"
+	if word == 4 {
+		move = "L"
+	}
+	source := fmt.Sprintf("TEXT ·%s(SB),4,$0-%d\nMOV%s out+0(FP),DI\nMOV%s memory+%d(FP),SI\n"+
+		"MOV%s old+%d(FP),AX\nMOV%s AX,BX\nMOV%s AX,DX\nMOV%s input+%d(FP),CX\nCMPL CX,CX\n%s\n"+
+		"MOV%s AX,0(DI)\nMOV%s DX,%d(DI)\nMOV%s BX,%d(DI)\n"+
+		"SETCS CL\nMOVB CL,%d(DI)\nSETOS CL\nMOVB CL,%d(DI)\nRET\n",
+		name, 4*word, move, move, word, move, 2*word, move, move, move, 3*word, operation,
+		move, move, word, move, 2*word, 3*word, 3*word+1)
+	return source, fmt.Sprintf("func %s(out *[32]byte,memory *[8]byte,old,input uintptr)\n", name)
+}
+
+func TestX86OfficialScalarMultiplyMOVBEInitializedThreeAPIFiveObjects(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		cases := x86ScalarMultiplyMOVBESourceCases(t, catalog, arch)
+		x86Legacy127Objects(t, arch, cases, x86ScalarMultiplyMOVBEInitializedFunction)
 	}
 }
 

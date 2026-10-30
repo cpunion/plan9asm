@@ -35,6 +35,60 @@ func TestX86ScalarMultiplyMOVBECompleteSourceTransport(t *testing.T) {
 	}
 }
 
+func TestX86ScalarMultiplyMOVBECompleteRowsAndModes(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		rows, err := X86ScalarMultiplyMOVBERows(catalog, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen, filtered, witnesses := map[string]bool{}, 0, 0
+		for _, row := range rows {
+			if row.ID == "" || seen[row.ID] {
+				t.Fatal("duplicate or missing original row identity", row.ID)
+			}
+			seen[row.ID] = true
+			if row.ModeFiltered != "" {
+				filtered++
+				if len(row.Witnesses) != 0 {
+					t.Fatal("refused source mode acquired a witness")
+				}
+			}
+			witnesses += len(row.Witnesses)
+		}
+		if len(rows) != 24 || filtered != map[string]int{"amd64": 0, "386": 8}[arch] ||
+			witnesses != map[string]int{"amd64": 36, "386": 24}[arch] {
+			t.Fatal("complete scalar multiply/MOVBE source-mode closure changed", arch, len(rows), filtered, witnesses)
+		}
+	}
+	for _, arch := range []string{"", "arm64", "wasm"} {
+		if _, err := X86ScalarMultiplyMOVBERows(catalog, arch); err == nil {
+			t.Fatal("foreign source mode acquired scalar transport", arch)
+		}
+	}
+	if _, err := X86ScalarMultiplyMOVBERows(X86LegacyCatalog{}, "amd64"); err == nil {
+		t.Fatal("empty source inventory silently passed")
+	}
+	for index, entry := range catalog.Optab {
+		if entry.Ytab != "yimul3" {
+			continue
+		}
+		changed := catalog
+		changed.Optab = append(append([]X86LegacyOpcode(nil), catalog.Optab[:index]...), catalog.Optab[index+1:]...)
+		if _, err := X86ScalarMultiplyMOVBERows(changed, "amd64"); err == nil {
+			t.Fatal("missing complete source member admitted")
+		}
+		changed.Optab = append(append([]X86LegacyOpcode(nil), catalog.Optab...), entry)
+		if _, err := X86ScalarMultiplyMOVBERows(changed, "amd64"); err == nil {
+			t.Fatal("duplicate complete source member admitted")
+		}
+		break
+	}
+}
+
 func TestX86ScalarMultiplyMOVBERejectsMalformedSource(t *testing.T) {
 	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
 	if err != nil {
