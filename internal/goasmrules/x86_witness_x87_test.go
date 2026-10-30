@@ -156,3 +156,121 @@ func TestX86LegacyX87TransportRejectsForeignSourceAxes(t *testing.T) {
 		}
 	}
 }
+
+// The remaining MOVE tables form a separate view. Their original row IDs
+// must not enlarge the already qualified 79-row projection.
+var x86X87MoveSourceSchemas = map[string][]string{
+	"yfmvd":  {"Zm_o/2/Ym,Yf0", "Zo_m/2/Yf0,Ym", "Zm_o/2/Yrf,Yf0", "Zo_m/2/Yf0,Yrf"},
+	"yfmvdp": {"Zo_m/2/Yf0,Ym", "Zo_m/2/Yf0,Yrf"},
+	"yfmvf":  {"Zm_o/2/Ym,Yf0", "Zo_m/2/Yf0,Ym"},
+	"yfmvp":  {"Zo_m/2/Yf0,Ym"},
+}
+
+func TestX86LegacyX87MoveCompleteOriginalInventory(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts, names, ids := map[string]int{}, map[string]bool{}, map[string]bool{}
+	for _, entry := range catalog.Optab {
+		schema := x86X87MoveSourceSchemas[entry.Ytab]
+		if schema == nil {
+			continue
+		}
+		if names[entry.Opcode] || entry.Kind != "encoding" || entry.Prefix != "Px" ||
+			entry.EscapeAdjustment != 0 || len(entry.Rows) != len(schema) || len(entry.OpBytes) != 2*len(schema) {
+			t.Fatal("complete original MOVE entry changed", entry)
+		}
+		names[entry.Opcode] = true
+		for index, row := range entry.Rows {
+			id := fmt.Sprintf("optab/%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, row.RowIndex)
+			if ids[id] || row.RowIndex != index || row.UnmatchedOffset != 2*index ||
+				fmt.Sprintf("%s/%d/%s", row.ZCase, row.ZOffset, strings.Join(row.Classes, ",")) != schema[index] {
+				t.Fatal("original ordered MOVE identity changed", id, row)
+			}
+			ids[id] = true
+			counts[entry.Ytab]++
+		}
+	}
+	for table, expected := range map[string]int{"yfmvd": 4, "yfmvdp": 2, "yfmvf": 6, "yfmvp": 6} {
+		if counts[table] != expected {
+			t.Fatal("incomplete original MOVE family", table, counts[table], expected)
+		}
+	}
+	if len(ids) != 18 || len(names) != 11 {
+		t.Fatal("MOVE source-row/name denominator changed", len(ids), len(names))
+	}
+}
+
+// RED uses the existing renderer's actual refusal, not an absent new API or
+// a claim that the initialized translator cannot execute this instruction.
+func TestX86LegacyX87MoveTransportCompleteDirections(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range catalog.Optab {
+		if x86X87MoveSourceSchemas[entry.Ytab] == nil {
+			continue
+		}
+		for _, row := range entry.Rows {
+			t.Run(fmt.Sprintf("%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, row.RowIndex), func(t *testing.T) {
+				witnesses, err := x86X87RowWitnesses(entry, row)
+				if err != nil || len(witnesses) != 2 {
+					t.Fatal("X87_MOVE_SOURCE_TRANSPORT_FEATURE_GAP", err)
+				}
+				for _, witness := range witnesses {
+					if !strings.HasPrefix(witness.Instruction, entry.Opcode+" ") ||
+						len(witness.Encoding) < 2 || len(witness.Encoding) > 3 || witness.Destination == "" {
+						t.Fatal("original MOVE witness lost its direction or payload", row, witness)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestX86LegacyX87MoveRejectsChangedPayloadAndDirection(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, original := range catalog.Optab {
+		if x86X87MoveSourceSchemas[original.Ytab] == nil {
+			continue
+		}
+		for _, selected := range original.Rows {
+			for _, control := range []string{"prefix", "stride", "offset", "extent", "row-order", "direction", "unselected-byte", "memory-digit"} {
+				if control == "memory-digit" && selected.Classes[0] != "Ym" && selected.Classes[1] != "Ym" {
+					continue
+				}
+				t.Run(fmt.Sprintf("%s/%d/%s", original.Opcode, selected.RowIndex, control), func(t *testing.T) {
+					entry, row := original, selected
+					entry.OpBytes = append([]string(nil), original.OpBytes...)
+					entry.Rows = append([]X86LegacyOperand(nil), original.Rows...)
+					switch control {
+					case "prefix":
+						entry.Prefix = "Pw"
+					case "stride":
+						row.ZOffset++
+					case "offset":
+						row.UnmatchedOffset++
+					case "extent":
+						entry.OpBytes = append(entry.OpBytes, "0")
+					case "row-order":
+						entry.Rows[0].RowIndex++
+					case "direction":
+						row.ZCase = "Zlit"
+					case "unselected-byte":
+						entry.OpBytes[len(entry.OpBytes)-1] = "invalid"
+					case "memory-digit":
+						entry.OpBytes[row.UnmatchedOffset+1] = "8"
+					}
+					if witnesses, err := x86X87RowWitnesses(entry, row); err == nil || len(witnesses) != 0 {
+						t.Fatal("changed original MOVE source acquired a format witness", control, witnesses, err)
+					}
+				})
+			}
+		}
+	}
+}
