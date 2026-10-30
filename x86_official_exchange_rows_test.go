@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -123,6 +125,93 @@ func x86ExchangeObjectDisassembly(t *testing.T, llc, objdump, triple, ir, level 
 	return string(listing)
 }
 
+func x86ExchangeObjectPrefixError(disassembly, widths string) error {
+	header := regexp.MustCompile(`^[0-9a-f]+ <([^>]+)>:$`)
+	want := map[string]bool{}
+	for _, width := range widths {
+		for _, locked := range []bool{false, true} {
+			want[fmt.Sprintf("Prefix%c_%t", width, locked)] = locked
+		}
+	}
+	seen := map[string]int{}
+	var failures []error
+	owner := ""
+	previousEnd, previousLock := uint64(0), false
+	for _, line := range strings.Split(disassembly, "\n") {
+		if match := header.FindStringSubmatch(strings.TrimSpace(line)); match != nil {
+			owner = strings.TrimPrefix(match[1], "_")
+			previousEnd, previousLock = 0, false
+			continue
+		}
+		address, rest, found := strings.Cut(strings.TrimSpace(line), ":")
+		pc, err := strconv.ParseUint(address, 16, 64)
+		if !found || err != nil {
+			continue
+		}
+		fields := strings.Fields(rest)
+		var code []byte
+		for len(fields) != 0 && len(fields[0]) == 2 {
+			value, err := strconv.ParseUint(fields[0], 16, 8)
+			if err != nil {
+				break
+			}
+			code, fields = append(code, byte(value)), fields[1:]
+		}
+		if len(code) == 0 || len(fields) == 0 {
+			continue
+		}
+		mnemonic := fields[0]
+		if strings.HasPrefix(mnemonic, "xadd") || mnemonic == "lock" && len(fields) > 1 && strings.HasPrefix(fields[1], "xadd") {
+			locked, expected := want[owner]
+			if !expected {
+				failures = append(failures, fmt.Errorf("unowned target exchange instruction %s: %s", owner, line))
+				continue
+			}
+			if mnemonic == "lock" {
+				mnemonic = fields[1]
+			}
+			seen[owner]++
+			actualLock := code[0] == 0xf0 || previousLock && previousEnd == pc
+			if actualLock != locked || mnemonic != "xadd"+strings.ToLower(owner[6:7]) {
+				failures = append(failures, fmt.Errorf("%s locked=%t want=%t: %s", owner, actualLock, locked, line))
+			}
+		}
+		previousEnd = pc + uint64(len(code))
+		previousLock = len(code) == 1 && code[0] == 0xf0 && mnemonic == "lock"
+	}
+	for owner := range want {
+		if seen[owner] != 1 {
+			failures = append(failures, fmt.Errorf("target function %s has %d XADDs, want one", owner, seen[owner]))
+		}
+	}
+	return errors.Join(failures...)
+}
+
+func TestX86ExchangeObjectPrefixReaderBoundaries(t *testing.T) {
+	// LLVM22's actual default disassembly separates f0 from the following
+	// opcode. Keep its observed function/byte shape, including symbol spelling.
+	const listing = "0000 <PrefixB_false>:\n0: 0f c0 07 xaddb %al,(%rdi)\n" +
+		"0003 <PrefixB_true>:\n3: f0 lock\n4: 0f c0 07 xaddb %al,(%rdi)\n"
+	for _, sample := range []struct {
+		name, text string
+		valid      bool
+	}{
+		{"observed", listing, true},
+		{"platform-underscore", strings.ReplaceAll(listing, "<Prefix", "<_Prefix"), true},
+		{"swapped-functions", strings.NewReplacer("PrefixB_false", "PrefixB_true", "PrefixB_true", "PrefixB_false").Replace(listing), false},
+		{"other-next-opcode", strings.Replace(listing, "4: 0f", "4: 90 nop\n5: 0f", 1), false},
+		{"nonadjacent-prefix", strings.Replace(listing, "4: 0f", "5: 0f", 1), false},
+		{"wrong-width", strings.ReplaceAll(listing, "xaddb", "xaddw"), false},
+		{"foreign-owner", strings.Replace(listing, "PrefixB_true", "Other", 1), false},
+	} {
+		t.Run(sample.name, func(t *testing.T) {
+			if err := x86ExchangeObjectPrefixError(sample.text, "B"); (err == nil) != sample.valid {
+				t.Fatal("object prefix reader changed its function/adjacency/width boundary", err)
+			}
+		})
+	}
+}
+
 func TestX86ExchangeMemoryPrefixOriginalAndLLVMObjects(t *testing.T) {
 	llc, objdump := findLLVM22Tool("llc"), findLLVM22Tool("llvm-objdump")
 	if llc == "" || objdump == "" {
@@ -135,6 +224,7 @@ func TestX86ExchangeMemoryPrefixOriginalAndLLVMObjects(t *testing.T) {
 				widths = "BWL"
 			}
 			var source, declarations strings.Builder
+			var bodies, prefixes []x86OfficialPackedCase
 			for _, width := range widths {
 				for _, locked := range []bool{false, true} {
 					body := fmt.Sprintf("XADD%c CX,1(SI)", width)
@@ -146,6 +236,28 @@ func TestX86ExchangeMemoryPrefixOriginalAndLLVMObjects(t *testing.T) {
 					}
 					program, declaration := x86UnlockedScalarRMWFixture(target.arch, body, true)
 					name := fmt.Sprintf("Prefix%c_%t", width, locked)
+					position := strings.Index(program, "\nXADD")
+					if position < 0 {
+						t.Fatal("original source lost its XADD")
+					}
+					line := strings.Count(source.String(), "\n") + strings.Count(program[:position+1], "\n") + 1
+					end := strings.IndexByte(program[position+1:], '\n') + position + 1
+					code := []byte{0x0f, 0xc1, 0x4c, 0x1f, 0xff} // CX,-1(DI)(BX*1).
+					if width == 'B' {
+						code[1] = 0xc0
+					} else if width == 'W' {
+						code = append([]byte{0x66}, code...)
+					} else if width == 'Q' {
+						code = append([]byte{0x48}, code...)
+					}
+					fixture := x86OfficialPackedCase{symbol: name, row: name, line: line,
+						witness: goasmrules.X86PackedBinaryWitness{Instruction: program[position+1 : end], Encoding: code}}
+					bodies = append(bodies, fixture)
+					if locked {
+						fixture.line--
+						fixture.witness.Instruction, fixture.witness.Encoding = "LOCK", []byte{0xf0}
+					}
+					prefixes = append(prefixes, fixture)
 					source.WriteString(strings.Replace(program, "·Value", "·"+name, 1))
 					declarations.WriteString(strings.Replace(declaration, "Value", name, 1) + "\n")
 				}
@@ -156,8 +268,10 @@ func TestX86ExchangeMemoryPrefixOriginalAndLLVMObjects(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if strings.Count(listing, "\tLOCK") != len(widths) {
-				t.Fatal("original Go source lost explicit LOCK adjacency", listing)
+			for _, original := range [][]x86OfficialPackedCase{bodies, prefixes} {
+				if err := x86OfficialPackedVerifyListing(listing, original); err != nil {
+					t.Fatal("original Go function lost its exact XADD/prefix bytes", err)
+				}
 			}
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(api, func(t *testing.T) {
@@ -167,18 +281,8 @@ func TestX86ExchangeMemoryPrefixOriginalAndLLVMObjects(t *testing.T) {
 					}
 					for _, level := range []string{"-O0", "-O2"} {
 						disassembly := x86ExchangeObjectDisassembly(t, llc, objdump, target.triple, ir, level)
-						count, locked := 0, 0
-						for _, line := range strings.Split(disassembly, "\n") {
-							if !strings.Contains(line, "xadd") {
-								continue
-							}
-							count++
-							if strings.Contains(line, "lock") {
-								locked++
-							}
-						}
-						if count != 2*len(widths) || locked != len(widths) {
-							t.Error("EXCHANGE_ORIGINAL_PREFIX_CHANGED", api, level, "xadd", count, "locked", locked, "want", 2*len(widths), len(widths))
+						if err := x86ExchangeObjectPrefixError(disassembly, widths); err != nil {
+							t.Error("EXCHANGE_ORIGINAL_PREFIX_CHANGED", api, level, err)
 						}
 					}
 				})
