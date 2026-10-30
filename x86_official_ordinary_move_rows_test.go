@@ -223,19 +223,23 @@ func TestX86OfficialOrdinaryMoveInitializedThreeAPIFiveObjects(t *testing.T) {
 }
 
 func TestX86OfficialOrdinaryMoveSourceRowsDoNotSupplyInputAuthority(t *testing.T) {
-	for _, row := range []struct{ operation, initialization string }{
-		{"MOVB CL,BL", "MOVQ old+0(FP),BX\n"},
-		{"MOVW CX,BX", "MOVQ input+8(FP),CX\n"},
-		{"MOVL M1,CX", ""},
-		{"MOVQ X0,M1", ""},
-		{"MOVB 0(SI),BL", "MOVQ old+0(FP),BX\n"},
-		{"MOVQ CX,0(SI)", "MOVQ input+8(FP),CX\n"},
-		{"MOVW $slot+0(SP),BX", "MOVQ old+0(FP),BX\n"},
-		{"MOVL $slot+0(SP),BX", ""},
-		{"MOVQ $slot+0(SP),BX", ""},
+	for _, row := range []struct{ operation, initialization, observation string }{
+		{"MOVB CL,BL", "MOVQ old+0(FP),BX\n", ""},
+		{"MOVW CX,BX", "MOVQ input+8(FP),CX\n", ""},
+		{"MOVL M1,CX", "", "MOVQ CX,ret+16(FP)\n"},
+		{"MOVQ X0,M1", "", "MOVQ M1,ret+16(FP)\nEMMS\n"},
+		{"MOVB 0(SI),BL", "MOVQ old+0(FP),BX\n", ""},
+		{"MOVQ CX,0(SI)", "MOVQ old+0(FP),BX\nMOVQ input+8(FP),CX\n", ""},
+		{"MOVW $slot+0(SP),BX", "MOVQ old+0(FP),BX\n", ""},
+		{"MOVL $slot+0(SP),BX", "", ""},
+		{"MOVQ $slot+0(SP),BX", "", ""},
 	} {
 		t.Run(row.operation, func(t *testing.T) {
-			source := "TEXT ·MissingMovInput(SB),4,$0-24\n" + row.initialization + row.operation + "\nMOVQ BX,ret+16(FP)\nRET\n"
+			observation := row.observation
+			if observation == "" {
+				observation = "MOVQ BX,ret+16(FP)\n"
+			}
+			source := "TEXT ·MissingMovInput(SB),4,$0-24\n" + row.initialization + row.operation + "\n" + observation + "RET\n"
 			declaration := "func MissingMovInput(old,input uint64) uint64\n"
 			// The source spelling remains Go-valid even when a numerical input,
 			// bank/state input, pointer or independently owned frame is absent.
