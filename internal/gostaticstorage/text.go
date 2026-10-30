@@ -194,6 +194,10 @@ func readTextObjectKinds(data []byte, target string, flags uint32, empty bool, b
 	if err != nil {
 		return nil, err
 	}
+	return readCheckedTextObjectKinds(object, target, builtins, referenced, fipsText)
+}
+
+func readCheckedTextObjectKinds(object *checkedGoObject, target string, builtins []TextReference, referenced sdkReferencedSymbols, fipsText bool) ([]TextRecord, error) {
 	block := object.block
 	definitions, err := object.indexedSymbols()
 	if err != nil {

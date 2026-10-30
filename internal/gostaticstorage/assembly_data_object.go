@@ -21,13 +21,13 @@ func observeASMDataObject(data, builtin []byte, target string, flags uint32, ref
 		return member, err
 	}
 	member.ObjectOffset = int64(len(data) - len(body))
-	object, err := checkedObject(body, flags, flags&4 != 0)
+	object, err := checkedSDKObject(body, flags, flags&4 != 0)
 	if err != nil {
 		return member, err
 	}
 	// TEXT validates every reference, relocation and auxiliary record, including
 	// unused ones. It retains all original bodies rather than choosing by name.
-	member.Texts, err = readTextObjectReferences(body, target, flags, flags&4 != 0, builtins, referenced)
+	member.Texts, err = readCheckedTextObjectKinds(object, target, builtins, referenced, true)
 	if err != nil {
 		return member, err
 	}

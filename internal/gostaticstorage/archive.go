@@ -172,8 +172,19 @@ type checkedGoObject struct {
 }
 
 func checkedObject(data []byte, flags uint32, emptyAssembly bool) (*checkedGoObject, error) {
+	return checkedObjectRecords(data, flags, emptyAssembly, false)
+}
+
+// SDK compiler bodies have four independently bounded definition namespaces.
+// This offline decoding role supplies no SDK provenance or source authority.
+// Ordinary bodies and individual assembly members retain their original bound.
+func checkedSDKObject(data []byte, flags uint32, emptyAssembly bool) (*checkedGoObject, error) {
+	return checkedObjectRecords(data, flags, emptyAssembly, flags&16 != 0 && flags&4 == 0)
+}
+
+func checkedObjectRecords(data []byte, flags uint32, emptyAssembly, sdkCompiler bool) (*checkedGoObject, error) {
 	const headerSize = 8 + 8 + 4 + 19*4
-	if len(data) < headerSize || string(data[:8]) != "\x00go120ld" {
+	if len(data) < headerSize || len(data) > archiveLimit || string(data[:8]) != "\x00go120ld" {
 		return nil, contextError("unknown or truncated binary goobj header")
 	}
 	// ObjFlagShared, FromAssembly and Unlinkable are outside this prototype.
@@ -194,19 +205,30 @@ func checkedObject(data []byte, flags uint32, emptyAssembly bool) (*checkedGoObj
 	}
 	block := func(index int) []byte { return data[offsets[index]:offsets[index+1]] }
 	// Check every fixed-record block, including unused reference/aux records.
-	widths := map[int]int{0: 16, 1: 8, 2: 8, 3: 21, 4: 21, 5: 21, 6: 21, 7: 21,
-		8: 10, 9: 8, 10: 16, 11: 4, 12: 4, 13: 4, 14: 23, 15: 9, 17: 16}
+	widths := [...]int{16, 8, 8, 21, 21, 21, 21, 21, 10, 8, 16, 4, 4, 4, 23, 9, 0, 16}
 	for index, width := range widths {
-		if len(block(index))%width != 0 || len(block(index))/width > symbolLimit {
+		if width == 0 {
+			continue // Raw DATA bytes are bounded by the complete object interval.
+		}
+		// Index tables contain N+1 entries and are checked exactly below.
+		// SDK relocation/Aux work is bounded by its own aligned byte block,
+		// not the unrelated number of definitions in a single namespace.
+		boundedByBytes := index >= 11 && index <= 13 || sdkCompiler && (index == 14 || index == 15)
+		if len(block(index))%width != 0 || !boundedByBytes && len(block(index))/width > symbolLimit {
 			return nil, contextError(fmt.Sprintf("invalid or excessive binary block record count: block=%d bytes=%d width=%d records=%d limit=%d",
 				index, len(block(index)), width, len(block(index))/width, symbolLimit))
 		}
 	}
+	definitionBlocks := [...]int{3, 4, 5, 6}
 	count := 0
-	for i := 3; i <= 6; i++ {
+	for _, i := range definitionBlocks {
 		count += len(block(i)) / 21
 	}
-	if count == 0 && !emptyAssembly || count > symbolLimit || len(block(9))/8 != len(block(4))/21 || len(block(10))/16 != len(block(5))/21 {
+	definitionLimit := symbolLimit
+	if sdkCompiler {
+		definitionLimit *= len(definitionBlocks)
+	}
+	if count == 0 && !emptyAssembly || count > definitionLimit || len(block(9))/8 != len(block(4))/21 || len(block(10))/16 != len(block(5))/21 {
 		return nil, contextError("invalid symbol/hash inventory")
 	}
 	var indices [3][]uint32

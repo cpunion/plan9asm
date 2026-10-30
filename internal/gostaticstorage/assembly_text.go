@@ -125,6 +125,7 @@ func observeAssemblyArchiveReferences(data, builtinSource []byte, target string,
 		if err != nil {
 			return nil, err
 		}
+		var sdkObject *checkedGoObject
 		if !sdk {
 			records, err := assemblyArchiveDefinitions(body, flags)
 			if err != nil {
@@ -140,10 +141,11 @@ func observeAssemblyArchiveReferences(data, builtinSource []byte, target string,
 				storage[name] = record.Kind != 1
 			}
 		} else {
-			object, err := checkedObject(body, flags, index != 0)
+			object, err := checkedSDKObject(body, flags, index != 0)
 			if err != nil {
 				return nil, err
 			}
+			sdkObject = object
 			symbols, err := object.indexedSymbols()
 			if err != nil {
 				return nil, err
@@ -154,7 +156,12 @@ func observeAssemblyArchiveReferences(data, builtinSource []byte, target string,
 				}
 			}
 		}
-		texts, err := readTextObjectReferences(body, target, flags, sdk && index != 0, builtins, referenced)
+		var texts []TextRecord
+		if sdk {
+			texts, err = readCheckedTextObjectKinds(sdkObject, target, builtins, referenced, true)
+		} else {
+			texts, err = readTextObjectReferences(body, target, flags, false, builtins, referenced)
+		}
 		if err != nil {
 			return nil, err
 		}
