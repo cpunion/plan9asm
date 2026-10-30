@@ -9,10 +9,12 @@ Original qualification, failures and host exclusions remain in their reports.
 ## Published and local revisions
 
 [PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. Published
-`3551c62a5` has its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40925324365);
-acceptance requires all 325 jobs, original package logs, coverage and review.
-The local follow-up `c6bedd6f2` adds the 127-row batch below and has no public
-CI qualification yet. Let the published round finish before another push.
+`798cf56ee` has its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40999892704),
+which reports source-contract failures and a truncated large test matrix.
+The preceding `3551c62a5` [round](https://github.com/xgo-dev/plan9asm/actions/runs/40925324365)
+passed all 325 jobs. Those results do not certify later revisions. Let each
+published round finish naturally before another batch push; acceptance requires
+the new head's complete package logs, coverage and external review.
 
 Previous `137945fdf` completed its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40904358535)
 with 292 successful and 33 failed jobs: two source-test owners across eleven
@@ -227,8 +229,23 @@ preflight failure on an ARM64 host; no program executed in that failed owner.
 
 ## Remaining closeout
 
-1. The published Plan9asm and LLGo pin have completed their CI rounds. Publish
-   the later local repairs only through the allowed fork after final gates;
+Local CI repairs preserve the original Go formats while distinguishing missing
+inputs from initialized source. Raw FS/GS reads retain exact decoder identity
+and numerical offset inputs. XADD/XCHG share output effects across native and
+actual module-owned numeric static storage, with writable extents still checked.
+Stack-expression positives use actual source-bound frames. These components
+require their final integrated regression and CI; they are not cloud passes.
+
+The segment input matrix now uses bounded scenario batches instead of a separate
+subtest for every API call. All 17,056 source/declaration/role identities and
+51,168 API checks remain, alongside original Go byte, scale, IR and object
+checks. Both SDKs complete all five owners under the unchanged 64 MiB capture
+bound with approximately 1.6 MiB of output. Planned, failed and incomplete
+partition counts must still be checked independently in CI artifacts.
+
+1. The preceding accepted Plan9asm and LLGo pin completed their CI rounds.
+   Finish the latest Plan9asm round and publish local repairs through the
+   allowed fork after final gates;
    require fresh complete CI, coverage and review at each new public head.
 2. Finish final GP classification review across five architectures and eight
    source profiles, the policy suites and the unchanged complete-translation
