@@ -8,9 +8,12 @@ Original qualification, failures and host exclusions remain in their reports.
 
 ## Published and local revisions
 
-[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. Published
-`798cf56ee` has its [own round](https://github.com/xgo-dev/plan9asm/actions/runs/40999892704),
-which reports source-contract failures and a truncated large test matrix.
+[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The
+`798cf56ee` [round](https://github.com/xgo-dev/plan9asm/actions/runs/40999892704)
+finished naturally: 191 successful and 134 failed jobs. The failures comprise
+fourteen source-test owners, eleven truncated source partitions and dependent
+collectors. The original failed reports remain failed; local repairs need
+their own complete CI acceptance.
 The preceding `3551c62a5` [round](https://github.com/xgo-dev/plan9asm/actions/runs/40925324365)
 passed all 325 jobs. Those results do not certify later revisions. Let each
 published round finish naturally before another batch push; acceptance requires
@@ -220,11 +223,13 @@ with Go 1.20.14, without skips. Current-Go actual runtime capture, verification
 and source-revocation tests pass for both amd64 and 386. These are complete
 source/object observations, not execution of the translated runtime.
 
-The unchanged strict 55-file benchmark still reports 41 passes and fourteen
-failures, without new failing files. Six diagnostics advance to subsequent
-TEXT, frame, ABI or literal-initialization checks. Its 169-second complete run
-is slower than the historical 116-second comparison; SDK throughput remains
-unaccepted. The local current-Go profile package also retains one Rosetta
+The unchanged strict 55-file benchmark at `4e94a9f42` reports 41 passes and
+fourteen failures, without new failing files or unattempted sources. Six
+diagnostics advance to subsequent TEXT, frame, ABI or literal-initialization
+checks. This complete run took 134 seconds; the earlier local run took 169
+seconds and the historical comparison 116 seconds. These are separate runs,
+not a paired efficiency acceptance. SDK throughput remains unaccepted.
+The local current-Go profile package also retains one Rosetta
 preflight failure on an ARM64 host; no program executed in that failed owner.
 
 ## Remaining closeout
@@ -239,7 +244,12 @@ PCALIGN backend defect; its exact diagnostic is observed separately from a
 successful Go object. The changed owner passes on both endpoint SDKs and still
 requires all three LLVM target objects. Unchanged owners retain their frozen
 run identities. These are local results, not cloud passes; the three explicit
-host-inapplicable runtime owners still require native CI execution.
+host-inapplicable runtime owners still require native CI execution. The combined
+evidence comprises 12,056 passes and three host skips per SDK, inherited for
+133 owners and freshly rerun for the changed owner; it is not a complete rerun
+at the latest revision. Both complete current-Go CLIs pass without skips:
+38 roots / 77 nodes and 401 roots / 2,599 nodes respectively. Their declared
+minimum is Go 1.24; these CLI results do not certify Go 1.20 execution.
 
 The segment input matrix now uses bounded scenario batches instead of a separate
 subtest for every API call. All 17,056 source/declaration/role identities and
