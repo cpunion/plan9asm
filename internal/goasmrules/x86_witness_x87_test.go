@@ -302,3 +302,38 @@ func TestX86LegacyX87MoveRejectsChangedPayloadAndDirection(t *testing.T) {
 		}
 	}
 }
+
+func TestX86LegacyX87MoveViewPreservesOriginalProjection(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		original, err := X86X87Rows(catalog, arch)
+		if err != nil || len(original) != 79 {
+			t.Fatal("MOVE closure enlarged the original x87 projection", arch, err)
+		}
+		seen := map[string]bool{}
+		for _, row := range original {
+			seen[row.ID] = true
+		}
+		moves, err := X86X87MoveRows(catalog, arch)
+		if err != nil || len(moves) != 18 {
+			t.Fatal("remaining MOVE projection lost its complete rows", arch, err)
+		}
+		for _, row := range moves {
+			if seen[row.ID] || len(row.Witnesses) != 2 {
+				t.Fatal("new MOVE source identity repeated or overlapped the original view", arch, row)
+			}
+			seen[row.ID] = true
+		}
+		if len(seen) != 97 {
+			t.Fatal("old/new original x87 source union changed", arch, len(seen))
+		}
+	}
+	for _, arch := range []string{"", "arm", "arm64", "wasm"} {
+		if rows, err := X86X87MoveRows(catalog, arch); err == nil || len(rows) != 0 {
+			t.Fatal("MOVE source projection inferred a missing or foreign x86 mode", arch, rows, err)
+		}
+	}
+}

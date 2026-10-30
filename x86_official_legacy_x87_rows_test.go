@@ -228,7 +228,7 @@ func x86X87MoveOriginalSourceCases(t *testing.T, catalog goasmrules.X86LegacyCat
 					first, last = last, first
 				}
 				cases = append(cases, x86OfficialPackedCase{row: id,
-					witness: goasmrules.X86PackedBinaryWitness{Instruction: entry.Opcode + " " + first + "," + last, Encoding: code}})
+					witness: goasmrules.X86PackedBinaryWitness{Instruction: entry.Opcode + " " + first + "," + last, Destination: last, Encoding: code}})
 			}
 			// The non-pop F0,F0 alias selects yfmvd row2 before row3.
 			// The pop alias selects yfmvdp's actual register row1.
@@ -250,8 +250,33 @@ func TestX86OfficialLegacyX87MoveOriginalGoRowsAndFirstMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	modes := make(map[string][]goasmrules.X86X87Row)
 	for _, arch := range []string{"amd64", "386"} {
 		cases := x86X87MoveOriginalSourceCases(t, catalog)
+		rows, err := goasmrules.X86X87MoveRows(catalog, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		modes[arch] = rows
+		expected := make(map[string]goasmrules.X86PackedBinaryWitness, len(cases))
+		for _, fixture := range cases {
+			expected[fixture.row+"/"+fixture.witness.Instruction] = fixture.witness
+		}
+		witnesses := 0
+		for _, row := range rows {
+			for _, witness := range row.Witnesses {
+				key := row.ID + "/" + witness.Instruction
+				original, found := expected[key]
+				if !found || !bytes.Equal(original.Encoding, witness.Encoding) || original.Destination != witness.Destination {
+					t.Fatal("MOVE transport differs from the independent actual-Go fixture", key, original, witness)
+				}
+				delete(expected, key)
+				witnesses++
+			}
+		}
+		if len(rows) != 18 || witnesses != 36 || len(expected) != 2 {
+			t.Fatal("complete MOVE row/witness/first-match union changed", arch, len(rows), witnesses, len(expected))
+		}
 		for start := 0; start < len(cases); start += 32 {
 			end := start + 32
 			if end > len(cases) {
@@ -278,5 +303,57 @@ func TestX86OfficialLegacyX87MoveOriginalGoRowsAndFirstMatch(t *testing.T) {
 				}
 			})
 		}
+	}
+	if !t.Failed() {
+		x86Legacy127SaveIdentity(t, "PLAN9ASM_X87_MOVE_ROW_IDENTITY_OUTPUT", struct {
+			Source goasmrules.X86LegacyCatalog
+			Modes  map[string][]goasmrules.X86X87Row
+		}{catalog, modes})
+	}
+}
+
+func TestX86OfficialLegacyX87MoveOriginalEmitterObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	objects := 0
+	for _, arch := range []string{"amd64", "386"} {
+		cases := x86X87MoveOriginalSourceCases(t, catalog)
+		for start := 0; start < len(cases); start += 32 {
+			end := start + 32
+			if end > len(cases) {
+				end = len(cases)
+			}
+			t.Run(fmt.Sprintf("%s/batch%d", arch, start/32), func(t *testing.T) {
+				var source strings.Builder
+				source.WriteString("TEXT ·X87MoveEmitter(SB),4,$0-0\n")
+				for _, fixture := range cases[start:end] {
+					source.WriteString("FINIT\n")
+					source.WriteString(fixture.witness.Instruction)
+					source.WriteByte('\n')
+				}
+				source.WriteString("RET\n")
+				file, err := Parse(ArchAMD64, source.String())
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, triple := range x86Legacy127Targets(arch) {
+					ir := x86X87LowererObjectUnit(t, file, arch, triple)
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, triple, ir, level)
+						objects++
+					}
+				}
+				t.Logf("private emitter only: retained %d original MOVE row/alias operations; no numerical or execution claim", end-start)
+			})
+		}
+	}
+	if objects != 20 {
+		t.Fatal("complete five-target O0/O2 MOVE object matrix changed", objects)
 	}
 }
