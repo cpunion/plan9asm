@@ -89,7 +89,7 @@ func TestGoAMD64FixedLocalOriginalMoveAddressLiveUses(t *testing.T) {
 				case "uninitialized-local":
 					initialization = ""
 				}
-				source := "TEXT ·AddressUse(SB),4,$16-16\nMOVQ input+0(FP),AX\n" + initialization +
+				source := "TEXT ·AddressUse(SB),4,$16-16\nMOVQ input+0(FP),AX\nMOVQ $0,BX\n" + initialization +
 					"MOV" + width + " $" + address + "(SP),BX\n" + tail + "RET\n"
 				declaration := "func AddressUse(input uint64) uint64\n"
 				goAssemblerOracleOutput(t, "amd64", source, "", true)

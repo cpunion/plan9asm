@@ -99,8 +99,11 @@ func x86LEASourceInstruction(ins Instr) Instr {
 // This local view keeps the actual Op/Raw untouched for source replay. It
 // supplies syntax/width only, not a frame, initialized data or numerical bits.
 func x86NamedFrameMoveAddressInstruction(ins Instr, arch string) (Instr, bool, error) {
+	if len(ins.Args) != 2 || ins.Args[0].Kind != OpFPAddr && ins.Args[0].Kind != OpSym {
+		return ins, false, nil
+	}
 	op := x86GoMOVQSourceInstruction(ins).Op
-	if (op != "MOVW" && op != "MOVL" && op != "MOVQ") || len(ins.Args) != 2 || !x86ResultNamedPredicateInstruction(ins) {
+	if (op != "MOVW" && op != "MOVL" && op != "MOVQ") || !x86ResultNamedPredicateInstruction(ins) {
 		return ins, false, nil
 	}
 	var address Operand
