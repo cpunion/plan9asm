@@ -18,6 +18,74 @@ type X86ScalarRMWWitness struct {
 	Encoding                 []byte
 }
 
+// X86OrdinaryMoveRow keeps bank transfers and address rewrites separate from
+// GP syntax. None of these source observations grants numerical/storage facts.
+type X86OrdinaryMoveRow struct {
+	X86ScalarRMWRow
+	Role, Rewrite string
+}
+
+func X86OrdinaryMoveRows(catalog X86LegacyCatalog, arch string) ([]X86OrdinaryMoveRow, error) {
+	if arch != "amd64" && arch != "386" {
+		return nil, fmt.Errorf("ordinary MOV requires a Go x86 mode")
+	}
+	var result []X86OrdinaryMoveRow
+	seen := map[string]bool{}
+	for _, entry := range catalog.Optab {
+		if entry.Opcode != "MOVB" && entry.Opcode != "MOVW" && entry.Opcode != "MOVL" && entry.Opcode != "MOVQ" {
+			continue
+		}
+		if seen[entry.Opcode] {
+			return nil, fmt.Errorf("duplicate ordinary MOV source table")
+		}
+		seen[entry.Opcode] = true
+		for _, operand := range entry.Rows {
+			witnesses, err := x86ScalarRMWRowWitnesses(entry, operand, arch)
+			if err != nil {
+				return nil, fmt.Errorf("%s/%d: %w", entry.Opcode, operand.RowIndex, err)
+			}
+			row := X86OrdinaryMoveRow{X86ScalarRMWRow: X86ScalarRMWRow{
+				ID:     fmt.Sprintf("optab/%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, operand.RowIndex),
+				Opcode: entry.Opcode, Witnesses: witnesses}, Role: "GP"}
+			if strings.Contains(operand.ZCase, "_xm") {
+				row.Role = "bank"
+			} else if operand.ZCase == "Zaut_r" {
+				row.Role = "address"
+				if entry.Opcode != "MOVW" {
+					row.Rewrite = "LEA" + entry.Opcode[3:]
+				}
+			}
+			if arch == "386" && entry.Prefix == "Pw8" && operand.UnmatchedOffset >= 8 {
+				row.ModeFiltered, row.Witnesses = "original Go Pw8 requires amd64 at source offset >= 8", nil
+			}
+			result = append(result, row)
+		}
+	}
+	if len(seen) != 4 || len(result) != 32 && len(result) != 33 {
+		return nil, fmt.Errorf("incomplete ordinary MOV source tables: names=%d rows=%d", len(seen), len(result))
+	}
+	return result, nil
+}
+
+func x86OrdinaryMoveSchema(entry X86LegacyOpcode) []string {
+	gp := []string{"Zr_m/1/Yrl,Yml", "Zm_r/1/Yml,Yrl", "Zil_rp/1/Yi32,Yrl", "Zilo_m/2/Yi32,Yml"}
+	switch entry.Ytab {
+	case "ymovb":
+		return []string{"Zr_m/1/Yrb,Ymb", "Zm_r/1/Ymb,Yrb", "Zib_rp/1/Yi32,Yrb", "Zibo_m/2/Yi32,Ymb"}
+	case "ymovw":
+		return append(gp, "Zaut_r/2/Yiauto,Yrl")
+	case "ymovl":
+		return append(gp, "Zm_r_xm/1/Yml,Ymr", "Zr_m_xm/1/Ymr,Yml", "Zm_r_xm/2/Yml,Yxr", "Zr_m_xm/2/Yxr,Yml", "Zaut_r/2/Yiauto,Yrl")
+	case "ymovq":
+		rows := []string{"Zm_r_xm_nr/1/Ym,Ymr", "Zr_m_xm_nr/1/Ymr,Ym", "Zm_r_xm_nr/2/Yxr,Ymr", "Zm_r_xm_nr/2/Yxm,Yxr", "Zr_m_xm_nr/2/Yxr,Yxm", "Zr_m/1/Yrl,Yml", "Zm_r/1/Yml,Yrl"}
+		if len(entry.Rows) == 15 {
+			rows = append(rows, "Zilo_m/2/Ys32,Yrl")
+		}
+		return append(rows, "Ziq_rp/1/Yi64,Yrl", "Zilo_m/2/Yi32,Yml", "Zm_r_xm/1/Ymm,Ymr", "Zr_m_xm/1/Ymr,Ymm", "Zm_r_xm/2/Yml,Yxr", "Zr_m_xm/2/Yxr,Yml", "Zaut_r/1/Yiauto,Yrl")
+	}
+	return nil
+}
+
 // X86ScalarRMWRows projects the six complete legacy scalar RMW tables. The
 // original reader supplies all ordered attributes and opcode payloads; this
 // adapter does not carry a second per-mnemonic opcode table.
@@ -342,6 +410,10 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		"ydivl":  {"Zm_o/2/Yml"},
 	}
 	schema := schemas[entry.Ytab]
+	ordinary := x86OrdinaryMoveSchema(entry)
+	if ordinary != nil {
+		schema = ordinary
+	}
 	if entry.Opcode == "" {
 		return nil, fmt.Errorf("missing scalar source opcode")
 	}
@@ -373,7 +445,14 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		}
 	}
 	expectedPrefix := map[byte]string{'B': "Pb", 'W': "Pe", 'L': "Px", 'Q': "Pw"}[width]
-	if remainingPrefix != "" {
+	if ordinary != nil {
+		if entry.Ytab != "ymov"+strings.ToLower(string(width)) || entry.Opcode != "MOV"+string(width) || entry.EscapeAdjustment != 0 {
+			return nil, fmt.Errorf("ordinary MOV source role/escape changed")
+		}
+		if width == 'Q' {
+			expectedPrefix = "Pw8"
+		}
+	} else if remainingPrefix != "" {
 		expectedPrefix = remainingPrefix
 	} else if (entry.Ytab == "ybtl" || conditional) && width != 'Q' {
 		expectedPrefix = map[byte]string{'W': "Pq", 'L': "Pm"}[width]
@@ -393,7 +472,29 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		return nil, fmt.Errorf("scalar carrier is outside the complete table grammar")
 	}
 	var payload []byte
+	mediaPrefixes := map[int]string{}
+	if ordinary != nil {
+		for _, original := range entry.Rows {
+			if strings.Contains(original.ZCase, "_xm") && original.ZOffset == 2 {
+				marker := "Pe"
+				if original.ZCase == "Zm_r_xm_nr" {
+					marker = "Pf3"
+					if original.Classes[1] == "Ymr" {
+						marker = "Pf2"
+					}
+				}
+				mediaPrefixes[original.UnmatchedOffset] = marker
+			}
+		}
+	}
 	for index, token := range entry.OpBytes {
+		if marker := mediaPrefixes[index]; marker != "" {
+			if token != marker {
+				return nil, fmt.Errorf("ordinary MOV source media-prefix atom changed")
+			}
+			payload = append(payload, map[string]byte{"Pe": 0x66, "Pf2": 0xf2, "Pf3": 0xf3}[marker])
+			continue
+		}
 		if entry.Ytab == "yimul" && index == 4 {
 			if token != "Pm" {
 				return nil, fmt.Errorf("scalar multiply source lost its symbolic escape")
@@ -436,9 +537,36 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		offset += previous.ZOffset + adjustment
 	}
 	last := entry.Rows[len(entry.Rows)-1]
+	payloadEnd := last.UnmatchedOffset + last.ZOffset + adjustment
+	if ordinary != nil && last.ZCase == "Zaut_r" {
+		// Go advances by zoffset on a nonmatch, but Zaut_r consumes only its
+		// single placeholder. The final MOVW/L row retains its original stride.
+		payloadEnd = last.UnmatchedOffset + 1
+	}
 	if entry.EscapeAdjustment != adjustment || row.UnmatchedOffset != offset ||
-		last.UnmatchedOffset+last.ZOffset+adjustment != len(payload) || offset < 0 || offset >= len(payload) {
+		payloadEnd != len(payload) || offset < 0 || offset >= len(payload) {
 		return nil, fmt.Errorf("scalar complete payload/ordered offset changed")
+	}
+	if ordinary != nil {
+		for _, original := range entry.Rows {
+			start := original.UnmatchedOffset
+			if strings.Contains(original.ZCase, "_xm") && original.ZOffset == 2 {
+				start++
+			}
+			if original.ZCase != "Zaut_r" && (payload[start] == 0 || payload[start] == 0x0f) {
+				return nil, fmt.Errorf("ordinary MOV opcode atom crosses its source span")
+			}
+			switch original.ZCase {
+			case "Zibo_m", "Zilo_m":
+				if payload[start+1] != 0 {
+					return nil, fmt.Errorf("ordinary immediate MOV lost its /0 extension")
+				}
+			case "Zaut_r":
+				if payload[start] != 0 {
+					return nil, fmt.Errorf("ordinary address MOV lost its unused placeholder")
+				}
+			}
+		}
 	}
 	var prefix []byte
 	switch entry.Prefix {
@@ -450,6 +578,10 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		prefix = []byte{0x66, 0x0f}
 	case "Pw":
 		prefix = []byte{0x48}
+	case "Pw8":
+		if offset >= 8 {
+			prefix = []byte{0x48}
+		}
 	case "Pf3":
 		prefix = []byte{0xf3, 0x0f}
 	case "Pef3":
@@ -464,6 +596,14 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		prefix = []byte{0xf3, 0x0f, 0x38}
 	case "Pq5w":
 		prefix = []byte{0xf3, 0x48, 0x0f, 0x38}
+	}
+	bank := ordinary != nil && strings.Contains(row.ZCase, "_xm")
+	if bank {
+		if row.ZOffset == 2 {
+			prefix = append([]byte{payload[offset]}, prefix...)
+			offset++
+		}
+		prefix = append(prefix, 0x0f)
 	}
 	if payload[offset] == 0x0f {
 		prefix = append(prefix, 0x0f)
@@ -480,7 +620,7 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 	// Earlier matching classes own register/register and small-immediate
 	// shadows. The late direction is witnessed by memory source instead.
 	var operands [][2]string
-	immediate := 128
+	immediate := int64(128)
 	compare := entry.Ytab == "ycmpl" || entry.Ytab == "ycmpb"
 	switch row.ZCase {
 	case "Zib_", "Zil_":
@@ -496,7 +636,57 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		if row.Classes[0] == "Yi8" {
 			immediate = 1
 		}
-		operands = append(operands, [2]string{fmt.Sprint("$", immediate), dst}, [2]string{fmt.Sprint("$", immediate), "0(SI)"})
+		if ordinary != nil {
+			if row.Classes[0] == "Ys32" {
+				immediate = -1
+				operands = append(operands, [2]string{"$-1", dst})
+			} else {
+				operands = append(operands, [2]string{fmt.Sprint("$", immediate), "0(SI)"})
+			}
+		} else {
+			operands = append(operands, [2]string{fmt.Sprint("$", immediate), dst}, [2]string{fmt.Sprint("$", immediate), "0(SI)"})
+		}
+	case "Zib_rp", "Zil_rp", "Ziq_rp":
+		if row.ZCase == "Ziq_rp" {
+			immediate = 0x1122334455667788
+			operands = append(operands, [2]string{"$0x1122334455667788", dst})
+		} else {
+			operands = append(operands, [2]string{fmt.Sprint("$", immediate), dst})
+		}
+	case "Zaut_r":
+		operands = append(operands, [2]string{"$slot+0(SP)", dst})
+	case "Zm_r_xm", "Zm_r_xm_nr":
+		destination := "M1"
+		if row.Classes[1] == "Yxr" {
+			destination = "X1"
+		}
+		switch row.Classes[0] {
+		case "Ym":
+			operands = append(operands, [2]string{"0(SI)", destination})
+		case "Yxr", "Yxm":
+			operands = append(operands, [2]string{"X0", destination})
+			if row.Classes[0] == "Yxm" {
+				operands = append(operands, [2]string{"0(SI)", destination})
+			}
+		default:
+			operands = append(operands, [2]string{src, destination})
+			if width == 'L' {
+				operands = append(operands, [2]string{"0(SI)", destination})
+			}
+		}
+	case "Zr_m_xm", "Zr_m_xm_nr":
+		source := "M1"
+		if row.Classes[0] == "Yxr" {
+			source = "X1"
+		}
+		if row.Classes[1] == "Ym" || row.Classes[1] == "Yxm" {
+			operands = append(operands, [2]string{source, "0(SI)"})
+		} else {
+			operands = append(operands, [2]string{source, src})
+			if width == 'L' {
+				operands = append(operands, [2]string{source, "0(SI)"})
+			}
+		}
 	case "Zib_rr", "Zil_rr", "Zibm_r":
 		if row.Classes[0] == "Yi8" {
 			immediate = 1
@@ -544,7 +734,21 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 				rm = 0xc1
 			} // CX source, BX destination.
 		}
+		if bank {
+			rm = 0xc1
+			if args[0] == "X0" {
+				rm = 0xc0
+			}
+			if memory {
+				rm = 6
+			}
+		}
 		switch row.ZCase {
+		case "Zm_r_xm", "Zm_r_xm_nr", "Zr_m_xm", "Zr_m_xm_nr":
+			code = append(code, rm|1<<3)
+		case "Zaut_r":
+			code[len(code)-1] = 0x8d // Go's Zaut_r transport; L/Q are progedit rewrites.
+			code = append(code, 0x1c, 0x24)
 		case "Zr_m":
 			code = append(code, rm|1<<3)
 		case "Zm_r", "Zmb_r":
@@ -567,17 +771,20 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 				return nil, fmt.Errorf("scalar /digit is not a three-bit extension")
 			}
 			code = append(code, rm|payload[offset+1]<<3)
-		case "Z_rp":
+		case "Z_rp", "Zib_rp", "Zil_rp", "Ziq_rp":
 			code[len(code)-1] += 3
 		}
-		if strings.HasPrefix(args[0], "$") || compare && strings.HasPrefix(args[1], "$") {
+		if row.ZCase != "Zaut_r" && (strings.HasPrefix(args[0], "$") || compare && strings.HasPrefix(args[1], "$")) {
 			n := 1
 			if row.ZCase == "Zil_" || row.ZCase == "Zilo_m" || row.ZCase == "Z_il" || row.ZCase == "Zm_ilo" ||
-				row.ZCase == "Zil_rr" || row.ZCase == "Zibm_r" && row.Classes[0] == "Yi32" {
+				row.ZCase == "Zil_rr" || row.ZCase == "Zil_rp" || row.ZCase == "Zibm_r" && row.Classes[0] == "Yi32" {
 				n = 4
 				if width == 'W' {
 					n = 2
 				}
+			}
+			if row.ZCase == "Ziq_rp" {
+				n = 8
 			}
 			for shift := 0; shift < n; shift++ {
 				code = append(code, byte(immediate>>uint(shift*8)))

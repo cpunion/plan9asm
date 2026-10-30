@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"runtime"
@@ -134,6 +135,48 @@ func TestX86OfficialOrdinaryMoveCompleteOriginalGo(t *testing.T) {
 		}
 		x86OrdinaryMoveCheckOriginalGo(t, arch, accepted)
 	}
+}
+
+func TestX86OfficialOrdinaryMoveCompleteSourceJoin(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := x86OrdinaryMoveOriginalCases(t, catalog)
+	modes := map[string][]goasmrules.X86OrdinaryMoveRow{}
+	for _, arch := range []string{"amd64", "386"} {
+		rows, err := goasmrules.X86OrdinaryMoveRows(catalog, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		modes[arch] = rows
+		expected := map[string]x86OrdinaryMoveOriginalCase{}
+		for _, fixture := range all {
+			if arch != "386" || !fixture.mode64 {
+				expected[fixture.row+"/"+fixture.original] = fixture
+			}
+		}
+		for _, row := range rows {
+			for _, witness := range row.Witnesses {
+				key := row.ID + "/" + witness.Instruction
+				original, found := expected[key]
+				if !found || !bytes.Equal(witness.Encoding, original.witness.Encoding) || witness.Destination != original.witness.Destination {
+					t.Fatal("complete MOV row/instruction/bytes/destination join differs", arch, key, witness, original.witness)
+				}
+				if (row.Rewrite != "") != (original.rewrite != "") || row.Rewrite != "" && !strings.HasPrefix(original.witness.Instruction, row.Rewrite+" ") {
+					t.Fatal("original MOV-to-LEA observation lost its rewrite identity", key, row.Rewrite, original.rewrite)
+				}
+				delete(expected, key)
+			}
+		}
+		if len(expected) != 0 {
+			t.Fatal("independent original MOV observations omitted", arch, expected)
+		}
+	}
+	x86Legacy127SaveIdentity(t, "PLAN9ASM_ORDINARY_MOVE_IDENTITY_OUTPUT", struct {
+		Source goasmrules.X86LegacyCatalog
+		Modes  map[string][]goasmrules.X86OrdinaryMoveRow
+	}{catalog, modes})
 }
 
 func TestX86OfficialOrdinaryMoveImmediateFirstMatch(t *testing.T) {

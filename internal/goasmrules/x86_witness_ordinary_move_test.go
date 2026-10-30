@@ -75,7 +75,7 @@ func TestX86OrdinaryMoveCompleteMetadataBoundaries(t *testing.T) {
 			continue
 		}
 		for _, selected := range entry.Rows {
-			for _, field := range []string{"original-arity", "selected-arity", "original-index", "selected-index", "original-offset", "selected-offset", "original-stride", "selected-stride", "earlier-row", "last-row", "row-count", "prefix", "source-role", "nonbyte", "payload-short", "payload-extra", "symbolic-marker", "escape-negative", "escape-overflow"} {
+			for _, field := range []string{"original-arity", "selected-arity", "original-index", "selected-index", "original-offset", "selected-offset", "original-stride", "selected-stride", "earlier-row", "last-row", "row-count", "prefix", "source-role", "nonbyte", "payload-short", "payload-extra", "symbolic-marker", "opcode-zero", "opcode-escape", "escape-one", "escape-negative", "escape-overflow"} {
 				t.Run(fmt.Sprintf("%s/%d/%s", entry.Opcode, selected.RowIndex, field), func(t *testing.T) {
 					changed, row := entry, selected
 					changed.Rows = append([]X86LegacyOperand(nil), entry.Rows...)
@@ -115,6 +115,12 @@ func TestX86OrdinaryMoveCompleteMetadataBoundaries(t *testing.T) {
 						changed.OpBytes = append(changed.OpBytes, "0")
 					case "symbolic-marker":
 						changed.OpBytes[0] = "Pe"
+					case "opcode-zero":
+						changed.OpBytes[0] = "0"
+					case "opcode-escape":
+						changed.OpBytes[0] = "0x0f"
+					case "escape-one":
+						changed.EscapeAdjustment = 1
 					case "escape-negative":
 						changed.EscapeAdjustment = -maxInt - 1
 					case "escape-overflow":
@@ -133,6 +139,83 @@ func TestX86OrdinaryMoveCompleteMetadataBoundaries(t *testing.T) {
 					}
 				})
 			}
+		}
+	}
+}
+
+func TestX86OrdinaryMoveSourceRolesAndModeBoundaries(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	historical := false
+	for _, entry := range catalog.Optab {
+		if entry.Opcode == "MOVQ" {
+			historical = len(entry.Rows) == 15
+		}
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		rows, err := X86OrdinaryMoveRows(catalog, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		roles := map[string]int{}
+		filtered, rewrites := 0, 0
+		for _, row := range rows {
+			roles[row.Role]++
+			if row.Rewrite != "" {
+				if row.Role != "address" || row.Rewrite != "LEA"+row.Opcode[3:] {
+					t.Fatal("address rewrite supplied a different role", row)
+				}
+				rewrites++
+			}
+			if row.ModeFiltered != "" {
+				if arch != "386" || row.Opcode != "MOVQ" || len(row.Witnesses) != 0 {
+					t.Fatal("mode filter supplied a witness or removed a legal mode", row)
+				}
+				filtered++
+			} else if len(row.Witnesses) == 0 {
+				t.Fatal("unfiltered original source row lacks its observation", row)
+			}
+		}
+		gp, wantFiltered := 16, 0
+		if historical {
+			gp++
+		}
+		if arch == "386" {
+			wantFiltered = 9
+			if historical {
+				wantFiltered++
+			}
+		}
+		if !reflect.DeepEqual(roles, map[string]int{"GP": gp, "bank": 13, "address": 3}) || filtered != wantFiltered || rewrites != 2 {
+			t.Fatal("complete source-role/mode partition changed", roles, filtered, rewrites)
+		}
+	}
+	for _, arch := range []string{"", "arm64", "wasm"} {
+		if _, err := X86OrdinaryMoveRows(catalog, arch); err == nil {
+			t.Fatal("foreign mode borrowed ordinary x86 source transport", arch)
+		}
+	}
+	if _, err := X86OrdinaryMoveRows(X86LegacyCatalog{}, "amd64"); err == nil {
+		t.Fatal("missing catalog supplied an ordinary MOV closure")
+	}
+	for _, field := range []string{"missing", "duplicate"} {
+		changed := catalog
+		changed.Optab = append([]X86LegacyOpcode(nil), catalog.Optab...)
+		for index, entry := range changed.Optab {
+			if entry.Opcode != "MOVL" {
+				continue
+			}
+			if field == "missing" {
+				changed.Optab = append(changed.Optab[:index], changed.Optab[index+1:]...)
+			} else {
+				changed.Optab = append(changed.Optab, entry)
+			}
+			break
+		}
+		if _, err := X86OrdinaryMoveRows(changed, "amd64"); err == nil {
+			t.Fatal("incomplete/duplicate catalog supplied an ordinary MOV closure", field)
 		}
 	}
 }
