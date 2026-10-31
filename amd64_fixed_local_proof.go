@@ -323,7 +323,7 @@ func fixedLocalInstructionShape(ins Instr) bool {
 		_, named := fixedLocalBranchLabel(ins)
 		return named
 	}
-	if x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op) != 0 {
+	if x86RawReturnScalarMoveBytes(x86SourceMoveInstruction(ins, "amd64").Op) != 0 {
 		return len(ins.Args) == 2
 	}
 	if _, address := fixedLocalStaticAddress(ins); address {
@@ -1033,7 +1033,7 @@ func fixedLocalStepWithGP(ins *Instr, state *x86FixedLocalState, sig FuncSig, pr
 	if known, err := fixedLocalPrivateAddressStep(*ins, state, proof); known {
 		return err
 	}
-	if width := x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(*ins).Op); width != 0 {
+	if width := x86RawReturnScalarMoveBytes(x86SourceMoveInstruction(*ins, "amd64").Op); width != 0 {
 		return fixedLocalMove(ins, state, sig, proof, residue, width)
 	}
 	if known, err := fixedLocalExchangeStep(ins, state, sig, proof, residue); known {

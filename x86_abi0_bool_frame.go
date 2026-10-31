@@ -129,7 +129,7 @@ func x86ABI0BoolFrameNUMTransfer(ordinal int, ins Instr, state *x86ResultState, 
 
 func x86ABI0BoolFrameTransfer(ordinal int, original Instr, state *x86ResultState, owned []bool, resultOffset int64,
 	arch string, transfer x86ResultSourceTransfer) bool {
-	ins := x86GoMOVQSourceInstruction(original)
+	ins := x86SourceMoveInstruction(original, arch)
 	if accepted, known := x86ABI0BoolCallStep(ordinal, ins, state, owned, resultOffset, arch); known {
 		return accepted
 	}

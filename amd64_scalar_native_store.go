@@ -22,12 +22,19 @@ func x86ScalarNativeStoreProperties(op Op, ins Instr, arch string) (x86ScalarNat
 }
 
 func x86ScalarRegisterStoreProperties(op Op, ins Instr, arch string) (x86ScalarNativeStoreForm, bool, error) {
+	if form, known, err := x86ScalarMoveAliasProperties(op, ins, arch); known {
+		if err != nil {
+			return x86ScalarNativeStoreForm{}, true, err
+		}
+		op = form.spec.canonical
+	}
 	if len(ins.Args) != 2 || (ins.Args[0].Kind != OpReg && ins.Args[0].Kind != OpImm) || ins.Args[1].Kind != OpMem ||
 		ins.Args[1].Mem.Sym != "" || ins.Args[1].Mem.Segment != "" ||
 		ins.Args[1].Mem.Index == FS || ins.Args[1].Mem.Index == GS {
 		return x86ScalarNativeStoreForm{}, false, nil
 	}
 	projected := ins
+	projected.Op = op
 	source := ins.Args[0]
 	register := source
 	if source.Kind == OpImm {

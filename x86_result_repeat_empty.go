@@ -62,7 +62,7 @@ func x86ResultRepeatEmptyBranch(instructions []Instr, edges [][]int, previous []
 	}
 	for at := start; at < comparison; at++ {
 		work++
-		ins := x86GoMOVQSourceInstruction(instructions[at])
+		ins := x86SourceMoveInstruction(instructions[at], arch)
 		width := x86RawReturnScalarMoveBytes(ins.Op)
 		if plain(ins) && width != 0 && len(ins.Args) == 2 && ins.Args[1].Kind == OpReg {
 			destination, _, valid := x86ResultGP(ins.Args[1].Reg, width, arch)
@@ -117,7 +117,7 @@ func x86ResultRepeatEmptyBranch(instructions []Instr, edges [][]int, previous []
 		}
 		for count := 0; count < limit && at >= 0 && at < len(instructions); count++ {
 			work++
-			ins := x86GoMOVQSourceInstruction(instructions[at])
+			ins := x86SourceMoveInstruction(instructions[at], arch)
 			if !plain(ins) {
 				return nil, false
 			}

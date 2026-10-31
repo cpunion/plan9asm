@@ -34,7 +34,7 @@ func x86OpaqueAddressPointerResultRole(fn Func, sig FuncSig, arch string) bool {
 		if original.Op == "NOP" && len(original.Args) == 0 {
 			continue
 		}
-		ins := x86GoMOVQSourceInstruction(original)
+		ins := x86SourceMoveInstruction(original, arch)
 		if ins.Op != move || len(ins.Args) != 2 {
 			return false
 		}

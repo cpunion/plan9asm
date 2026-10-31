@@ -107,7 +107,7 @@ func x86ABI0ForwardMoveBytes(ins Instr, index int) int64 {
 	if len(ins.Args) != 2 || !x86ResultNamedPredicateInstruction(ins) {
 		return 0
 	}
-	if x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op) == 0 {
+	if x86RawReturnScalarMoveBytes(x86SourceMoveInstruction(ins, "amd64").Op) == 0 {
 		if form, known, err := amd64ScalarVectorMoveProperties(ins, "amd64"); known {
 			if err != nil || form.mask >= 0 || form.memory != index || form.spec.rawOnly {
 				return 0

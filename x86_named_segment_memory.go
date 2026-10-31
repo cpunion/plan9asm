@@ -52,7 +52,7 @@ func x86NamedSegmentMOVNeedsProof(ins Instr, arch string) bool {
 		ins.Args[0].Kind != OpMem || ins.Args[1].Kind != OpReg {
 		return false
 	}
-	canonical := x86GoMOVQSourceInstruction(ins)
+	canonical := x86SourceMoveInstruction(ins, arch)
 	width := x86RawReturnScalarMoveBytes(canonical.Op)
 	if width == 0 {
 		return false

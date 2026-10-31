@@ -141,7 +141,7 @@ func fixedLocalCandidateBases(fn Func) fixedLocalCandidateBaseSet {
 			}
 			continue
 		}
-		op := x86GoMOVQSourceInstruction(ins).Op
+		op := x86SourceMoveInstruction(ins, "amd64").Op
 		if op != "MOVQ" && op != "LEAQ" {
 			continue
 		}

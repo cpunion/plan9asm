@@ -13,7 +13,7 @@ func x86DirectTailResultAddressTransfer(ins Instr, state *x86ResultState, owned 
 	if len(state.resultAddressSlots) == 0 {
 		return transfer(ordinal, ins, state, owned, resultOffset, arch)
 	}
-	form := x86GoMOVQSourceInstruction(ins) // Dispatch copy, never source identity.
+	form := x86SourceMoveInstruction(ins, arch) // Dispatch copy, never source identity.
 	word := x86ResultPointerWord(arch)
 	move, lea := Op("MOVQ"), Op("LEAQ")
 	if arch == "386" {

@@ -103,7 +103,7 @@ func x86ContinuationResultStep(ordinal int, ins Instr, state *x86ResultState, ow
 	if arch == "386" {
 		move, lea = "MOVL", "LEAL"
 	}
-	form := x86GoMOVQSourceInstruction(ins)
+	form := x86SourceMoveInstruction(ins, arch)
 	register := func(arg Operand) (int, bool) {
 		index, _, ok := x86ResultGP(arg.Reg, word, arch)
 		return index, ok && arg.Kind == OpReg

@@ -116,7 +116,7 @@ func x86LoweredStaticAddressValues(file *File, resolve func(string) string, sigs
 // retain their independent contracts. Address annotations follow the same
 // non-shared Go386 TYPE_ADDR rule as the existing paired emitter.
 func x86StaticAddressValueMove(ins Instr, arch string) (x86StaticSBAddress, bool, int, bool) {
-	ins = x86GoMOVQSourceInstruction(ins)
+	ins = x86SourceMoveInstruction(ins, arch)
 	word := x86ResultPointerWord(arch)
 	if !x86ResultNamedPredicateInstruction(ins) || arch != "386" && arch != "amd64" ||
 		x86RawReturnScalarMoveBytes(ins.Op) != word || len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {

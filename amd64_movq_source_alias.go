@@ -61,7 +61,7 @@ func x86GoMOVQAddressSource(operand Operand, arch string) bool {
 
 // Do not normalize the actual source: caller/raw/frame certificates bind its
 // entire original Op and Raw. Consumers canonicalize only local dispatch copies.
-func validateX86GoMOVQSourceAliases(file *File, arch string) error {
+func validateX86MoveSourceAliases(file *File, arch string) error {
 	if file == nil || file.Arch != ArchAMD64 {
 		return nil
 	}
@@ -70,6 +70,9 @@ func validateX86GoMOVQSourceAliases(file *File, arch string) error {
 	}
 	for _, function := range file.Funcs {
 		for _, ins := range function.Instrs {
+			if _, _, err := x86ScalarMoveAliasProperties(ins.Op, ins, arch); err != nil {
+				return err
+			}
 			if ins.x86Encoded || ins.x86SourceRaw != nil {
 				continue
 			}

@@ -219,7 +219,7 @@ func proveX86SDKLiteralAccessesAtMinimumRequest(fn Func, sig FuncSig, arch strin
 						operand.Mem.OffRaw != "" || operand.Mem.Segment != "" || operand.Mem.IndexExt != "" {
 						return numericalSBContext("private literal derived address lost its exact origin")
 					}
-					width, write, valid := x86InstructionMemoryShape(x86GoMOVQSourceInstruction(ins), index, arch)
+					width, write, valid := x86InstructionMemoryShape(x86SourceMoveInstruction(ins, arch), index, arch)
 					if !valid || write || width <= 0 {
 						return numericalSBContext("private literal derived access has an unbound read-only shape")
 					}
@@ -235,7 +235,7 @@ func proveX86SDKLiteralAccessesAtMinimumRequest(fn Func, sig FuncSig, arch strin
 				}
 			}
 			if !private {
-				if width, write, known := x86InstructionMemoryShape(x86GoMOVQSourceInstruction(ins), index, arch); known && !write && width > 0 {
+				if width, write, known := x86InstructionMemoryShape(x86SourceMoveInstruction(ins, arch), index, arch); known && !write && width > 0 {
 					nonliteral[pc] = true
 				}
 				continue
@@ -389,7 +389,7 @@ func x86SDKLiteralRefineEdge(op Op, taken bool, state *x86SDKLiteralState) bool 
 }
 
 func x86SDKLiteralTransfer(ins Instr, state *x86SDKLiteralState, sig FuncSig, arch string, literalRead *x86SDKLiteralAccess) error {
-	ins = x86GoMOVQSourceInstruction(ins) // Facts retain the complete original instruction.
+	ins = x86SourceMoveInstruction(ins, arch) // Facts retain the complete original instruction.
 	word := x86ResultPointerWord(arch)
 	op := string(ins.Op)
 	width := int64(0)

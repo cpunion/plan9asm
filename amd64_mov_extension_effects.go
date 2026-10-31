@@ -112,7 +112,7 @@ func x86ScalarMoveMemoryBytes(ins Instr, operand int, arch string) int64 {
 		}
 		return 0
 	}
-	op := Op(normalizeInstructionOpcode(x86GoMOVQSourceInstruction(ins).Op))
+	op := Op(normalizeInstructionOpcode(x86SourceMoveInstruction(ins, arch).Op))
 	if _, recognized, err := x86ConditionalSetProperties(ins.Op, ins, arch); recognized {
 		if err == nil && operand == 0 {
 			return 1

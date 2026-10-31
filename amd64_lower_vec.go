@@ -114,7 +114,7 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		// Change local dispatch only; keep source/caller certificate identity.
 		dispatch := ins
 		dispatch.Op = op
-		op = x86GoMOVQSourceInstruction(dispatch).Op
+		op = x86SourceMoveInstruction(dispatch, c.goarch).Op
 	}
 	if _, ok := amd64MaskMoveSpecs[op]; ok {
 		if rawOp != op {

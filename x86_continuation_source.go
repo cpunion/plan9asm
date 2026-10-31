@@ -290,7 +290,7 @@ func (graph *x86ContinuationGraph) collectTables(owners map[string]string) error
 				if !ok || address.symbol != symbol {
 					continue
 				}
-				if x86GoMOVQSourceInstruction(ins).Op != move || address.offset < 0 || address.offset%word != 0 || address.offset > table.bytes-word || owners[fn.Sym] != "" ||
+				if x86SourceMoveInstruction(ins, graph.arch).Op != move || address.offset < 0 || address.offset%word != 0 || address.offset > table.bytes-word || owners[fn.Sym] != "" ||
 					table.initializer != "" && table.initializer != fn.Sym {
 					return x86ContinuationContext("table write is not one exact closed initializer")
 				}

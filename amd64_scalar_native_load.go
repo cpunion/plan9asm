@@ -61,9 +61,18 @@ func x86ScalarNativeLoadProperties(op Op, ins Instr, arch string) (x86ScalarNati
 // native input, a private frame, or an unavailable physical entry register.
 // Each consumer must select that role before calling the common emitter.
 func x86ScalarRegisterLoadProperties(op Op, ins Instr, arch string) (x86ScalarNativeLoadForm, bool, error) {
+	if form, known, err := x86ScalarMoveAliasProperties(op, ins, arch); known {
+		if err != nil {
+			return x86ScalarNativeLoadForm{}, true, err
+		}
+		if form.spec.load {
+			return x86ScalarNativeLoadForm{}, false, nil // Existing extension storage consumer.
+		}
+		op = form.spec.canonical
+	}
 	local := ins
 	local.Op = op
-	canonical := x86GoMOVQSourceInstruction(local).Op
+	canonical := x86SourceMoveInstruction(local, arch).Op
 	width := x86RawReturnScalarMoveBytes(canonical)
 	if width == 0 || len(ins.Args) != 2 || ins.Args[0].Kind != OpMem || ins.Args[1].Kind != OpReg {
 		return x86ScalarNativeLoadForm{}, false, nil

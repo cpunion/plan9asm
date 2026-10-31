@@ -15,7 +15,7 @@ func x86ResultCallerOriginsAfter(original Instr, before [16]uint16, after [16]bo
 			next[index] = 0
 		}
 	}
-	ins := x86GoMOVQSourceInstruction(original)
+	ins := x86SourceMoveInstruction(original, arch)
 	if !x86ResultNamedPredicateInstruction(ins) || len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
 		return next
 	}

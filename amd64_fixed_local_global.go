@@ -25,7 +25,7 @@ func fixedLocalGlobalSymbol(symbol string) string {
 }
 
 func fixedLocalStaticAddress(ins Instr) (x86StaticSBAddress, bool) {
-	ins = x86GoMOVQSourceInstruction(ins)
+	ins = x86SourceMoveInstruction(ins, "amd64")
 	if ins.Op != "LEAQ" && x86RawReturnScalarMoveBytes(ins.Op) != 8 ||
 		!x86ResultNamedPredicateInstruction(ins) || len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
 		return x86StaticSBAddress{}, false

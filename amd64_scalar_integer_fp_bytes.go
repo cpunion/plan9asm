@@ -191,7 +191,7 @@ func x86DirectGPFPResultSourceRole(fn Func, sig FuncSig, arch string) bool {
 // move lowerer. Vector/MMX forms keep their own grammar and permissions; Go's
 // MOVD/MOVDQ2Q aliases retain their original instruction identity.
 func x86IntegerFPMoveWidth(original Instr, arch string) int64 {
-	ins := x86GoMOVQSourceInstruction(original)
+	ins := x86SourceMoveInstruction(original, arch)
 	for _, operand := range ins.Args {
 		if operand.Kind != OpReg {
 			continue

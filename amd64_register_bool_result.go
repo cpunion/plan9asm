@@ -26,7 +26,7 @@ func x86RegisterCanonicalBytesAfter(original Instr, before [16]uint8, arch strin
 	if next, known := x86SegmentQueryCanonicalBytesAfter(original, before, arch); known {
 		return next
 	}
-	ins := x86GoMOVQSourceInstruction(original)
+	ins := x86SourceMoveInstruction(original, arch)
 	next := before
 	if _, known, err := x86DuplicateMoveProperties(ins.Op, ins, arch); known && err == nil && x86ResultNamedPredicateInstruction(ins) {
 		return next // No GP write; vector results cannot create canonical bool facts.

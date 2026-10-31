@@ -266,7 +266,7 @@ func x86CallerScalarStep(ins *Instr, state *x86SourceStackState, proof *x86GoCal
 	if _, known, err := x86OrderingHintProperties(ins.Op, *ins, "amd64"); known {
 		return false, err == nil
 	}
-	op := Op(normalizeInstructionOpcode(x86GoMOVQSourceInstruction(*ins).Op))
+	op := Op(normalizeInstructionOpcode(x86SourceMoveInstruction(*ins, "amd64").Op))
 	if effect, known, err := x86TypedCounterControlByteEffect(ins.Op, *ins, "amd64"); known {
 		if err != nil {
 			return false, false

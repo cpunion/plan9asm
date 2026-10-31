@@ -48,7 +48,7 @@ func x86StaticIntegerResultMoveBytes(ins Instr, arch string) int64 {
 		}
 		return int64(form.bits / 8)
 	}
-	return x86RawReturnScalarMoveBytes(x86GoMOVQSourceInstruction(ins).Op)
+	return x86RawReturnScalarMoveBytes(x86SourceMoveInstruction(ins, arch).Op)
 }
 
 func (c *amd64Ctx) checkStaticIntegerResultInitialization() error {

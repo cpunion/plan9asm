@@ -112,7 +112,7 @@ func coalesceX86Continuations(file *File, opt Options) (*File, error) {
 				if ins.Op == "JMP" && len(ins.Args) == 1 {
 					continue
 				}
-				form := x86GoMOVQSourceInstruction(ins)
+				form := x86SourceMoveInstruction(ins, opt.Goarch)
 				address := form.Op == "LEAQ" || form.Op == "LEAL" ||
 					((form.Op == "MOVQ" || form.Op == "MOVL") && strings.HasPrefix(arg.Sym, "$"))
 				if !address || ai != 0 || len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {

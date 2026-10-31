@@ -55,7 +55,7 @@ func x86ABI0CanonicalBoolTransfer(transfer x86ResultSourceTransfer) x86ResultSou
 // execute its complete typed transfer, then intersect these byte facts with
 // initialized bytes. Only actual declared slots allocate this bounded FP state.
 func x86ABI0CanonicalBytesAfter(original Instr, beforeFP []bool, beforeGP [16]uint8, arch string) ([]bool, [16]uint8) {
-	ins := x86GoMOVQSourceInstruction(original)
+	ins := x86SourceMoveInstruction(original, arch)
 	nextFP := append([]bool(nil), beforeFP...)
 	nextGP := x86RegisterCanonicalBytesAfter(original, beforeGP, arch)
 	read := func(operand Operand, width int64) uint8 {

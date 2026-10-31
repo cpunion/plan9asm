@@ -118,7 +118,7 @@ func certifiedSDKLiteralAccess(ins Instr, arch string) (x86SDKLiteralAccess, boo
 			return x86SDKLiteralAccess{}, false
 		}
 	} else {
-		width, write, valid := x86InstructionMemoryShape(x86GoMOVQSourceInstruction(ins), fact.Operand, arch)
+		width, write, valid := x86InstructionMemoryShape(x86SourceMoveInstruction(ins, arch), fact.Operand, arch)
 		if !valid || write || width != fact.Width || width <= 0 {
 			return x86SDKLiteralAccess{}, false
 		}
@@ -170,7 +170,7 @@ func x86ResultSDKLiteralStep(ins Instr, state *x86ResultState, owned []bool, res
 	next.loweredStaticReads = state.loweredStaticReads
 	next.literalMemoryOperand, next.literalMemoryBytes = &ins.Args[fact.Operand], fact.Width
 	ins.x86SDKLiteral = nil
-	accepted := x86ScalarFPResultTransfer(x86GoMOVQSourceInstruction(ins), &next, owned, resultOffset, arch)
+	accepted := x86ScalarFPResultTransfer(x86SourceMoveInstruction(ins, arch), &next, owned, resultOffset, arch)
 	next.literalMemoryOperand, next.literalMemoryBytes = nil, 0
 	if accepted {
 		*state = next

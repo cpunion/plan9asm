@@ -12,6 +12,14 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 	if ok, terminated, err := c.lowerMOVBE(op, ins); ok {
 		return ok, terminated, err
 	}
+	if form, known, err := x86ScalarMoveAliasProperties(op, ins, c.goarch); known {
+		if err != nil {
+			return true, false, err
+		}
+		if !form.spec.load {
+			op = form.spec.canonical // Local lowering only; the original source remains intact.
+		}
+	}
 	switch op {
 	case "MOVQ", "MOVD", "MOVDQ2Q", "MOVL", "MOVB", "MOVW", "CMOVQLT",
 		"MOVBWSX", "MOVBWZX", "MOVBLSX", "MOVBLZX", "MOVBQSX", "MOVBQZX",
@@ -30,7 +38,7 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 		}
 		dispatch := ins
 		dispatch.Op = op
-		if x86GoMOVQSourceInstruction(dispatch).Op != x86GoMOVQSourceInstruction(ins).Op {
+		if x86SourceMoveInstruction(dispatch, c.goarch).Op != x86SourceMoveInstruction(ins, c.goarch).Op {
 			return true, false, fmt.Errorf("named frame MOV address dispatch disagrees with original instruction")
 		}
 		if view.Args[0].Kind == OpFP {
@@ -72,7 +80,7 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 	src, dst := ins.Args[0], ins.Args[1]
 	dispatch := ins
 	dispatch.Op = op
-	op = x86GoMOVQSourceInstruction(dispatch).Op
+	op = x86SourceMoveInstruction(dispatch, c.goarch).Op
 
 	// Vector moves are handled in lowerVec.
 	if dst.Kind == OpReg {

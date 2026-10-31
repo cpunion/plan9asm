@@ -222,7 +222,7 @@ func x86ResultStringCountAfter(ins Instr, before, current x86ResultStringCount, 
 	if (ins.Op == "REP" || ins.Op == "REPN") && len(ins.Args) == 0 {
 		return before // Only the independently bound source transfer accepts it.
 	}
-	ins = x86GoMOVQSourceInstruction(ins)
+	ins = x86SourceMoveInstruction(ins, arch)
 	word := x86ResultPointerWord(arch)
 	if width := x86RawReturnScalarMoveBytes(ins.Op); width != 0 && len(ins.Args) == 2 {
 		if ins.Args[1].Kind != OpReg {

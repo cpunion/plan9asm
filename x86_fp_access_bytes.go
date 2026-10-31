@@ -88,7 +88,7 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 			return int64(spec.bits / 8), index == 1, true
 		}
 	}
-	op := x86GoMOVQSourceInstruction(ins).Op
+	op := x86SourceMoveInstruction(ins, arch).Op
 	if op == "MOVB" || op == "MOVW" || op == "MOVL" || op == "MOVQ" {
 		if len(ins.Args) != 2 {
 			return 0, false, false

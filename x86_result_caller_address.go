@@ -145,7 +145,7 @@ func x86ResultCallerAddressesAfter(ins Instr, before [16]bool, entryFP map[int64
 		ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride || ins.x86SegmentPrefix != 0 {
 		return [16]bool{}
 	}
-	ins = x86GoMOVQSourceInstruction(ins) // Original source/certificates stay unchanged.
+	ins = x86SourceMoveInstruction(ins, arch) // Original source/certificates stay unchanged.
 	if _, known, err := x86DuplicateMoveProperties(ins.Op, ins, arch); known && err == nil {
 		return before // A validated vector-only write preserves, but never creates, a GP identity.
 	}

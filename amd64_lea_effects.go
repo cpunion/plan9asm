@@ -103,7 +103,7 @@ func x86NamedFrameMoveAddressInstruction(ins Instr, arch string) (Instr, bool, e
 	if len(ins.Args) != 2 || ins.Args[0].Kind != OpFPAddr && ins.Args[0].Kind != OpSym {
 		return ins, false, nil
 	}
-	op := x86GoMOVQSourceInstruction(ins).Op
+	op := x86SourceMoveInstruction(ins, arch).Op
 	if (op != "MOVW" && op != "MOVL" && op != "MOVQ") || !x86ResultNamedPredicateInstruction(ins) {
 		return ins, false, nil
 	}

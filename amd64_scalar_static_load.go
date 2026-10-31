@@ -20,7 +20,7 @@ func x86ScalarStaticLoadProperties(ins Instr, arch string) (x86ScalarStaticLoadF
 	if !valid {
 		return x86ScalarStaticLoadForm{}, false
 	}
-	projected := x86GoMOVQSourceInstruction(ins)
+	projected := x86SourceMoveInstruction(ins, arch)
 	projected.Args = []Operand{
 		{Kind: OpSym, Sym: fmt.Sprintf("%s%+d(SB)", address.symbol, address.offset)},
 		ins.Args[1],

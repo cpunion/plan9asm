@@ -127,7 +127,7 @@ func x86ResultDataBPStep(ins Instr, state *x86ResultState, owned []bool, resultO
 	if !x86ResultNamedPredicateInstruction(ins) || len(ins.Args) != 2 {
 		return false, false
 	}
-	local := x86GoMOVQSourceInstruction(ins)
+	local := x86SourceMoveInstruction(ins, "amd64")
 	first, last := ins.Args[0], ins.Args[1]
 	if local.Op == "MOVQ" && (first.Kind == OpReg && first.Reg == BP || last.Kind == OpReg && last.Reg == BP) {
 		pointer := false
