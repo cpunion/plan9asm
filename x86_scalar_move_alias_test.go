@@ -121,6 +121,21 @@ func TestX86ScalarMoveAliasesByteEffectsAndPreservedRoles(t *testing.T) {
 					t.Fatal("alias effect changed original Op, Raw or operands")
 				}
 			})
+			if arch == "386" {
+				t.Run("386/native-pointer-copy/"+op, func(t *testing.T) {
+					// Px copies one complete 32-bit word on this mode. Preserve
+					// its actual pointer identity without turning its bits into NUM.
+					source := "TEXT ·Value(SB),4,$0-8\nMOVL p+0(FP),AX\n" + op + " AX,SI\nMOVL (SI),BX\nMOVL BX,ret+4(FP)\nRET\n"
+					goAssemblerOracleOutput(t, arch, source, "", true)
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(api, func(t *testing.T) {
+							if ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(p *uint32) uint32", arch, "i386-unknown-linux-gnu", api); err != nil || ir == "" {
+								t.Fatal("SCALAR_MOVE_ALIAS_WORD_POINTER_GAP", op, api, err)
+							}
+						})
+					}
+				})
+			}
 		}
 	}
 }
@@ -271,8 +286,34 @@ func TestX86ScalarMoveAliasesNativeAddressAndSourceIdentityBoundaries(t *testing
 					}
 					options := Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"Value": sig},
 						ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") }}
-					if ir, err := Translate(file, options); err == nil || ir != "" {
-						t.Fatal("scalar source alias authenticated forged raw/producer metadata", op, mutation, err)
+					ir, err := Translate(file, options)
+					if op == "MOVQL" {
+						if err == nil || ir != "" {
+							t.Fatal("new source alias authenticated an unbound physical producer", op, mutation, err)
+						}
+						return
+					}
+					// The existing extension consumer already admits pure NUM
+					// register effects with these markers. Preserve that allowance;
+					// a marker must still not authorize a new native memory read.
+					if err != nil || ir == "" {
+						t.Fatal("existing numerical raw extension regressed", mutation, err)
+					}
+					memoryBody := fmt.Sprintf("%s p+0(FP),AX\nMOVLQZX (AX),BX\n%s BX,ret+%d(FP)\nRET", move, move, word)
+					_, memoryFile, memorySig, memorySource := x86ResultInitializationFixture(t, arch, "func Value(p *uint32) uintptr", memoryBody)
+					goAssemblerOracleOutput(t, arch, memorySource, "", true)
+					for index := range memoryFile.Funcs[0].Instrs {
+						ins := &memoryFile.Funcs[0].Instrs[index]
+						if ins.Op == "MOVLQZX" {
+							ins.x86Encoded = mutation == "decoded"
+							if mutation == "raw" {
+								ins.x86SourceRaw = new(x86SourceRawInstruction)
+							}
+						}
+					}
+					options.Sigs = map[string]FuncSig{"Value": memorySig}
+					if ir, err := Translate(memoryFile, options); ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("numerical raw extension acquired native read authority", mutation, err)
 					}
 				})
 			}
