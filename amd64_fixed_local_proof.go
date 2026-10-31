@@ -203,8 +203,19 @@ func fixedLocalEffectPlan(fn Func, binding *x86FixedLocalBinding) (map[int]x86Ty
 				effects = make(map[int]x86TypedByteEffect)
 			}
 			effects[index] = fixedLocalLogicalLiteralEffect(ins, effect, binding)
-		} else if !fixedLocalInstructionShape(ins) {
-			return nil, goAMD64FrameContext("fixed local complete source has an unregistered instruction shape: %s", ins.Op)
+		} else {
+			shape := ins
+			if x86LEAWidth(ins.Op, "amd64") != 0 && len(ins.Args) == 2 && ins.Args[0].Kind == OpMem {
+				address, err := fixedLocalMemoryAddress(ins, 0, fn.FrameSize)
+				if err != nil {
+					return nil, err
+				}
+				shape.Args = append([]Operand(nil), ins.Args...)
+				shape.Args[0].Mem = address
+			}
+			if !fixedLocalInstructionShape(shape) {
+				return nil, goAMD64FrameContext("fixed local complete source has an unregistered instruction shape: %s", ins.Op)
+			}
 		}
 	}
 	return effects, nil
