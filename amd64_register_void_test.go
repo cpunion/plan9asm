@@ -160,27 +160,55 @@ func TestAMD64RegisterVoidWholeFunctionThreeAPIsAndObjects(t *testing.T) {
 func TestAMD64RegisterVoidCannotWaiveFaultingInputsAndSourceRoles(t *testing.T) {
 	for _, fixture := range []struct {
 		name, declaration, body string
+		registerProofOnly       bool
 	}{
-		{"undefined-base", "func view(input uint64)\n", "MOVQ (R10),AX"},
-		{"NUM-is-not-pointer", "func view(input uint64)\n", "MOVQ (AX),BX"},
-		{"hidden-closure", "func view(input uint64)\n", "MOVQ 8(DX),BX"},
-		{"hidden-g", "func view(input uint64)\n", "MOVQ (R14),AX"},
-		{"physical-stack", "func view(input uint64)\n", "MOVQ (SP),AX"},
-		{"ABI0-input", "func view(input uint64)\n", "MOVQ input+0(FP),AX"},
-		{"ABI0-store", "func view(input uint64)\n", "MOVQ AX,input+0(FP)"},
-		{"unbound-call", "func view(input uint64)\n", "CALL ·unknown(SB)"},
-		{"one-path-fault", "func view(input uint64)\n", "CMPQ AX,$0\nJE done\nMOVQ (R10),BX\ndone:"},
+		{"undefined-base", "func view(input uint64)\n", "MOVQ (R10),AX", false},
+		{"NUM-is-not-pointer", "func view(input uint64)\n", "MOVQ (AX),BX", false},
+		{"hidden-closure", "func view(input uint64)\n", "MOVQ 8(DX),BX", false},
+		{"hidden-g", "func view(input uint64)\n", "MOVQ (R14),AX", false},
+		{"physical-stack", "func view(input uint64)\n", "MOVQ (SP),AX", true},
+		{"ABI0-input", "func view(input uint64)\n", "MOVQ input+0(FP),AX", true},
+		{"ABI0-store", "func view(input uint64)\n", "MOVQ AX,input+0(FP)", true},
+		{"one-path-fault", "func view(input uint64)\n", "CMPQ AX,$0\nJE done\nMOVQ (R10),BX\ndone:", false},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
-			_, _, source := amd64RegisterVoidSource(t, fixture.declaration, fixture.body)
+			fn, sig, source := amd64RegisterVoidSource(t, fixture.declaration, fixture.body)
+			declaration := fixture.declaration
+			if fixture.registerProofOnly {
+				// The legacy ordinary-MOV path can use logical frame fields without
+				// this register-entry proof. Its public admission is not a native
+				// ABIInternal frame contract. Keep the exact original source here,
+				// and make the paired-read public counterexample explicit below.
+				err := checkAMD64RegisterResultInitialization(fn, sig,
+					func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+						return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
+					})
+				if !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("original SP/FP source acquired register-entry ownership", err)
+				}
+				declaration = "func view(input *uint64)\n"
+				_, _, source = amd64RegisterVoidSource(t, declaration, "MOVQ (AX),R10\n"+fixture.body)
+				requireAMD64RegisterResultGoObject(t, source)
+			}
 			for _, api := range []string{"text", "module", "Go"} {
-				ir, err := x86ScalarFPBitViewAPI(t, source, fixture.declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+				ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
 				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 					t.Error("Void waived a faulting read or its original source/entry role", api, err)
 				}
 			}
 		})
 	}
+
+	t.Run("unbound-call", func(t *testing.T) {
+		const declaration = "func view(input uint64)\n"
+		_, _, source := amd64RegisterVoidSource(t, declaration, "CALL ·unknown(SB)")
+		for _, api := range []string{"text", "module", "Go"} {
+			ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+			if err == nil || ir != "" {
+				t.Error("Void admitted a call without its required signature", api, err)
+			}
+		}
+	})
 }
 
 func TestAMD64RegisterVoidRejectsForgedResultsAndEntries(t *testing.T) {
