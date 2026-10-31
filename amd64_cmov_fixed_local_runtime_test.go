@@ -41,6 +41,7 @@ func x86CMOVFixedLocalRuntimeBatch(t *testing.T, batch int) {
 	if !ok {
 		t.Fatal("CMOV frame capture requires the actual execution target", execution.triple)
 	}
+	goAMD64FramePrepareOwnedToolCache(t)
 	triple := execution.triple
 	kernels := x86CMOVFixedLocalKernels(true)
 	start, end, ok := fixedLocalObjectBatchRange(len(kernels), batch)
