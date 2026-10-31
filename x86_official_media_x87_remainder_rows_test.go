@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"bytes"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -175,8 +176,45 @@ func TestX86OfficialMediaX87OriginalGoRowsAndFirstMatch(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		x86LegacyLiteralSIMDCheckGoBatches(t, arch, mediaX87OriginalSourceCases(t, catalog))
 	}
+	modes := map[string][]goasmrules.X86ScalarRMWRow{}
+	for _, arch := range []string{"amd64", "386"} {
+		rows, err := goasmrules.X86LegacyMediaX87Rows(catalog, arch)
+		if err != nil {
+			t.Fatal("complete explicit source view failed after independent original-Go observations", arch, err)
+		}
+		expected := map[string]goasmrules.X86PackedBinaryWitness{}
+		for _, original := range mediaX87OriginalSourceCases(t, catalog) {
+			if strings.HasSuffix(original.row, "/first-match") {
+				continue // Independently assembled selection control, not another original row.
+			}
+			expected[original.row+"/"+original.witness.Instruction] = original.witness
+		}
+		witnesses := 0
+		for _, row := range rows {
+			if row.ModeFiltered != "" {
+				t.Fatal("source view filtered an actually assembled canonical mode", arch, row)
+			}
+			for _, witness := range row.Witnesses {
+				key := row.ID + "/" + witness.Instruction
+				original, found := expected[key]
+				if !found || !bytes.Equal(original.Encoding, witness.Encoding) || original.Destination != witness.Destination {
+					t.Fatal("complete media/x87 source transport differs from independent actual Go", arch, key, witness, original)
+				}
+				delete(expected, key)
+				witnesses++
+			}
+		}
+		if len(rows) != 31 || witnesses != 52 || len(expected) != 0 {
+			t.Fatal("complete media/x87 original ID/witness join omitted or repeated source cases", arch, len(rows), witnesses, expected)
+		}
+		modes[arch] = rows
+	}
 	if !t.Failed() {
 		t.Log("MEDIA_X87_ACTUAL_GO original_rows=31 original_cases=52 first_match_controls=1 modes=2 exact_bytes=106")
+		x86Legacy127SaveIdentity(t, "PLAN9ASM_MEDIA_X87_REMAINDER_IDENTITY_OUTPUT", struct {
+			Source goasmrules.X86LegacyCatalog
+			Modes  map[string][]goasmrules.X86ScalarRMWRow
+		}{catalog, modes})
 	}
 }
 

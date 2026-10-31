@@ -112,9 +112,18 @@ func x86X87RowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([]X86Scala
 		fmt.Sprintf("%s/%d/%s", row.ZCase, row.ZOffset, strings.Join(row.Classes, ",")) != schema[row.RowIndex] {
 		return nil, fmt.Errorf("selected x87 source row differs")
 	}
-	opcode, fragment := payload[0], payload[1]
+	return x86X87CarrierWitnesses(entry.Opcode, row, payload[0], payload[1]), nil
+}
+
+// Callers validate complete source roles before selecting these carrier bytes.
+// The one-operand status forms share memory addressing and AX literal emission,
+// not numerical status-bit availability or a native x87 entry contract.
+func x86X87CarrierWitnesses(name string, row X86LegacyOperand, opcode, fragment byte) []X86ScalarRMWWitness {
+	if len(row.Classes) == 1 && row.Classes[0] == "Yax" {
+		return []X86ScalarRMWWitness{{Instruction: name + " AX", Destination: "AX", Encoding: []byte{opcode, fragment}}}
+	}
 	var witnesses []X86ScalarRMWWitness
-	memory := row.Classes[0] == "Ym" || row.Classes[1] == "Ym"
+	memory := row.Classes[0] == "Ym" || len(row.Classes) == 2 && row.Classes[1] == "Ym"
 	for _, lane := range []byte{1, 7} {
 		first, last := fmt.Sprint("F", lane), "F0"
 		// Go asmando ORs its full field fragment with the fixed register
@@ -126,11 +135,18 @@ func x86X87RowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([]X86Scala
 				first, code = "7(AX)", []byte{opcode, 0x40 | fragment<<3, 7}
 			}
 		}
+		if len(row.Classes) == 1 {
+			last = "" // FSTSW memory has no explicit F0 source.
+		}
 		if row.ZCase == "Zo_m" {
 			first, last = last, first
 		}
-		witnesses = append(witnesses, X86ScalarRMWWitness{Instruction: entry.Opcode + " " + first + "," + last,
+		instruction := name + " " + last
+		if first != "" {
+			instruction = name + " " + first + "," + last
+		}
+		witnesses = append(witnesses, X86ScalarRMWWitness{Instruction: instruction,
 			Destination: last, Encoding: code})
 	}
-	return witnesses, nil
+	return witnesses
 }

@@ -800,6 +800,18 @@ func x86PackedEncodingAtoms(expression string, required, optional []string) (map
 }
 
 func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([]X86PackedBinaryWitness, error) {
+	// Captured source must retain the whole original schema/payload even
+	// when this old consumer selects only its ordinary XMM row. Only old
+	// fixtures with neither rows nor a source expression use the partial path.
+	var capturedEncoding []byte
+	if (entry.Ytab == "yxcvm1" || entry.Ytab == "yxcvm2" || entry.Ytab == "ymmxmm0f38") &&
+		(len(entry.Rows) != 0 || entry.OpcodeExpression != "") {
+		var err error
+		capturedEncoding, err = x86LegacyMediaX87Encoding(entry, row)
+		if err != nil {
+			return nil, err
+		}
+	}
 	scalarConversion := x86LegacyScalarConversionTable(entry.Ytab)
 	var scalar x86LegacyScalarConversionForm
 	if scalarConversion {
@@ -828,6 +840,11 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 	if entry.Kind != "encoding" || entry.EscapeAdjustment != 0 && !literal ||
 		strings.Join(row.Classes, ",") != "Yxm,Yxr" && !immediate && !shuffle && !scalarConversion {
 		return nil, fmt.Errorf("unmodeled legacy packed operand row")
+	}
+	// Reuse the complete encoding for the original ordinary conversion and
+	// XMM literal rows. New MMX and other source roles retain the old refusal.
+	if capturedEncoding != nil && (conversion && row.RowIndex == 0 || literal) {
+		return x86LegacyMediaCarrierWitnesses(entry.Opcode, []string{"Yxm", "Yxr"}, capturedEncoding, true), nil
 	}
 	prefix, offset, opcodeBytes := []byte{0x66, 0x0f}, 0, 1
 	terminator := 0
@@ -951,6 +968,9 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 			return nil, fmt.Errorf("legacy packed opcode is not a byte literal")
 		}
 		encoding = append(encoding, byte(opcode))
+	}
+	if !scalarConversion && !immediate && !shuffle {
+		return x86LegacyMediaCarrierWitnesses(entry.Opcode, []string{"Yxm", "Yxr"}, encoding, true), nil
 	}
 	sources, extension := []string{"X0", "(AX)"}, uint64(0)
 	if scalarConversion {

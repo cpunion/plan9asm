@@ -75,6 +75,49 @@ type x86LegacyMediaFormat struct {
 	mmx, store, imm8 bool
 }
 
+// Pure carrier/ModRM emission is shared by the old XMM consumer and the
+// complete mixed-bank source view. Callers own shape validation and source
+// selection. The carrier width establishes neither a memory tuple nor NUM.
+func x86LegacyMediaCarrierWitnesses(name string, classes []string, prefix []byte, memorySource bool) []X86PackedBinaryWitness {
+	first, last, width := "X0", "X1", 128
+	if classes[0] == "Ymm" || classes[0] == "Ymr" {
+		first = "M0"
+	}
+	if classes[1] == "Ymr" {
+		last, width = "M1", 64
+	} else if classes[1] == "Yml" {
+		last = "CX"
+	}
+	sources, destinations := []string{first}, []string{last}
+	if classes[0] == "Ym" {
+		sources = []string{"(AX)"}
+	} else if memorySource && (classes[0] == "Yxm" || classes[0] == "Ymm") {
+		sources = append(sources, "(AX)")
+	}
+	if classes[1] == "Yml" {
+		destinations = append(destinations, "(AX)")
+	}
+	var result []X86PackedBinaryWitness
+	for _, source := range sources {
+		for _, destination := range destinations {
+			modrm := byte(0xc8)
+			if source == "(AX)" {
+				modrm = 0x08
+			} else if destination == "CX" {
+				modrm = 0xc1
+			} else if destination == "(AX)" {
+				modrm = 0
+			}
+			result = append(result, X86PackedBinaryWitness{
+				Instruction: name + " " + source + "," + destination, Generation: "legacy", Width: width,
+				First: source, Second: destination, Destination: destination, Memory: source == "(AX)" || destination == "(AX)",
+				Encoding: append(append([]byte(nil), prefix...), modrm),
+			})
+		}
+	}
+	return result
+}
+
 func x86LegacyMediaRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([]X86PackedBinaryWitness, bool, error) {
 	format, err := x86LegacyMediaFormatForRow(entry, row)
 	if err != nil {

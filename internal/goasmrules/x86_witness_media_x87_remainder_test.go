@@ -65,9 +65,9 @@ func mediaX87OriginalEntries(t *testing.T) []X86LegacyOpcode {
 	return entries
 }
 
-// The initial feature RED calls existing transport, rather than a missing new
-// API. A later explicit source projection must preserve these old consumers'
-// original physical-state boundaries and snapshots.
+// The initial feature RED called existing transport, rather than a missing
+// new API. Keep that old source-consumer boundary observable after adding the
+// explicit projection; no physical-state permission follows from either view.
 func mediaX87ExistingWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([]X86ScalarRMWWitness, error) {
 	if entry.Ytab == "yfxch" || entry.Ytab == "ystsw" {
 		return x86X87RowWitnesses(entry, row)
@@ -87,6 +87,68 @@ func mediaX87ExistingWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([]X
 
 func TestX86LegacyMediaX87CompleteOriginalSourceInventory(t *testing.T) {
 	mediaX87OriginalEntries(t)
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"", "arm64", "wasm"} {
+		if rows, err := X86LegacyMediaX87Rows(catalog, arch); err == nil || len(rows) != 0 {
+			t.Fatal("source view accepted an absent or foreign physical Go mode", arch, err)
+		}
+	}
+	mediaX87CapturedPublicViews(t, catalog)
+}
+
+func mediaX87CapturedPublicViews(t *testing.T, catalog X86LegacyCatalog) {
+	t.Helper()
+	avx, err := LoadX86AVXRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, entry := range catalog.Optab {
+		view := X86PackedNumericConversionRows
+		atom := 3 // The unselected MMX conversion opcode.
+		if entry.Ytab == "ymmxmm0f38" {
+			view, atom = X86PackedHorizontalIntegerRows, 2
+		} else if entry.Ytab != "yxcvm1" && entry.Ytab != "yxcvm2" {
+			continue
+		} else if entry.Prefix == "Pm" {
+			atom = 2 // This source uses a zero stride placeholder at atom3.
+		}
+		before, err := view(catalog, avx)
+		if err != nil {
+			t.Fatal("original public view must pass before metadata mutations", entry.Opcode, err)
+		}
+		for _, field := range []string{"empty-expression", "unselected-byte", "captured-expression-without-rows", "missing-expression-invalid-original-index", "neither-capture-field"} {
+			t.Run("public-source/"+entry.Opcode+"/"+field, func(t *testing.T) {
+				changed := catalog
+				changed.Optab = append([]X86LegacyOpcode(nil), catalog.Optab...)
+				item := &changed.Optab[index]
+				item.Rows = append([]X86LegacyOperand(nil), entry.Rows...)
+				item.OpBytes = append([]string(nil), entry.OpBytes...)
+				switch field {
+				case "empty-expression":
+					item.OpcodeExpression = ""
+				case "unselected-byte":
+					item.OpBytes[atom] = "not-a-byte"
+				case "captured-expression-without-rows":
+					item.Rows = nil
+				case "missing-expression-invalid-original-index":
+					item.OpcodeExpression, item.Rows[0].RowIndex = "", -1
+				case "neither-capture-field":
+					item.OpcodeExpression, item.Rows = "", nil
+				}
+				got, err := view(changed, avx)
+				if field == "empty-expression" {
+					if err != nil || !reflect.DeepEqual(got, before) {
+						t.Fatal("existing empty-expression whole-row contract changed", err)
+					}
+				} else if err == nil || len(got) != 0 {
+					t.Fatal("incomplete or corrupt capture acquired public source-view authority", field, got, err)
+				}
+			})
+		}
+	}
 }
 
 func TestX86LegacyMediaX87ExistingTransportCompleteOriginalRows(t *testing.T) {
@@ -94,7 +156,7 @@ func TestX86LegacyMediaX87ExistingTransportCompleteOriginalRows(t *testing.T) {
 		for _, row := range entry.Rows {
 			t.Run(fmt.Sprintf("%s/%d", entry.Opcode, row.RowIndex), func(t *testing.T) {
 				before := fmt.Sprintf("%#v", entry)
-				witnesses, err := mediaX87ExistingWitnesses(entry, row)
+				witnesses, err := x86LegacyMediaX87RowWitnesses(entry, row)
 				if err != nil || len(witnesses) == 0 {
 					t.Fatal("MEDIA_X87_COMPLETE_SOURCE_TRANSPORT_FEATURE_GAP", err)
 				}
@@ -106,6 +168,30 @@ func TestX86LegacyMediaX87ExistingTransportCompleteOriginalRows(t *testing.T) {
 				if before != fmt.Sprintf("%#v", entry) {
 					t.Fatal("source formatter mutated the original table")
 				}
+				previous, previousErr := mediaX87ExistingWitnesses(entry, row)
+				old := (entry.Ytab == "yxcvm1" || entry.Ytab == "yxcvm2") && row.RowIndex == 0 ||
+					entry.Ytab == "ymmxmm0f38" && row.RowIndex == 1 || entry.Ytab == "yxr" && entry.Prefix == "Pm"
+				if old && (previousErr != nil || !reflect.DeepEqual(witnesses, previous)) || !old && (previousErr == nil || len(previous) != 0) {
+					t.Fatal("explicit source projection changed the original packed/x87 consumer boundary", previousErr, previous)
+				}
+				withoutExpression := entry
+				withoutExpression.OpcodeExpression = ""
+				if got, err := x86LegacyMediaX87RowWitnesses(withoutExpression, row); err != nil || !reflect.DeepEqual(got, witnesses) {
+					t.Fatal("whole-row validation incorrectly required a source expression", err)
+				}
+				if old && entry.Ytab != "yxr" {
+					// Historical pure-format fixtures have neither captured
+					// rows nor an expression. Retain their old partial result;
+					// they cannot produce a complete-source view or NUM facts.
+					withoutExpression.Rows = nil
+					got, err := mediaX87ExistingWitnesses(withoutExpression, row)
+					if err != nil || !reflect.DeepEqual(got, previous) {
+						t.Fatal("uncaptured synthetic format contract changed", err)
+					}
+					if got, err := x86LegacyMediaX87RowWitnesses(withoutExpression, row); err == nil || len(got) != 0 {
+						t.Fatal("partial synthetic fixture acquired complete-source authority", got, err)
+					}
+				}
 			})
 		}
 	}
@@ -113,13 +199,20 @@ func TestX86LegacyMediaX87ExistingTransportCompleteOriginalRows(t *testing.T) {
 
 func mediaX87RequireMetadataRefusal(t *testing.T, entry X86LegacyOpcode, row X86LegacyOperand, field string) {
 	t.Helper()
-	defer func() {
-		if caught := recover(); caught != nil {
-			t.Errorf("MEDIA_X87_METADATA_PANIC %s/%d/%s: %v", entry.Opcode, row.RowIndex, field, caught)
-		}
-	}()
-	if got, err := mediaX87ExistingWitnesses(entry, row); err == nil || len(got) != 0 {
-		t.Errorf("MEDIA_X87_METADATA_ACCEPTED %s/%d/%s: %v", entry.Opcode, row.RowIndex, field, got)
+	for _, consumer := range []struct {
+		name string
+		read func(X86LegacyOpcode, X86LegacyOperand) ([]X86ScalarRMWWitness, error)
+	}{{"original", mediaX87ExistingWitnesses}, {"complete", x86LegacyMediaX87RowWitnesses}} {
+		func() {
+			defer func() {
+				if caught := recover(); caught != nil {
+					t.Errorf("MEDIA_X87_METADATA_PANIC %s/%d/%s: consumer=%s %v", entry.Opcode, row.RowIndex, field, consumer.name, caught)
+				}
+			}()
+			if got, err := consumer.read(entry, row); err == nil || len(got) != 0 {
+				t.Errorf("MEDIA_X87_METADATA_ACCEPTED %s/%d/%s: consumer=%s %v", entry.Opcode, row.RowIndex, field, consumer.name, got)
+			}
+		}()
 	}
 }
 
@@ -132,6 +225,7 @@ func TestX86LegacyMediaX87CompleteOriginalMetadataBoundaries(t *testing.T) {
 					"original-class", "selected-class", "original-index", "selected-index", "original-zcase", "selected-zcase",
 					"negative-stride", "overflow-stride", "selected-stride", "negative-offset", "selected-offset",
 					"negative-escape", "overflow-escape", "prefix", "opcode-expression", "empty-payload", "truncated-payload", "extra-payload",
+					"captured-expression-without-rows", "missing-expression-invalid-original-index",
 				} {
 					changed, row := entry, original
 					changed.Rows = append([]X86LegacyOperand(nil), entry.Rows...)
@@ -188,6 +282,11 @@ func TestX86LegacyMediaX87CompleteOriginalMetadataBoundaries(t *testing.T) {
 						changed.Prefix = "Pinvalid"
 					case "opcode-expression":
 						changed.OpcodeExpression = "obj.ANOP"
+					case "captured-expression-without-rows":
+						changed.Rows = nil
+					case "missing-expression-invalid-original-index":
+						changed.OpcodeExpression = ""
+						changed.Rows[0].RowIndex = -1
 					case "empty-payload":
 						changed.OpBytes = nil
 					case "truncated-payload":
