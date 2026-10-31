@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"bytes"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -9,6 +10,88 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/goasmrules"
 )
+
+func TestX86ZeroOperandCompleteSourceView(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	modes := map[string][]goasmrules.X86ScalarRMWRow{}
+	for _, arch := range []string{"amd64", "386"} {
+		rows, err := goasmrules.X86ZeroOperandRows(catalog, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen, position, filtered := map[string]bool{}, 0, 0
+		for _, entry := range catalog.Optab {
+			if entry.Ytab != "ynone" {
+				continue
+			}
+			fixture, valid := zeroOperandOriginalCase(t, entry, arch)
+			if position >= len(rows) {
+				t.Fatal("source view omitted original rows", arch, fixture.row)
+			}
+			row := rows[position]
+			position++
+			if row.ID != fixture.row || row.Opcode != entry.Opcode || seen[row.ID] {
+				t.Fatal("source ID/order/name mismatch", arch, row, fixture.row)
+			}
+			seen[row.ID] = true
+			if !valid {
+				if row.ModeFiltered == "" || len(row.Witnesses) != 0 {
+					t.Fatal("mode-refused original row gained a source witness", arch, row)
+				}
+				filtered++
+				continue
+			}
+			if row.ModeFiltered != "" || len(row.Witnesses) != 1 {
+				t.Fatal("legal original row has no exact source witness", arch, row)
+			}
+			witness := row.Witnesses[0]
+			if witness.Instruction != fixture.witness.Instruction || witness.Destination != "" ||
+				!bytes.Equal(witness.Encoding, fixture.witness.Encoding) {
+				t.Fatal("source ID/instruction/literal/destination mismatch", arch, row, fixture)
+			}
+		}
+		wantFiltered := 12
+		if arch == "386" {
+			wantFiltered = 13
+		}
+		if position != len(rows) || position != 139 && position != 140 || filtered != wantFiltered {
+			t.Fatal("complete original source view changed", arch, position, len(rows), filtered)
+		}
+		modes[arch] = rows
+	}
+	for _, arch := range []string{"", "arm64", "amd64x"} {
+		if _, err := goasmrules.X86ZeroOperandRows(catalog, arch); err == nil {
+			t.Fatal("foreign source mode accepted", arch)
+		}
+	}
+	for _, field := range []string{"empty", "duplicate", "capacity"} {
+		changed := catalog
+		changed.Optab = append([]goasmrules.X86LegacyOpcode(nil), catalog.Optab...)
+		switch field {
+		case "empty":
+			changed.Optab = nil
+		case "duplicate":
+			for _, entry := range catalog.Optab {
+				if entry.Ytab == "ynone" {
+					changed.Optab = append(changed.Optab, entry)
+					break
+				}
+			}
+		case "capacity":
+			changed.OpBytesSize = 0
+		}
+		if _, err := goasmrules.X86ZeroOperandRows(changed, "amd64"); err == nil {
+			t.Fatal("invalid complete source catalog accepted", field)
+		}
+	}
+	x86Legacy127SaveIdentity(t, "PLAN9ASM_ZERO_OPERAND_IDENTITY_OUTPUT", struct {
+		Source goasmrules.X86LegacyCatalog
+		Modes  map[string][]goasmrules.X86ScalarRMWRow
+	}{catalog, modes})
+}
 
 // This test-only reference follows the original Go prefix switch and complete
 // zero-terminated opBytes array, independently of the production formatter.

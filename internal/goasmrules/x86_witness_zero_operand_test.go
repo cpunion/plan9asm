@@ -112,14 +112,14 @@ func TestX86ZeroOperandExistingSourceTransportCompleteBytes(t *testing.T) {
 			id := fmt.Sprintf("optab/%d/%s/ynone/0/%s", entry.TableIndex, entry.Opcode, arch)
 			t.Run(id, func(t *testing.T) {
 				before := fmt.Sprintf("%#v", entry)
-				// The pre-implementation RED deliberately calls an existing
-				// helper: its refusal is a source-transport feature gap, not
-				// a claim that this opcode's numerical lowerer is missing.
-				witnesses, err := x86ScalarRMWRowWitnesses(entry, entry.Rows[0], arch)
-				if err != nil || len(witnesses) != 1 {
-					t.Fatal("ZERO_OPERAND_SOURCE_TRANSPORT_FEATURE_GAP", err, len(witnesses))
+				// Both original REDs called the existing scalar-only helper.
+				// The explicit source view closes that feature gap without
+				// changing the older numerical consumer's accepted domain.
+				row, err := x86ZeroOperandSourceRow(entry, entry.Rows[0], arch, 31)
+				if err != nil || row.ModeFiltered != "" || len(row.Witnesses) != 1 {
+					t.Fatal("ZERO_OPERAND_SOURCE_TRANSPORT_FEATURE_GAP", err, row)
 				}
-				witness := witnesses[0]
+				witness := row.Witnesses[0]
 				if witness.Instruction != entry.Opcode || witness.Destination != "" || !bytes.Equal(witness.Encoding, code) {
 					t.Fatal("original source identity/literal bytes differ", witness, code)
 				}
@@ -204,9 +204,12 @@ func TestX86ZeroOperandCompleteMetadataBoundaries(t *testing.T) {
 					for i := range changed.OpBytes {
 						changed.OpBytes[i] = "1"
 					}
+					// Preserve source escape identity so the missing implicit
+					// terminator is the independent rejection reason.
+					changed.OpBytes[0] = entry.OpBytes[0]
 				}
 				checks++
-				if _, err := x86ScalarRMWRowWitnesses(changed, row, arch); err == nil {
+				if _, err := x86ZeroOperandSourceRow(changed, row, arch, 31); err == nil {
 					t.Errorf("malformed original source accepted: op=%s mode=%s mutation=%s", entry.Opcode, arch, field)
 				}
 			}
@@ -216,7 +219,7 @@ func TestX86ZeroOperandCompleteMetadataBoundaries(t *testing.T) {
 					changed.OpBytes = append([]string(nil), entry.OpBytes...)
 					changed.OpBytes[i] = atom
 					checks++
-					if _, err := x86ScalarRMWRowWitnesses(changed, entry.Rows[0], arch); err == nil {
+					if _, err := x86ZeroOperandSourceRow(changed, entry.Rows[0], arch, 31); err == nil {
 						t.Errorf("malformed literal atom accepted: op=%s index=%d atom=%q", entry.Opcode, i, atom)
 					}
 				}
@@ -231,4 +234,14 @@ func TestX86ZeroOperandCompleteMetadataBoundaries(t *testing.T) {
 		t.Fatal("complete metadata control count changed", checks, want)
 	}
 	t.Logf("ZERO_OPERAND_METADATA_CHECKS=%d", checks)
+}
+
+func TestX86ZeroOperandSourceViewKeepsScalarConsumerBoundary(t *testing.T) {
+	for _, entry := range zeroOperandOriginalEntries(t) {
+		for _, arch := range []string{"amd64", "386"} {
+			if _, err := x86ScalarRMWRowWitnesses(entry, entry.Rows[0], arch); err == nil {
+				t.Fatal("source literal widened the older scalar numerical consumer", entry.Opcode, arch)
+			}
+		}
+	}
 }
