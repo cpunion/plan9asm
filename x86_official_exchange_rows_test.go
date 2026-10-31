@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -103,8 +104,115 @@ func TestX86ExchangeOriginalCompleteRowsAndModes(t *testing.T) {
 			}
 		})
 	}
-	for _, stem := range []string{"XADD", "XCHG"} {
-		x86ScalarLiteralExpectedGoListing(t, "386", "TEXT ·NoQ(SB),4,$0-0\n"+stem+"Q CX,BX\nRET\n", false)
+	for _, fixture := range all {
+		if !strings.HasSuffix(strings.Fields(fixture.witness.Instruction)[0], "Q") {
+			continue
+		}
+		t.Run("386-refusal/"+fixture.witness.Instruction, func(t *testing.T) {
+			x86ScalarLiteralExpectedGoListing(t, "386", "TEXT ·NoQ(SB),4,$0-0\n"+fixture.witness.Instruction+"\nRET\n", false)
+		})
+	}
+}
+
+func TestX86OfficialExchangeSourceJoinAndInitializedObjects(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := x86ExchangeOriginalCases(t, catalog)
+	modes := make(map[string][]goasmrules.X86ScalarRMWRow)
+	for _, arch := range []string{"amd64", "386"} {
+		rows, err := goasmrules.X86ExchangeRows(catalog, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		modes[arch] = rows
+		expected := map[string]x86OfficialPackedCase{}
+		for _, fixture := range all {
+			if arch == "386" && strings.HasSuffix(strings.Fields(fixture.witness.Instruction)[0], "Q") {
+				continue
+			}
+			key := fixture.row + "/" + fixture.witness.Instruction
+			if _, found := expected[key]; found {
+				t.Fatal("duplicate independent row/instruction owner", key)
+			}
+			expected[key] = fixture
+		}
+		filtered := 0
+		for _, row := range rows {
+			if row.ModeFiltered != "" {
+				if arch != "386" || !strings.HasSuffix(row.Opcode, "Q") || len(row.Witnesses) != 0 {
+					t.Fatal("source row lost its original mode restriction", row)
+				}
+				filtered++
+				continue
+			}
+			if len(row.Witnesses) == 0 {
+				t.Fatal("unfiltered original exchange row lost its witness", row.ID)
+			}
+			for _, witness := range row.Witnesses {
+				key := row.ID + "/" + witness.Instruction
+				fixture, found := expected[key]
+				if !found || !bytes.Equal(witness.Encoding, fixture.witness.Encoding) || witness.Destination != fixture.witness.Destination {
+					t.Fatal("production exchange view differs from independent original bytes/direction", key, witness, fixture)
+				}
+				delete(expected, key)
+			}
+		}
+		wantFiltered := 0
+		if arch == "386" {
+			wantFiltered = 5
+		}
+		if len(rows) != 18 || len(expected) != 0 || filtered != wantFiltered {
+			t.Fatal("complete exchange source/mode join changed", arch, len(rows), len(expected), filtered)
+		}
+	}
+	x86Legacy127SaveIdentity(t, "PLAN9ASM_EXCHANGE_IDENTITY_OUTPUT", struct {
+		Source goasmrules.X86LegacyCatalog
+		Modes  map[string][]goasmrules.X86ScalarRMWRow
+	}{catalog, modes})
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			var source, declarations strings.Builder
+			word, move := goWordSize(target.arch), "MOVQ"
+			if word == 4 {
+				move = "MOVL"
+			}
+			count := 0
+			for _, fixture := range all {
+				if target.arch == "386" && strings.HasSuffix(strings.Fields(fixture.witness.Instruction)[0], "Q") {
+					continue
+				}
+				name := fmt.Sprint("ExchangeSource", count)
+				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s memory+0(FP),SI\n%s old+%d(FP),BX\n%s input+%d(FP),CX\n%s accumulator+%d(FP),AX\n%s\nXOR%s AX,BX\nXOR%s CX,BX\n%s BX,ret+%d(FP)\nRET\n",
+					name, 5*word, move, move, word, move, 2*word, move, 3*word, fixture.witness.Instruction, move[3:], move[3:], move, 4*word)
+				fmt.Fprintf(&declarations, "func %s(memory *[16]byte,old,input,accumulator uintptr) uintptr\n", name)
+				count++
+			}
+			want := 29
+			if target.arch == "386" {
+				want = 21
+			}
+			if count != want || count > 32 {
+				t.Fatal("initialized exchange whole-source inventory changed", count)
+			}
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					if err != nil || ir == "" {
+						t.Fatal("complete initialized original exchange source rejected", err)
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						x86PackedStringCompileObject(t, llc, target.triple, ir, level)
+					}
+				})
+			}
+		})
 	}
 }
 
@@ -326,5 +434,62 @@ func TestX86ExchangeHighByteOriginalPhysicalViews(t *testing.T) {
 				}
 			})
 		}
+		t.Run(stem.name+"/LOCK-high-byte-memory", func(t *testing.T) {
+			operation := stem.name + "B AH,(R8)"
+			source := "TEXT ·LockedByte(SB),4,$0-0\nLOCK\n" + operation + "\nRET\n"
+			code, err := hex.DecodeString("41" + stem.opcode + "20")
+			if err != nil {
+				t.Fatal(err)
+			}
+			listing, err := x86ScalarLiteralGoListing(t, "amd64", source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, original := range []x86OfficialPackedCase{
+				{symbol: "LockedByte", line: 2, row: operation, witness: goasmrules.X86PackedBinaryWitness{Instruction: "LOCK", Encoding: []byte{0xf0}}},
+				{symbol: "LockedByte", line: 3, row: operation, witness: goasmrules.X86PackedBinaryWitness{Instruction: operation, Encoding: code}},
+			} {
+				if err := x86OfficialPackedVerifyListing(listing, []x86OfficialPackedCase{original}); err != nil {
+					t.Fatal("original LOCK/REX byte view changed", err)
+				}
+			}
+			instruction := x86ScalarLaneInstruction(t, operation)
+			if _, err := parseAMD64ExchangeForm("amd64", instruction.Op, amd64ExchangeSpecs[instruction.Op], instruction); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("LOCK granted an unbound physical high-byte view", err)
+			}
+		})
+	}
+}
+
+func TestX86ExchangeHighBytePublicInputBoundaries(t *testing.T) {
+	for _, sample := range []struct {
+		operation string
+		context   bool
+		memory    bool
+	}{
+		{"XADDB AH,AL", false, false}, {"XADDB AL,AH", false, false}, {"XADDB AH,BL", false, false},
+		{"XADDB AL,R8", false, false}, {"XADDB AH,R8", true, false}, {"XADDB R8,AH", true, false},
+		{"XADDB AH,(R8)", true, true},
+	} {
+		t.Run(sample.operation, func(t *testing.T) {
+			declaration := "func ExchangeInput(memory *[16]byte,seed,old uintptr) uintptr\n"
+			address := "MOVQ old+16(FP),R8\n"
+			if sample.memory {
+				address = "MOVQ memory+0(FP),R8\n"
+			}
+			source := "TEXT ·ExchangeInput(SB),4,$0-32\nMOVQ seed+8(FP),AX\nMOVQ old+16(FP),BX\n" +
+				address + sample.operation + "\nMOVQ AX,ret+24(FP)\nRET\n"
+			x86LEAActualTargetGoObject(t, "amd64", "x86_64-unknown-linux-gnu", source)
+			for _, api := range []string{"text", "module", "Go"} {
+				ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", "x86_64-unknown-linux-gnu", api)
+				if sample.context {
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Error("unbound original REX byte view acquired NUM", api, err)
+					}
+				} else if err != nil || ir == "" {
+					t.Error("initialized original byte alias lost its public continuation", api, err)
+				}
+			}
+		})
 	}
 }

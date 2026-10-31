@@ -144,3 +144,39 @@ func TestX86ExchangeCompleteSourceMetadataBoundaries(t *testing.T) {
 		}
 	}
 }
+
+func TestX86ExchangeSourceClosureBoundaries(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"", "arm64", "wasm"} {
+		if _, err := X86ExchangeRows(catalog, mode); err == nil {
+			t.Fatal("foreign mode acquired exchange source rows", mode)
+		}
+	}
+	if _, err := X86ExchangeRows(X86LegacyCatalog{}, "amd64"); err == nil {
+		t.Fatal("missing catalog acquired complete source closure")
+	}
+	for _, field := range []string{"missing", "duplicate", "foreign-table"} {
+		changed := catalog
+		changed.Optab = append([]X86LegacyOpcode(nil), catalog.Optab...)
+		for index, entry := range changed.Optab {
+			if entry.Opcode != "XADDL" {
+				continue
+			}
+			switch field {
+			case "missing":
+				changed.Optab = append(changed.Optab[:index], changed.Optab[index+1:]...)
+			case "duplicate":
+				changed.Optab = append(changed.Optab, entry)
+			case "foreign-table":
+				changed.Optab[index].Ytab = "yaddl"
+			}
+			break
+		}
+		if _, err := X86ExchangeRows(changed, "amd64"); err == nil {
+			t.Fatal("incomplete or contradictory exchange source closure", field)
+		}
+	}
+}

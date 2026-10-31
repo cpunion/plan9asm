@@ -86,6 +86,61 @@ func x86OrdinaryMoveSchema(entry X86LegacyOpcode) []string {
 	return nil
 }
 
+// X86ExchangeRows retains the complete ordered XCHG/XADD source tables.
+// Prefix ownership, implicit locking, FLAGS and initialized inputs stay with
+// the existing typed consumers; a source witness grants none of those facts.
+func X86ExchangeRows(catalog X86LegacyCatalog, arch string) ([]X86ScalarRMWRow, error) {
+	if arch != "amd64" && arch != "386" {
+		return nil, fmt.Errorf("exchange source rows require a Go x86 mode")
+	}
+	var result []X86ScalarRMWRow
+	seen := map[string]bool{}
+	for _, entry := range catalog.Optab {
+		if x86ScalarExchangeTable(entry.Opcode) == "" {
+			continue
+		}
+		if seen[entry.Opcode] {
+			return nil, fmt.Errorf("duplicate exchange source table")
+		}
+		seen[entry.Opcode] = true
+		for _, operand := range entry.Rows {
+			witnesses, err := x86ScalarRMWRowWitnesses(entry, operand, arch)
+			if err != nil {
+				return nil, fmt.Errorf("%s/%d: %w", entry.Opcode, operand.RowIndex, err)
+			}
+			row := X86ScalarRMWRow{ID: fmt.Sprintf("optab/%d/%s/%s/%d", entry.TableIndex, entry.Opcode, entry.Ytab, operand.RowIndex),
+				Opcode: entry.Opcode, Witnesses: witnesses}
+			if arch == "386" && entry.Prefix == "Pw" {
+				row.ModeFiltered, row.Witnesses = "original Go rejects REX.W in 386 mode", nil
+			}
+			result = append(result, row)
+		}
+	}
+	if len(seen) != 8 || len(result) != 18 {
+		return nil, fmt.Errorf("incomplete exchange source closure: names=%d rows=%d", len(seen), len(result))
+	}
+	return result, nil
+}
+
+func x86ScalarExchangeTable(name string) string {
+	if len(name) != 5 || !strings.ContainsRune("BWLQ", rune(name[4])) {
+		return ""
+	}
+	switch name[:4] {
+	case "XADD":
+		if name[4] == 'B' {
+			return "yrb_mb"
+		}
+		return "yrl_ml"
+	case "XCHG":
+		if name[4] == 'B' {
+			return "yml_mb"
+		}
+		return "yxchg"
+	}
+	return ""
+}
+
 // X86ScalarRMWRows projects the six complete legacy scalar RMW tables. The
 // original reader supplies all ordered attributes and opcode payloads; this
 // adapter does not carry a second per-mnemonic opcode table.
@@ -408,6 +463,10 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		"ymovbe": {"Zlitm_r/3/Ym,Yrl", "Zlitr_m/3/Yrl,Ym"},
 		"ydivb":  {"Zm_o/2/Ymb"},
 		"ydivl":  {"Zm_o/2/Yml"},
+		"yrb_mb": {"Zr_m/1/Yrb,Ymb"},
+		"yrl_ml": {"Zr_m/1/Yrl,Yml"},
+		"yml_mb": {"Zr_m/1/Yrb,Ymb", "Zm_r/1/Ymb,Yrb"},
+		"yxchg":  {"Z_rp/1/Yax,Yrl", "Zrp_/1/Yrl,Yax", "Zr_m/1/Yrl,Yml", "Zm_r/1/Yml,Yrl"},
 	}
 	schema := schemas[entry.Ytab]
 	ordinary := x86OrdinaryMoveSchema(entry)
@@ -418,6 +477,11 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 		return nil, fmt.Errorf("missing scalar source opcode")
 	}
 	width := entry.Opcode[len(entry.Opcode)-1]
+	exchangeTable := x86ScalarExchangeTable(entry.Opcode)
+	exchange := exchangeTable != "" || entry.Ytab == "yrb_mb" || entry.Ytab == "yrl_ml" || entry.Ytab == "yml_mb" || entry.Ytab == "yxchg"
+	if exchange && exchangeTable != entry.Ytab {
+		return nil, fmt.Errorf("exchange source family does not own this table")
+	}
 	if entry.Ytab == "ydivb" || entry.Ytab == "ydivl" {
 		stem, actualWidth, known := x86ScalarImplicitFamily(entry.Opcode)
 		if !known || actualWidth == 'B' && entry.Ytab != "ydivb" || actualWidth != 'B' &&
@@ -568,6 +632,15 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 			}
 		}
 	}
+	if exchange {
+		for _, original := range entry.Rows {
+			start := original.UnmatchedOffset + adjustment
+			if payload[start] == 0 || payload[start] == 0x0f ||
+				(original.ZCase == "Z_rp" || original.ZCase == "Zrp_") && payload[start]&7 != 0 {
+				return nil, fmt.Errorf("exchange opcode span or short-register base changed")
+			}
+		}
+	}
 	var prefix []byte
 	switch entry.Prefix {
 	case "Pe":
@@ -714,7 +787,13 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 	case "Zm_o":
 		operands = append(operands, [2]string{"", src}, [2]string{"", "0(SI)"})
 	case "Z_rp":
-		operands = append(operands, [2]string{"", dst})
+		if exchange {
+			operands = append(operands, [2]string{"AX", dst}, [2]string{"AX", "AX"})
+		} else {
+			operands = append(operands, [2]string{"", dst})
+		}
+	case "Zrp_":
+		operands = append(operands, [2]string{dst, "AX"})
 	case "Zo_m":
 		if entry.Ytab != "yincl" || arch == "amd64" {
 			operands = append(operands, [2]string{"", dst})
@@ -771,8 +850,10 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 				return nil, fmt.Errorf("scalar /digit is not a three-bit extension")
 			}
 			code = append(code, rm|payload[offset+1]<<3)
-		case "Z_rp", "Zib_rp", "Zil_rp", "Ziq_rp":
-			code[len(code)-1] += 3
+		case "Z_rp", "Zrp_", "Zib_rp", "Zil_rp", "Ziq_rp":
+			if !exchange || args[0] != "AX" || args[1] != "AX" {
+				code[len(code)-1] += 3
+			}
 		}
 		if row.ZCase != "Zaut_r" && (strings.HasPrefix(args[0], "$") || compare && strings.HasPrefix(args[1], "$")) {
 			n := 1

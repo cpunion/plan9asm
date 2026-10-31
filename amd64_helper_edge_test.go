@@ -552,9 +552,12 @@ func TestAMD64AtomicAndBranchEdges(t *testing.T) {
 	if strings.Contains(out, "atomicrmw and ptr") {
 		t.Fatal("ordinary ANDB silently acquired implicit LOCK semantics")
 	}
+	if strings.Contains(out, "lock; xadd") {
+		t.Fatal("bare XADD borrowed LOCK from the rejected standalone prefix")
+	}
 	for _, want := range []string{
 		"asm sideeffect \"cmpxchgl $3, $2; sete $1\"",
-		"asm sideeffect \"lock; xadd",
+		"asm sideeffect \"xadd",
 		"asm sideeffect \"xchg",
 		"load volatile i8",
 		"and i8",

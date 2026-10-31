@@ -99,16 +99,16 @@ func parseAMD64ExchangeForm(goarch string, op Op, spec amd64ExchangeSpec, ins In
 		return invalid("uses an out-of-range address register")
 	}
 	form := amd64ExchangeForm{register: first, other: second}
-	if spec.kind == amd64ExchangeSwap {
-		if goarch == "amd64" && spec.bits == 8 && x86CompareExchangeHasREXByteView(x86CompareExchangeForm{
-			source: first, destination: second,
-		}) {
-			for _, operand := range []Operand{first, second} {
-				if operand.Kind == OpReg && (operand.Reg == AH || operand.Reg == CH || operand.Reg == DH || operand.Reg == BH) {
-					return amd64ExchangeForm{}, fmt.Errorf("%w: %s %s Go's REX encoding changes a high-byte spelling to an unbound low-byte physical view: %q", ErrProbeNeedsContext, goarch, op, ins.Raw)
-				}
+	if goarch == "amd64" && spec.bits == 8 && x86CompareExchangeHasREXByteView(x86CompareExchangeForm{
+		source: first, destination: second,
+	}) {
+		for _, operand := range []Operand{first, second} {
+			if operand.Kind == OpReg && (operand.Reg == AH || operand.Reg == CH || operand.Reg == DH || operand.Reg == BH) {
+				return amd64ExchangeForm{}, fmt.Errorf("%w: %s %s Go's REX encoding changes a high-byte spelling to an unbound low-byte physical view: %q", ErrProbeNeedsContext, goarch, op, ins.Raw)
 			}
 		}
+	}
+	if spec.kind == amd64ExchangeSwap {
 		// Go's accumulator/accumulator W/L/Q rows emit opcode 90 (with
 		// their width prefix), a NOP. In particular, EAX/EAX does not clear
 		// the upper RAX bytes as a genuine ModRM r32 exchange would.
@@ -170,7 +170,10 @@ func (c *amd64Ctx) emitExchangeMemory(spec amd64ExchangeSpec, memory Operand, va
 	width := map[int]string{8: "b", 16: "w", 32: "l", 64: "q"}[spec.bits]
 	mnemonic := "xchg" + width // A memory XCHG is implicitly locked.
 	if spec.kind == amd64ExchangeAdd {
-		mnemonic = "lock; xadd" + width
+		mnemonic = "xadd" + width
+		if c.namedAtomicLock {
+			mnemonic = "lock; " + mnemonic
+		}
 	}
 	registerClass := "r"
 	if spec.bits == 8 {

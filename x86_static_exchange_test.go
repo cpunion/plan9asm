@@ -103,7 +103,10 @@ func TestX86StaticExchangeCompleteFamilyInitializedObjects(t *testing.T) {
 					t.Fatal("complete initialized exchange source", api, err)
 				}
 				for _, output := range []string{ir, x86DwordProductIROptimize(t, ir)} {
-					if strings.Count(output, "asm sideeffect") != want || strings.Count(output, "lock; xadd") != want/3 {
+					// Every retained source here is bare. Adjacent LOCK sources and
+					// their per-function target bytes have an independent owner.
+					if strings.Count(output, "asm sideeffect") != want || strings.Count(output, "xadd") != want/3 ||
+						strings.Count(output, "xchg") != 2*want/3 || strings.Count(output, "lock; ") != strings.Count(source.String(), "\nLOCK\n") {
 						t.Fatal("original native exchange, locking or memory effect was lost", api, output)
 					}
 					for _, level := range []string{"-O0", "-O2"} {
