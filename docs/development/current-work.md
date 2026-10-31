@@ -7,7 +7,16 @@ translation efficiency while preserving all five architecture gates. Read
 
 ## Published CI and local revisions
 
-[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. Accepted
+[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. Published
+`e04799ae8` has an unaccepted [round](https://github.com/xgo-dev/plan9asm/actions/runs/41183676200):
+twelve source jobs expose two reproduced fixture defects (eleven old
+move-mask fixtures and one Windows Unix-oracle compile), followed by dependent
+collector failures. Preserve all original failed reports. Classified raw
+GoJSON contains no additional failure class; final round accounting remains
+separate from the qualified local repairs below.
+The local repairs below need their own complete publication CI and review.
+
+Accepted
 `652b6bae0` completed its own
 [round](https://github.com/xgo-dev/plan9asm/actions/runs/41173073767) naturally:
 325/325 successful jobs, without reruns. Independent acceptance joins all 286
@@ -37,62 +46,64 @@ job-local caches, installation verification and deadlines remain required.
 
 ## Current family batch
 
-The new code snapshot is `db1c0114d`; later documentation alone does not change
-its Go sources. Explicit SIMD transport joins 28 original rows through shared
-literal/media encoders, with one existing INSERTPS overlap and 27 new identities.
-Insert/extract, compare, implicit-X0, sign-mask and lane-move roles remain
-distinct. PEXTRW first-match order, mode386 Q refusals, all prefix atoms and
-SHA256RNDS2's original zero stride retain independent Go observations.
+The integrated code snapshot is `083fc425a`. The complete zero-operand
+`ynone/Zlit` source family uses one 109-line literal/prefix renderer: 140 current
+and 139 minimum-SDK rows, without opcode byte lists. The eight prefix classes,
+first-zero termination, retained trailing atoms and physical mode refusals are
+separate axes. It adds no numerical, stack, FLAGS, native or privileged-state
+permission; the old scalar consumer still refuses this distinct source group.
 
-Initialized objects exposed a missing native MMX move-mask consumer. It now
-uses the existing typed form and source-bound MMX region, requires all eight
-input bytes and EMMS, writes a zero-extended dword and revokes stale aliases.
-The ordinary logical move-mask observer still rejects physical MMX. Both SDKs
-pass 972 focused nodes without failures/skips and 96 LLVM object calls each.
-The full rule package passes 17,835/17,858 nodes; 1,136 existing controls and
-44 raw-role controls pass per SDK.
+Both SDKs reproduce the original formatter gap, then pass all 426/423 focused
+nodes without failures or skips. Actual Go observes 280/278 mode cases:
+255/253 exact byte matches and 25 explicit mode refusals each. The full rule
+package retains all old roots and passes 18,234/18,254 nodes across 169 roots.
+All 50 old identity snapshots are freshly byte-exact; two new snapshots add
+140/139 original identities without overlap.
 
-At functional snapshot `23c1d95fb`, Linux emulation executes twelve LLVM/C
-programs and two original Go programs across both SDKs. Each LLVM program
-checks sixteen kernels, 8,192 values, 8,192 aliases, 128 faults and sixteen
-exact-width boundaries. This is instruction execution, not physical hardware
-or a C-to-Go ABI bridge. The sole later production change copies the validated
-mask form inside its matching branch. Actual Go 1.27.3 allocation probes over
-28 ordinary instruction/mode pairs first reproduce 3-to-4 allocations, then
-restore 3-to-3 against `652b6bae0`; no whole-Translate speedup is established.
-The functional execution retains its original head through an explicit source
-dependency bridge, rather than being relabeled as a fresh `db1c0114d` run.
+MMX source scanning now allocates its three existing form copies only inside
+matching branches. Both SDKs measure all 28 ordinary query/mode pairs at three
+allocations before and zero after; 26 matched, invalid and source-identity
+outputs remain identical. All fourteen existing owners pass 402 nodes per SDK.
+This query measurement alone does not establish a public Translate speedup.
+Fresh controlled public Translate ABBA retains all 696 original measurements
+and 24 separate MOV-dense measurements: two SDKs, three complete ABBA blocks,
+200 ms and CPU4. All 68 commands end naturally with their source/tool guards.
+Original across-case median time ratios are 1.001714/1.002799, with no case
+median reaching 1.05; one minimum-SDK VPMADDUBSW block remains at 1.060481.
+Original median allocation ratios are 0.987815/0.987981 and bytes/op ratios
+0.965462/0.967748. MOV-dense time ratios are 1.033069/0.989203, allocation
+ratios 0.930902/0.931459 and bytes/op ratios 0.884144/0.890274. These are
+limited Translate observations, not general acceleration or SDK throughput.
+An earlier window was interrupted for CI after thirteen invocations; its
+partial results remain separate and do not contribute to this complete run.
 
-The official-corpus gate intentionally changes one isolated form:
-`PMOVMSKB mmx,gpr64` now requires context instead of using an invented zero
-MMX input. An added owner passes 169 nodes per SDK across all 168 ordinary
-bank/destination/mode pairs: missing inputs or EMMS fail, and fully initialized
-sequences with EMMS pass. Eight SDK source versions, five architectures and
-both old/new scanners produce 80 reports. All 32 non-amd64 pairs are identical;
-each amd64 pair changes only this form and its derived summaries. Only the
-three corresponding baseline fields change per version. Original validators
-pass all eight corrected profiles; earlier failed gates remain failed evidence.
+The published e047 round exposes two test-fixture defects. Compile-only Go
+oracles now explicitly target Linux/amd64 while retaining their original Unix
+fault checks, actual linked SDK/AMD64 verification and unchanged execution
+profile. A Windows-target environment reproduces the old compile failure;
+both SDKs pass the seven affected owners and three children after repair.
 
-Accepted `652b6bae0` retains all eight XADD/XCHG spellings and eighteen new
-source rows. Bare XADD has no LOCK prefix; explicit LOCK and memory XCHG keep
-their distinct ordering. The shared guard rejects AH/REX conflicts.
+The old eight-line move-mask fixture remains byte-exact as a three-API Context
+negative. Eight separate initialized functions now return each original mask
+result, with MMX input definitions and real EMMS. Undefined-input and unclosed
+MMX negatives remain. Three APIs, O0/O2 objects, per-function mask/cleanup
+liveness and adjacent controls pass 100 nodes per SDK. These repairs change
+only tests and their compile profile, with no production-state relaxation.
 
-Scalar signed conversions join all twelve rows of `yxcvfl/yxcvfq/yxcvlf/yxcvqf`
-through the existing legacy media encoder. Both SDKs pass 231 focused/object
-nodes, including all three APIs, five x86 targets and thirty O0/O2 objects;
-7,755 existing controls; and 17,175/17,198 complete rule nodes. All prior 46
-snapshots remain byte-exact; two new snapshots establish the inventory below.
-These source joins add no numerical, memory, runtime or hardware authority.
+Prior e047 explicit SIMD joins retain 28 rows with one INSERTPS overlap and
+27 new identities. PEXTRW first-match order, mode386 Q refusals and SHA256RNDS2's
+original zero stride remain independently observed. The real native MMX
+move-mask consumer requires all eight bytes, preserves FLAGS and source state,
+clears upper result bytes and revokes stale aliases. Ordinary logical observers
+still do not acquire physical MMX. Its original 23c execution remains explicitly
+bridged through later value-copy and test-only changes, not relabeled as fresh.
 
-Ordinary ABIInternal Void entries retain complete argument, source-shape and
-reaching-state checks. Only the AX result obligation at RET becomes optional;
-Void with declared result fields is rejected. Both SDKs pass all 67 focused
-nodes and 1,167 prior register/argument controls. Legacy public logical FP/SP
-admissions remain a separate entry-contract gap. At `652b6bae0`, actual current
-and minimum Go Linux CI each pass ten nodes without skips, including all six
-pipeline outputs: fifteen kernels, 1,920 numerical outcomes, 180 fault outcomes
-and two tripwires each. Failed local Docker startup and unknown owned-container
-cleanup remain separate observations, without a shared daemon restart.
+Earlier exchange/conversion and ABIInternal Void repairs remain. Accepted
+652 executes the fifteen-kernel scalar-move owner in both current and minimum
+Linux CI; Void retains all argument and faulting-input obligations. The single
+isolated MMX-to-GP probe correction remains audited across eighty old/new,
+eight-SDK-source, five-architecture reports. Missing physical inputs and EMMS
+remain Context, not passing instruction or runtime coverage.
 
 ## Qualified local batches
 
@@ -209,14 +220,14 @@ An earlier 12-sample incomplete overlay attempt remains excluded, not erased.
 
 ## Inventory and semantic boundaries
 
-At `23c1d95fb`, unchanged through `db1c0114d`, the independently joined source
-inventory has 60 overlapping family views and 50 identity snapshots. All 48
+At `153689182`, integrated at `083fc425a`, the independently joined source
+inventory has 61 overlapping family views and 52 identity snapshots. All 50
 previous snapshots were freshly captured and remain byte-exact:
 
 | SDK | AVX | optab | ymovtab | Total joined | Legacy joined / denominator | Unjoined legacy |
 |---|---:|---:|---:|---:|---:|---:|
-| Current | 3,568 | 972 | 18 | 4,558 | 990 / 1,418 | 428 |
-| Minimum | 3,568 | 973 | 18 | 4,559 | 991 / 1,417 | 426 |
+| Current | 3,568 | 1,112 | 18 | 4,698 | 1,130 / 1,418 | 288 |
+| Minimum | 3,568 | 1,112 | 18 | 4,698 | 1,130 / 1,417 | 287 |
 
 The denominator excludes exactly 13 Go Zpseudo rows and four Zbyte data rows;
 their identities remain retained separately. The ymovtab sentinel also remains
