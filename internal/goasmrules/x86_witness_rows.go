@@ -800,6 +800,15 @@ func x86PackedEncodingAtoms(expression string, required, optional []string) (map
 }
 
 func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([]X86PackedBinaryWitness, error) {
+	scalarConversion := x86LegacyScalarConversionTable(entry.Ytab)
+	var scalar x86LegacyScalarConversionForm
+	if scalarConversion {
+		var err error
+		scalar, err = x86LegacyScalarConversionProperties(entry, row)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if entry.Ytab == "yxshuf" || entry.Ytab == "yaes" {
 		encoding, err := x86LegacyLiteralSIMDEncoding(entry, row)
 		if err != nil {
@@ -817,12 +826,17 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 	shuffle := (entry.Ytab == "yxshuf" || entry.Ytab == "ypalignr") && strings.Join(row.Classes, ",") == "Yu8,Yxm,Yxr"
 	conversion := entry.Ytab == "yxcvm1" || entry.Ytab == "yxcvm2"
 	if entry.Kind != "encoding" || entry.EscapeAdjustment != 0 && !literal ||
-		strings.Join(row.Classes, ",") != "Yxm,Yxr" && !immediate && !shuffle {
+		strings.Join(row.Classes, ",") != "Yxm,Yxr" && !immediate && !shuffle && !scalarConversion {
 		return nil, fmt.Errorf("unmodeled legacy packed operand row")
 	}
 	prefix, offset, opcodeBytes := []byte{0x66, 0x0f}, 0, 1
 	terminator := 0
 	switch {
+	case scalarConversion:
+		prefix, offset = []byte{scalar.mandatory, 0x0f}, scalar.opcodeOffset
+		if scalar.wide {
+			prefix = []byte{scalar.mandatory, 0x48, 0x0f}
+		}
 	case conversion && row.RowIndex == 0 && row.ZCase == "Zm_r_xm" && row.ZOffset == 2 && row.UnmatchedOffset == 0 && len(entry.OpBytes) == 4:
 		if entry.Prefix == "Px" && (entry.OpBytes[2] == "Pe" || entry.OpBytes[2] == "Pm") {
 			mandatory := map[string]byte{"Pe": 0x66, "Pf2": 0xf2, "Pf3": 0xf3}[entry.OpBytes[0]]
@@ -933,12 +947,15 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 	encoding := prefix
 	for _, value := range entry.OpBytes[offset : offset+opcodeBytes] {
 		opcode, err := strconv.ParseUint(value, 0, 8)
-		if err != nil || literal && opcode == 0 {
+		if err != nil || literal && opcode == 0 || scalarConversion && (opcode == 0 || opcode == 0x0f) {
 			return nil, fmt.Errorf("legacy packed opcode is not a byte literal")
 		}
 		encoding = append(encoding, byte(opcode))
 	}
 	sources, extension := []string{"X0", "(AX)"}, uint64(0)
+	if scalarConversion {
+		sources = []string{"X0", "0(SI)"}
+	}
 	if immediate {
 		var err error
 		extension, err = strconv.ParseUint(entry.OpBytes[offset+1], 0, 8)
@@ -950,12 +967,24 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 	var witnesses []X86PackedBinaryWitness
 	for _, first := range sources {
 		modrm := byte(0xc8)
-		if first == "(AX)" {
+		memory := first == "(AX)" || scalarConversion && first == "0(SI)"
+		if memory {
 			modrm = 0x08
+			if scalarConversion {
+				modrm |= 6
+			}
 		}
-		instruction := entry.Opcode + " " + first + ",X1"
+		destination, second := "X1", "X1"
+		if scalarConversion {
+			if scalar.fromFloat {
+				destination, second = "BX", ""
+				modrm = modrm&0xc7 | 3<<3
+			} else if first == "X0" {
+				first, modrm = "CX", modrm&0xf8|1
+			}
+		}
+		instruction := entry.Opcode + " " + first + "," + destination
 		encoded := append(append([]byte(nil), encoding...), modrm)
-		second := "X1"
 		if shuffle {
 			instruction = entry.Opcode + " $7," + first + ",X1"
 			if entry.OpBytes[0] == "0x70" {
@@ -969,7 +998,7 @@ func x86PackedLegacyRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand) ([
 		}
 		witnesses = append(witnesses, X86PackedBinaryWitness{
 			Instruction: instruction, Generation: "legacy", Width: 128,
-			First: first, Second: second, Destination: "X1", Memory: first == "(AX)",
+			First: first, Second: second, Destination: destination, Memory: memory,
 			Encoding: encoded,
 		})
 	}
