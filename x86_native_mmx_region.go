@@ -11,6 +11,7 @@ type x86NativeMMXSite struct {
 	word        *x86MMXWordForm
 	integer     *x86LegacyMMXReadForm
 	maskStore   *amd64ImplicitMaskMoveSpec
+	moveMask    *x86MoveMaskForm
 }
 
 // This private source-bound region keeps the real MMX/x87 instructions
@@ -47,6 +48,10 @@ func x86NativeMMXInstruction(ins Instr, arch string) (x86NativeMMXSite, bool, er
 	}
 	if spec, known, err := x86ImplicitMaskMoveProperties(ins.Op, ins, arch); known && spec.byteWidth == 8 {
 		site.maskStore = &spec
+		return site, true, err
+	}
+	if form, known, err := x86MoveMaskProperties(ins.Op, ins, arch); known && form.byteWidth == 8 {
+		site.moveMask = &form
 		return site, true, err
 	}
 	return site, false, nil
@@ -128,6 +133,13 @@ func newX86NativeMMXRegion(fn Func, sig FuncSig, arch, triple string) (*x86Nativ
 		} else if site.integer != nil {
 			form := site.integer
 			if err := plan.operand(form.source, int64(form.memoryBytes), false); err != nil {
+				return fail(err.Error())
+			}
+		} else if site.moveMask != nil {
+			if err := plan.operand(site.instruction.Args[0], 8, false); err != nil {
+				return fail(err.Error())
+			}
+			if err := plan.operand(site.instruction.Args[1], 4, true); err != nil {
 				return fail(err.Error())
 			}
 		} else if site.maskStore != nil {
@@ -271,6 +283,24 @@ func (plan *x86NativeMMXRegion) transfer(ordinal int, ins Instr, state *x86Resul
 			state.resultAddressGP[index] = x86ResultSlotAddress{}
 		}
 		return x86ResultStore(form.destination, form.bytes, state, owned, resultOffset, arch), true
+	}
+	if site.moveMask != nil {
+		if !read(ins.Args[0], 8) {
+			return false, true
+		}
+		index, _, valid := x86ResultGP(ins.Args[1].Reg, 4, arch)
+		if !valid {
+			return false, true
+		}
+		// A physical mask produces a write-only r32. Its upper dword is
+		// zero, never the old pointer, caller address or canonical bool.
+		state.canonicalGP[index] = 0xf0
+		state.callerAddressGP[index], state.callerAddressOrigin[index] = false, 0
+		state.resultAddressGP[index] = x86ResultSlotAddress{}
+		if state.boolFrameGP != nil {
+			state.boolFrameGP[index] = x86ResultSlotAddress{}
+		}
+		return x86ResultStore(ins.Args[1], 4, state, owned, resultOffset, arch), true
 	}
 	if site.maskStore != nil {
 		for _, operand := range ins.Args {

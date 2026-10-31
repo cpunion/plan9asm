@@ -293,6 +293,23 @@ func x86NativeMMXAssembly(plan *x86NativeMMXRegion, gpBase, xBase int64) (string
 			}
 			continue
 		}
+		if site.moveMask != nil {
+			offset, err := gp(site.instruction.Args[1].Reg)
+			if err != nil {
+				return "", err
+			}
+			bank, _ := amd64ParseMReg(site.instruction.Args[0].Reg)
+			reg := "%r10d"
+			if plan.arch == "386" {
+				reg = "%eax"
+			}
+			code = append(code, fmt.Sprintf("pmovmskb %%mm%d, %s", bank, reg),
+				fmt.Sprintf("%s %s, %d($0)", word, data, offset))
+			if plan.arch == "386" {
+				code = append(code, fmt.Sprintf("movl $$0, %d($0)", offset+4))
+			}
+			continue
+		}
 		if site.maskStore != nil {
 			offset, err := gp(DI)
 			if err != nil {
