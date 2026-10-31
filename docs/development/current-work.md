@@ -40,7 +40,7 @@ retains prior qualifications and failures.
 
 ## Current integrated batch
 
-The code snapshot is `10de80934`, combining the following qualified components.
+The code snapshot is `6d350c633`, combining the following qualified components.
 A later publication needs its own complete gates and CI; an older accepted
 head does not certify these changes.
 
@@ -59,6 +59,14 @@ head does not certify these changes.
   public views and the new view share complete encoding validation. The 95
   original malformed-metadata counterexamples still exercise the old consumers.
   New and old paths share carrier construction; MMX admission remains unchanged.
+- Non-TLS ymovtab grammar joins 92 more source identities using five shared
+  encoding cases. Literal, prefix and ModRM transport and complete-table
+  structure validation are shared with existing consumers. The eighteen
+  double-shift rows stay unchanged; two TLS rows retain separate obligations.
+- CMOV runtime fixtures prepare their process-owned tool cache before source
+  capture. The immutable reader still rejects files that change while read.
+  Resource/lifecycle regressions pass on both SDKs; native Linux confirmation
+  belongs to the candidate's own CI, not this host's seven explicit skips.
 
 Both SDKs pass the new alias grammar/effect tests (125 nodes and thirty
 five-target, three-API O0/O2 object modules each). Portable execution passes
@@ -82,14 +90,20 @@ fourteen genuine passing roots. Exact source/tool/provider identity retains
 those executions; the remaining three commands ran separately. The original
 resource failure remains failed and is not described as a successful wrapper.
 
+The fallback batch passes nine roots / 489 nodes on each SDK. Complete rules
+pass 182 roots / 18,908 and 18,925 nodes; thirteen existing hooks pass 112 each.
+All previous 56 source snapshots remain byte-exact. Existing TLS, machine and
+segment boundaries pass 17 / 13 roots and 21,432 / 21,406 nodes respectively;
+these checks do not close the two contextual TLS encoding rows.
+
 ## Source inventory and limits
 
-The current integrated source union has 63 overlapping views and 56 snapshots:
+The current integrated source union has 64 overlapping views and 58 snapshots:
 
 | SDK | AVX | optab | ymovtab | Joined | Legacy / denominator | Unjoined legacy |
 |---|---:|---:|---:|---:|---:|---:|
-| Current | 3,568 | 1,172 | 18 | 4,758 | 1,190 / 1,418 | 228 |
-| Minimum | 3,568 | 1,171 | 18 | 4,757 | 1,189 / 1,417 | 228 |
+| Current | 3,568 | 1,172 | 110 | 4,850 | 1,282 / 1,418 | 136 |
+| Minimum | 3,568 | 1,171 | 110 | 4,849 | 1,281 / 1,417 | 136 |
 
 These are independently joined source identities, not translated or executed
 instruction counts. The denominator excludes exactly thirteen Zpseudo and
@@ -104,17 +118,17 @@ unexecuted forms never count as passing instruction coverage.
 
 ## Next work
 
-1. Run final combined policies, all five architectures on both SDKs, full
-   applicable build/vet and the controlled Translate comparison against
-   accepted `0310af39b`. Retain all original 29 cases, MOV-dense cases,
-   accepted-input guards, three ABBA blocks and actual outliers. Do not infer
-   SDK or generated-program speed from register-only microbenchmarks.
-2. Finish the remaining 228 source identities as format groups:
+1. Run final combined policies and all five architectures on both SDKs.
+   The accepted controlled Translate comparison at `f0a64c2e3` retains all
+   original 29 cases, MOV-dense cases, three ABBA blocks and actual outliers.
+   The subsequent library code is byte-exact; new source-table helpers are
+   consumed by the scanner, not translation. Keep this identity bridge
+   separate from fresh execution or scanner performance measurements.
+2. Finish the remaining 136 source identities as format groups:
    forty stack/control optab rows, 94 state/system/memory optab rows and
-   94 ymovtab rows. The last group has six encoding cases; reuse the eighteen
-   existing double-shift rows. TLS zero payloads require real target/shared/
-   relocation observations, and ymov fallback does not inherit optab suffix
-   filters. Retained TR padding can contain an unconsumed 0xff.
+   two contextual TLS ymovtab rows. TLS zero payloads require real target/
+   shared/relocation observations. A direct-TLS NOP comes from progedit,
+   bypasses ymovtab and cannot qualify either fallback encoding row.
 3. Continue initialized forms and semantic families alongside the inventory.
    Keep element, carrier, active/result and memory widths, operand direction,
    masks, alias writes, FLAGS and fault/order effects distinct. Reuse typed
