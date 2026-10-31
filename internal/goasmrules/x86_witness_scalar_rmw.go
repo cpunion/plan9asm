@@ -419,7 +419,7 @@ func x86ScalarCompleteOperandSchema(entry X86LegacyOpcode, row X86LegacyOperand,
 		}
 		classes := strings.Split(fields[2], ",")
 		stride, err := strconv.Atoi(fields[1])
-		if err != nil || stride <= 0 || original.RowIndex != index || original.ZCase != fields[0] ||
+		if err != nil || stride < 0 || original.RowIndex != index || original.ZCase != fields[0] ||
 			original.ZOffset != stride || original.UnmatchedOffset != offset || len(original.Classes) != len(classes) {
 			return fmt.Errorf("scalar complete original row identity changed")
 		}

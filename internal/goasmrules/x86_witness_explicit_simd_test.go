@@ -69,7 +69,10 @@ func TestX86LegacyExplicitSIMDCompleteSourceTransport(t *testing.T) {
 		for _, row := range entry.Rows {
 			t.Run(fmt.Sprintf("%s/%d", entry.Opcode, row.RowIndex), func(t *testing.T) {
 				before := fmt.Sprintf("%#v", entry)
-				witnesses, err := x86PackedLegacyRowWitnesses(entry, row)
+				// The original RED used the older packed-only projection. The
+				// final explicit view retains GP and MMX syntax without adding
+				// either bank to the packed numerical consumer.
+				witnesses, err := x86LegacyExplicitSIMDRowWitnesses(entry, row)
 				want := 2
 				if entry.Ytab == "yextrw" || entry.Ytab == "yxrrl" || entry.Ytab == "ymskb" || entry.Ytab == "yxr" {
 					want = 1
@@ -78,7 +81,7 @@ func TestX86LegacyExplicitSIMDCompleteSourceTransport(t *testing.T) {
 					t.Errorf("EXPLICIT_SIMD_SOURCE_TRANSPORT_GAP: got=%d want=%d error=%v", len(witnesses), want, err)
 				}
 				for _, w := range witnesses {
-					if w.Instruction == "" || len(w.Encoding) == 0 || w.Destination == "" || w.Masked || w.Zeroing || w.Broadcast || w.MaskResult {
+					if w.Instruction == "" || len(w.Encoding) == 0 || w.Destination == "" {
 						t.Error("incomplete or foreign witness", w)
 					}
 				}
@@ -93,7 +96,7 @@ func TestX86LegacyExplicitSIMDCompleteSourceTransport(t *testing.T) {
 func TestX86LegacyExplicitSIMDWholeSourceMetadataBoundaries(t *testing.T) {
 	for _, entry := range explicitSIMD27Entries(t) {
 		for _, original := range entry.Rows {
-			for _, field := range []string{"kind", "row-count", "original-arity", "selected-arity", "original-offset", "selected-offset", "original-stride", "selected-stride", "selected-index", "selected-zcase", "escape-negative", "escape-overflow", "prefix", "short", "extra", "nonbyte"} {
+			for _, field := range []string{"kind", "row-count", "original-arity", "selected-arity", "original-offset", "selected-offset", "original-stride", "selected-stride", "selected-index", "selected-zcase", "escape-negative", "escape-overflow", "prefix", "short", "extra", "nonbyte", "last-original-arity", "last-original-zcase", "last-original-offset", "last-original-stride"} {
 				t.Run(fmt.Sprintf("%s/%d/%s", entry.Opcode, original.RowIndex, field), func(t *testing.T) {
 					changed, row := entry, original
 					changed.Rows = append([]X86LegacyOperand(nil), entry.Rows...)
@@ -132,6 +135,14 @@ func TestX86LegacyExplicitSIMDWholeSourceMetadataBoundaries(t *testing.T) {
 						changed.OpBytes = append(changed.OpBytes, "0")
 					case "nonbyte":
 						changed.OpBytes[len(changed.OpBytes)-1] = "0x100"
+					case "last-original-arity":
+						changed.Rows[len(changed.Rows)-1].Classes = nil
+					case "last-original-zcase":
+						changed.Rows[len(changed.Rows)-1].ZCase = "Zlit"
+					case "last-original-offset":
+						changed.Rows[len(changed.Rows)-1].UnmatchedOffset = maxInt
+					case "last-original-stride":
+						changed.Rows[len(changed.Rows)-1].ZOffset = maxInt
 					}
 					defer func() {
 						if failure := recover(); failure != nil {
@@ -141,7 +152,7 @@ func TestX86LegacyExplicitSIMDWholeSourceMetadataBoundaries(t *testing.T) {
 					if reflect.DeepEqual(changed, entry) && reflect.DeepEqual(row, original) {
 						t.Fatal("ineffective mutation")
 					}
-					if _, err := x86PackedLegacyRowWitnesses(changed, row); err == nil {
+					if _, err := x86LegacyExplicitSIMDRowWitnesses(changed, row); err == nil {
 						t.Error("EXPLICIT_SIMD_MALFORMED_ACCEPTED", field)
 					}
 				})

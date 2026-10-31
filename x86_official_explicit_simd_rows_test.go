@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"runtime"
@@ -82,6 +83,87 @@ func explicitSIMD27OriginalCases(t *testing.T, catalog goasmrules.X86LegacyCatal
 		t.Fatal("independent whole-family formats changed", len(cases))
 	}
 	return cases
+}
+
+func TestX86LegacyExplicitSIMDCompleteSourceJoin(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	originals := explicitSIMD27OriginalCases(t, catalog)
+	modes := map[string][]goasmrules.X86ScalarRMWRow{}
+	for _, arch := range []string{"amd64", "386"} {
+		rows, err := goasmrules.X86LegacyExplicitSIMDRows(catalog, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := map[string]x86OfficialPackedCase{}
+		for _, fixture := range originals {
+			name := strings.Fields(fixture.witness.Instruction)[0]
+			if arch == "386" && (name == "PEXTRQ" || name == "PINSRQ") {
+				continue
+			}
+			key := fixture.row + "/" + fixture.witness.Instruction
+			if _, dup := expected[key]; dup {
+				t.Fatal("duplicate independent fixture", key)
+			}
+			expected[key] = fixture
+		}
+		seen, filtered := map[string]bool{}, 0
+		for _, row := range rows {
+			if seen[row.ID] {
+				t.Fatal("duplicate original source ID", row.ID)
+			}
+			seen[row.ID] = true
+			if row.ModeFiltered != "" {
+				if arch != "386" || row.Opcode != "PEXTRQ" && row.Opcode != "PINSRQ" || len(row.Witnesses) != 0 {
+					t.Fatal("mode restriction changed", row)
+				}
+				filtered++
+				continue
+			}
+			for _, w := range row.Witnesses {
+				key := row.ID + "/" + w.Instruction
+				fixture, found := expected[key]
+				if !found || !bytes.Equal(w.Encoding, fixture.witness.Encoding) || w.Destination != fixture.witness.Destination {
+					t.Fatal("original source ID/encoding/direction mismatch", key, w, fixture)
+				}
+				delete(expected, key)
+			}
+		}
+		wantFiltered := 0
+		if arch == "386" {
+			wantFiltered = 2
+		}
+		if len(rows) != 28 || filtered != wantFiltered || len(expected) != 0 {
+			t.Fatal("incomplete exact source join", arch, len(rows), filtered, len(expected))
+		}
+		modes[arch] = rows
+	}
+	if _, err := goasmrules.X86LegacyExplicitSIMDRows(catalog, "arm64"); err == nil {
+		t.Fatal("foreign mode accepted")
+	}
+	for _, duplicate := range []bool{false, true} {
+		changed := catalog
+		changed.Optab = append([]goasmrules.X86LegacyOpcode(nil), catalog.Optab...)
+		for i, entry := range changed.Optab {
+			if entry.Opcode == "EXTRACTPS" {
+				if duplicate {
+					changed.Optab = append(changed.Optab, entry)
+				} else {
+					changed.Optab = append(changed.Optab[:i], changed.Optab[i+1:]...)
+				}
+				break
+			}
+		}
+		if _, err := goasmrules.X86LegacyExplicitSIMDRows(changed, "amd64"); err == nil {
+			t.Fatal("incomplete/duplicate source accepted", duplicate)
+		}
+	}
+	x86Legacy127SaveIdentity(t, "PLAN9ASM_LEGACY_EXPLICIT_SIMD_IDENTITY_OUTPUT", struct {
+		Source goasmrules.X86LegacyCatalog
+		Modes  map[string][]goasmrules.X86ScalarRMWRow
+	}{catalog, modes})
 }
 
 func TestX86LegacyExplicitSIMDOriginalGoBytesAndModes(t *testing.T) {
