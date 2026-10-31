@@ -133,6 +133,14 @@ func TestX86GPDataFlagsCPUExistingTransportCompleteFamily(t *testing.T) {
 					if before != fmt.Sprintf("%#v", entry) {
 						t.Fatal("cold formatter modified original source")
 					}
+					for _, expression := range []string{"obj.A" + entry.Opcode, ""} {
+						variant := entry
+						variant.OpcodeExpression = expression
+						got, err := x86ScalarRMWRowWitnesses(variant, row, arch)
+						if err != nil || !reflect.DeepEqual(got, witnesses) {
+							t.Fatal("captured obj enum or existing unobserved fixture contract changed", expression, err)
+						}
+					}
 					if entry.Ytab == "ycrc32b" || entry.Ytab == "ycrc32l" {
 						implicit := entry
 						// Removing this explicit zero does not change the full
