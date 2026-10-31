@@ -31,7 +31,7 @@ func TestX86NativeMMXMoveMaskByteEffects(t *testing.T) {
 					if !valid {
 						t.Fatal("independent GP fixture invalid")
 					}
-					state := x86ResultState{flags: x86ByteFlagsCF | x86ByteFlagsZF, direction: x86ResultDirectionBackward}
+					state := x86ResultState{flags: x86ByteFlagCF | x86ByteFlagZF, direction: x86ResultDirectionBackward}
 					state.nativeMMX[bank] = 0xff
 					state.canonicalGP[index] = 0xff
 					state.pointerGP[index], state.callerAddressGP[index], state.callerAddressOrigin[index] = true, true, 7
