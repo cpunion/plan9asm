@@ -27,7 +27,7 @@ func TestX86ScalarMoveAliasesPortableValuesFlagsAndMemory(t *testing.T) {
 			for _, op := range []string{"MOVQL", "MOVLQZX"} {
 				name := "Alias" + op
 				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s x+0(FP),AX\n%s seed+%d(FP),BX\n"+
-					"CMPL AX,$0\n%s AX,BX\nJNE done%s\nADDL $7,BX\ndone%s:\n%s BX,ret+%d(FP)\nRET\n",
+					"CMPL BX,$0\n%s AX,BX\nJNE done%s\nADDL $7,BX\ndone%s:\n%s BX,ret+%d(FP)\nRET\n",
 					name, 3*word, move, move, word, op, name, name, move, 2*word)
 				fmt.Fprintf(&declarations, "func %s(x,seed %s) %s\n", name, gotype, gotype)
 				fmt.Fprintf(&prototypes, "extern %s %s(%s,%s);\n", ctype, name, ctype, ctype)
@@ -75,7 +75,7 @@ static int registers(void) {
             for(unsigned v=0;v<8;v++) {
                 for(unsigned s=0;s<4;s++) {
                     uint32_t low=(uint32_t)inputs[v];
-                    Word want=(uint32_t)(low+(low==0?7u:0u));
+                    Word want=(uint32_t)(low+((uint32_t)seeds[s]==0?7u:0u));
                     if(rows[r]((Word)inputs[v],(Word)seeds[s])!=want) return 1;
                     observations++;
                 }
