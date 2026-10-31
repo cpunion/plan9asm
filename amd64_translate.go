@@ -662,13 +662,11 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 				continue
 			}
 			access, certified := c.fixedLocalMemoryAccess(ins, index)
-			if !certified {
+			if !certified && x86LEAWidth(addressView.Op, c.goarch) == 0 {
 				if !fixedLocalGPAddressOnly(addressView, index) {
 					return false, goAMD64FrameContext("fixed local storage consumer lacks an exact native access certificate")
 				}
-				if x86LEAWidth(addressView.Op, c.goarch) == 0 {
-					continue // Sized NOP does not consume an effective address.
-				}
+				continue // Sized NOP does not consume an effective address.
 			}
 			if !certified || !access.nativeInput {
 				// Address formation consumes the same original NAME_AUTO bias
@@ -676,6 +674,16 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 				physical, err := fixedLocalMemoryAddress(ins, index, c.fixedLocal.frame)
 				if err != nil {
 					return false, err
+				}
+				if !certified {
+					// The original source/frame owner resolves NAME_AUTO. The
+					// numerical grammar must not guess a bare symbolic offset.
+					query := addressView
+					query.Args = append([]Operand(nil), addressView.Args...)
+					query.Args[index].Mem = physical
+					if !fixedLocalGPAddressOnly(query, index) {
+						return false, goAMD64FrameContext("fixed local address lacks its complete typed effect")
+					}
 				}
 				if previous, found := c.fixedMemRoles[operand.Mem]; found && previous != physical {
 					return false, goAMD64FrameContext("fixed local equal parsed operands have conflicting native address roles")
