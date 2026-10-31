@@ -2,6 +2,7 @@ package goasmrules
 
 import (
 	"fmt"
+	"reflect"
 	"runtime"
 	"testing"
 )
@@ -24,19 +25,11 @@ func movtabRemainderOriginalRows(t *testing.T) []X86MoveRule {
 	return rows
 }
 
-// The old formatter is the existing X86MoveRule byte hook. Its rejection of
-// the new roles records the initial feature gap; it must keep that boundary
-// after a separate remainder formatter is introduced. Do not add these roles
-// to double-shift or infer numerical/native permissions from this test.
-func movtabExistingByteHook(row X86MoveRule) ([]X86ScalarRMWWitness, error) {
-	return x86ScalarDoubleShiftWitnesses(row)
-}
-
 func TestX86MovtabRemainderCompleteSourceTransport(t *testing.T) {
 	for _, row := range movtabRemainderOriginalRows(t) {
 		t.Run(fmt.Sprintf("%d/%s/%s", row.TableIndex, row.Opcode, row.Code), func(t *testing.T) {
 			before := fmt.Sprintf("%#v", row)
-			witnesses, err := movtabExistingByteHook(row)
+			witnesses, err := x86MovtabRemainderRowWitnesses(row)
 			if err != nil || len(witnesses) == 0 {
 				t.Fatal("MOVTAB_REMAINDER_FORMATTER_FEATURE_GAP", row.TableIndex, row.Code, err)
 			}
@@ -49,6 +42,78 @@ func TestX86MovtabRemainderCompleteSourceTransport(t *testing.T) {
 				t.Fatal("source formatter mutated its original capture")
 			}
 		})
+	}
+}
+
+func TestX86MovtabRemainderPaddingAndSourceIdentity(t *testing.T) {
+	for _, original := range movtabRemainderOriginalRows(t) {
+		t.Run(fmt.Sprintf("%d/%s", original.TableIndex, original.Opcode), func(t *testing.T) {
+			want, err := x86MovtabRemainderRowWitnesses(original)
+			if err != nil {
+				t.Fatal("original complete source required", err)
+			}
+			for _, expression := range []string{"", "obj.A" + original.Opcode} {
+				row := original
+				row.OpcodeExpression = expression
+				if got, err := x86MovtabRemainderRowWitnesses(row); err != nil || !reflect.DeepEqual(got, want) {
+					t.Fatal("equivalent source enum spelling changed output", expression, err)
+				}
+			}
+			row := original
+			for len(row.OpBytes) > 0 && (row.OpBytes[len(row.OpBytes)-1] == "0" || row.OpBytes[len(row.OpBytes)-1] == "00") {
+				row.OpBytes = row.OpBytes[:len(row.OpBytes)-1]
+			}
+			if got, err := x86MovtabRemainderRowWitnesses(row); err != nil || !reflect.DeepEqual(got, want) {
+				t.Fatal("implicit fixed-array padding changed source bytes", original, err)
+			}
+			if original.Code != "movLit" {
+				row = original
+				row.OpBytes = append([]string(nil), original.OpBytes...)
+				field := 1
+				if original.Code == "movRegMem2op" || original.Code == "movMemReg2op" {
+					field = 2
+				}
+				row.OpBytes[field] = "9"
+				movtabRequireMetadataRefusal(t, row, "foreign-special-register-field")
+			}
+		})
+	}
+}
+
+func TestX86MovtabRemainderPublicSourceBoundaries(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"", "arm64", "wasm"} {
+		if rows, err := X86MovtabRemainderRows(catalog, arch); err == nil || len(rows) != 0 {
+			t.Fatal("source projection accepted absent or foreign mode", arch)
+		}
+	}
+	for _, mutation := range []string{"duplicate-role", "missing-row", "index", "unknown-code"} {
+		changed := catalog
+		changed.Movtab = append([]X86MoveRule(nil), catalog.Movtab...)
+		switch mutation {
+		case "duplicate-role":
+			changed.Movtab[1] = changed.Movtab[0]
+			changed.Movtab[1].TableIndex = 1
+		case "missing-row":
+			changed.Movtab = changed.Movtab[1:]
+		case "index":
+			changed.Movtab[0].TableIndex = 1
+		case "unknown-code":
+			changed.Movtab[0].Code = "movUnknown"
+		}
+		if rows, err := X86MovtabRemainderRows(changed, "amd64"); err == nil || len(rows) != 0 {
+			t.Fatal("incomplete original table acquired source ownership", mutation)
+		}
+	}
+	for _, original := range catalog.Movtab {
+		if original.Code == "movTLSReg" {
+			if got, err := x86MovtabRemainderRowWitnesses(original); err == nil || len(got) != 0 {
+				t.Fatal("TLS zero payload became successful target-independent bytes", original, got)
+			}
+		}
 	}
 }
 
@@ -114,7 +179,7 @@ func movtabRequireMetadataRefusal(t *testing.T, row X86MoveRule, field string) {
 			t.Errorf("MOVTAB_REMAINDER_METADATA_PANIC row=%d field=%s panic=%v", row.TableIndex, field, caught)
 		}
 	}()
-	if got, err := movtabExistingByteHook(row); err == nil || len(got) != 0 {
+	if got, err := x86MovtabRemainderRowWitnesses(row); err == nil || len(got) != 0 {
 		t.Errorf("MOVTAB_REMAINDER_METADATA_ACCEPTED row=%d field=%s witnesses=%v", row.TableIndex, field, got)
 	}
 }

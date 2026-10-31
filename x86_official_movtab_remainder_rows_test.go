@@ -2,6 +2,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -11,29 +12,35 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/goasmrules"
 )
 
-type movtabSourceJoinForTest struct {
-	row     goasmrules.X86ScalarRMWRow
-	context string
-}
-
-// This is the existing source-ownership join, not a request to expand the
-// shift grammar. The separate remainder producer will join beside it. Its
-// absence must fail a source-ID assertion after real Go observations run,
-// rather than prevent the test binary from compiling.
-func movtabExistingSourceJoin(t *testing.T, catalog goasmrules.X86LegacyCatalog, arch string) map[string]movtabSourceJoinForTest {
+// Separate source producers share an ID union, never numerical permissions
+// or membership in the other producer's grammar.
+func movtabCompleteSourceJoin(t *testing.T, catalog goasmrules.X86LegacyCatalog, arch string) map[string]goasmrules.X86ScalarRMWRow {
 	t.Helper()
 	rows, err := goasmrules.X86ScalarShiftRotateRows(catalog, arch)
 	if err != nil {
 		t.Fatal(err)
 	}
-	joined := map[string]movtabSourceJoinForTest{}
+	joined := map[string]goasmrules.X86ScalarRMWRow{}
 	for _, row := range rows {
 		if strings.HasPrefix(row.ID, "ymovtab/") {
-			joined[row.ID] = movtabSourceJoinForTest{row: row}
+			joined[row.ID] = row
 		}
 	}
 	if len(joined) != 18 {
 		t.Fatal("original double-shift join changed", len(joined))
+	}
+	remainder, err := goasmrules.X86MovtabRemainderRows(catalog, arch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range remainder {
+		if _, duplicate := joined[row.ID]; duplicate {
+			t.Fatal("separate source producers duplicated an original ID", row.ID)
+		}
+		joined[row.ID] = row
+	}
+	if len(remainder) != 92 || len(joined) != 110 {
+		t.Fatal("non-TLS source join changed", len(remainder), len(joined))
 	}
 	return joined
 }
@@ -44,9 +51,10 @@ func TestX86MovtabRemainderCompleteSourceJoin(t *testing.T) {
 		t.Fatal(err)
 	}
 	originals := movtabRemainderOriginalCases(t, catalog)
+	modes := map[string][]goasmrules.X86ScalarRMWRow{}
 	for _, arch := range []string{"amd64", "386"} {
 		t.Run(arch, func(t *testing.T) {
-			joined := movtabExistingSourceJoin(t, catalog, arch)
+			joined := movtabCompleteSourceJoin(t, catalog, arch)
 			count := 0
 			for _, original := range catalog.Movtab {
 				if original.Kind != "encoding" || original.Code == "movDoubleShift" {
@@ -56,19 +64,23 @@ func TestX86MovtabRemainderCompleteSourceJoin(t *testing.T) {
 				id := fmt.Sprintf("ymovtab/%d/%s/%s", original.TableIndex, original.Opcode, original.Code)
 				t.Run(id, func(t *testing.T) {
 					actual, found := joined[id]
+					if original.Code == "movTLSReg" {
+						// These two remain source-byte gaps. Actual OS/shared
+						// profiles and relocation owners are separate evidence.
+						if found {
+							t.Fatal("TLS metadata was counted as a successful source encoding", actual)
+						}
+						instruction := x86PureGPUnknownInstruction(t, original.Opcode+" TLS,AX")
+						if err := x86SourceTLSMoveError(instruction, arch); !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("unbound TLS source lost its actual-context boundary", err)
+						}
+						return
+					}
 					if !found {
 						t.Fatal("MOVTAB_REMAINDER_SOURCE_ID_FEATURE_GAP", id)
 					}
-					if actual.row.ID != id || actual.row.Opcode != original.Opcode {
+					if actual.ID != id || actual.Opcode != original.Opcode {
 						t.Fatal("source join changed the original row identity", original, actual)
-					}
-					if original.Code == "movTLSReg" {
-						// Source-context ownership is explicit. An empty payload is
-						// never a successful encoding or an independent TLS proof.
-						if actual.context == "" || len(actual.row.Witnesses) != 0 || actual.row.ModeFiltered != "" {
-							t.Fatal("TLS context became a zero-byte encoding or a mode exclusion", actual)
-						}
-						return
 					}
 					var expected []x86OfficialPackedCase
 					for _, fixture := range originals {
@@ -80,17 +92,17 @@ func TestX86MovtabRemainderCompleteSourceJoin(t *testing.T) {
 						t.Fatal("source join lost its independent original byte reference", id)
 					}
 					if arch == "386" && strings.Contains(expected[0].witness.Instruction, "CR8") {
-						if actual.row.ModeFiltered == "" || len(actual.row.Witnesses) != 0 {
+						if actual.ModeFiltered == "" || len(actual.Witnesses) != 0 {
 							t.Fatal("386 CR8 original refusal became a successful source encoding", actual)
 						}
 						return
 					}
-					if actual.context != "" || actual.row.ModeFiltered != "" || len(actual.row.Witnesses) != len(expected) {
+					if actual.ModeFiltered != "" || len(actual.Witnesses) != len(expected) {
 						t.Fatal("source witness count, mode or context changed", actual, len(expected))
 					}
-					for index, witness := range actual.row.Witnesses {
+					for index, witness := range actual.Witnesses {
 						fixture := expected[index].witness
-						if witness.Instruction != fixture.Instruction || string(witness.Encoding) != string(fixture.Encoding) {
+						if witness.Instruction != fixture.Instruction || witness.Destination != fixture.Destination || string(witness.Encoding) != string(fixture.Encoding) {
 							t.Fatal("source join changed original Go syntax, first-match or bytes", witness, fixture)
 						}
 					}
@@ -99,7 +111,21 @@ func TestX86MovtabRemainderCompleteSourceJoin(t *testing.T) {
 			if count != 94 {
 				t.Fatal("complete remainder source denominator changed", count)
 			}
+			t.Log("MOVTAB_SOURCE_JOIN proven_rows=92 pending_TLS_source_rows=2 original_double_shift_rows=18")
+			for _, original := range catalog.Movtab {
+				if original.Kind != "encoding" || original.Code == "movDoubleShift" || original.Code == "movTLSReg" {
+					continue
+				}
+				id := fmt.Sprintf("ymovtab/%d/%s/%s", original.TableIndex, original.Opcode, original.Code)
+				modes[arch] = append(modes[arch], joined[id])
+			}
 		})
+	}
+	if !t.Failed() {
+		x86Legacy127SaveIdentity(t, "PLAN9ASM_MOVTAB_REMAINDER_IDENTITY_OUTPUT", struct {
+			Source goasmrules.X86LegacyCatalog
+			Modes  map[string][]goasmrules.X86ScalarRMWRow
+		}{catalog, modes})
 	}
 }
 
@@ -197,6 +223,7 @@ func movtabRemainderOriginalCases(t *testing.T, catalog goasmrules.X86LegacyCata
 				row: fmt.Sprintf("ymovtab/%d/%s/%s", row.TableIndex, row.Opcode, row.Code),
 				witness: goasmrules.X86PackedBinaryWitness{
 					Instruction: row.Opcode + " " + arguments,
+					Destination: arguments[strings.LastIndex(arguments, ",")+1:],
 					Encoding:    append([]byte(nil), code...),
 				},
 			})

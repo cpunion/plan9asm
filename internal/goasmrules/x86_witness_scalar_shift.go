@@ -168,7 +168,7 @@ func x86ScalarShiftWitnesses(opcode string, prefix []byte, op, extension byte, c
 			} else {
 				modrm |= extension << 3
 			}
-			encoded := append(append([]byte(nil), prefix...), op, modrm)
+			encoded := x86SourceModRMBytes(prefix, op, modrm)
 			if strings.HasPrefix(count, "$") && (double || count != "$1") {
 				value, _ := strconv.Atoi(count[1:])
 				encoded = append(encoded, byte(value))
@@ -177,4 +177,10 @@ func x86ScalarShiftWitnesses(opcode string, prefix []byte, op, extension byte, c
 		}
 	}
 	return witnesses
+}
+
+// Source-only ModRM emission. Grammar, register-bank and memory roles must
+// be validated before callers supply the complete prefix/opcode and field.
+func x86SourceModRMBytes(prefix []byte, opcode, modrm byte) []byte {
+	return append(append([]byte(nil), prefix...), opcode, modrm)
 }

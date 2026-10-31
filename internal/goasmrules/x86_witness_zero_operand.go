@@ -49,30 +49,15 @@ func x86ZeroOperandSourceRow(entry X86LegacyOpcode, selected X86LegacyOperand, a
 	// PutOpBytesLit reads to the first zero, including implicit array padding.
 	// Validate the entire original payload, even bytes after that terminator:
 	// SAHF deliberately retains a later, currently unused sequence in Go.
-	literal := make([]byte, 0, len(entry.OpBytes))
-	terminated := false
-	for i, atom := range entry.OpBytes {
-		value, err := strconv.ParseUint(atom, 0, 8)
-		if err != nil {
-			return fail()
-		}
-		if i == 0 {
-			escape := 0
-			if value == 0x0f {
-				escape = 1
-			}
-			if value == 0 || entry.EscapeAdjustment != escape {
-				return fail()
-			}
-		}
-		if value == 0 {
-			terminated = true
-		}
-		if !terminated {
-			literal = append(literal, byte(value))
-		}
+	literal, err := x86SourceLiteralBytes(entry.OpBytes, capacity)
+	if err != nil {
+		return fail()
 	}
-	if !terminated && len(entry.OpBytes) == capacity {
+	escape := 0
+	if literal[0] == 0x0f {
+		escape = 1
+	}
+	if entry.EscapeAdjustment != escape {
 		return fail()
 	}
 	var prefix []byte
@@ -106,4 +91,30 @@ func x86ZeroOperandSourceRow(entry X86LegacyOpcode, selected X86LegacyOperand, a
 		result.Witnesses = []X86ScalarRMWWitness{{Instruction: entry.Opcode, Encoding: append(prefix, literal...)}}
 	}
 	return result, nil
+}
+
+// Fixed-array literals stop at the first zero, including implicit padding.
+// Every source atom remains validated even after emission stops.
+func x86SourceLiteralBytes(atoms []string, capacity int) ([]byte, error) {
+	if capacity <= 0 || len(atoms) == 0 || len(atoms) > capacity {
+		return nil, fmt.Errorf("invalid source literal capacity")
+	}
+	literal := make([]byte, 0, len(atoms))
+	terminated := false
+	for _, atom := range atoms {
+		value, err := strconv.ParseUint(atom, 0, 8)
+		if err != nil {
+			return nil, fmt.Errorf("source literal contains a non-byte atom")
+		}
+		if value == 0 {
+			terminated = true
+		}
+		if !terminated {
+			literal = append(literal, byte(value))
+		}
+	}
+	if len(literal) == 0 || !terminated && len(atoms) == capacity {
+		return nil, fmt.Errorf("empty or unterminated source literal")
+	}
+	return literal, nil
 }
