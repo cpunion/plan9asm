@@ -35,11 +35,15 @@ func TestAMD64RegisterVoidKeepsDeclaredInputsAndFullFlow(t *testing.T) {
 				declaration := "func view(" + strings.TrimSuffix(strings.Repeat(width.typ+",", index+1), ",") + ")\n"
 				body := fmt.Sprintf("%s %s,R12", width.move, register)
 				fn, sig, _ := amd64RegisterVoidSource(t, declaration, body)
-				seen := 0
+				seen, shapes := 0, 0
 				err := checkAMD64RegisterResultInitialization(fn, sig,
 					func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
 						if ins.Raw != body {
 							t.Fatal("unexpected source effect in the input counterexample", ins.Raw)
+						}
+						if state.shapeOnly {
+							shapes++
+							return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
 						}
 						seen++
 						for carrier, reg := range registers {
@@ -57,8 +61,8 @@ func TestAMD64RegisterVoidKeepsDeclaredInputsAndFullFlow(t *testing.T) {
 						}
 						return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
 					})
-				if err != nil || seen != 1 {
-					t.Fatal("ordinary Void must consume its actual input/effect without an AX result", seen, err)
+				if err != nil || seen != 1 || shapes != 1 {
+					t.Fatal("ordinary Void must consume both source shape and actual input/effect", seen, shapes, err)
 				}
 			})
 			cases++
@@ -70,9 +74,13 @@ func TestAMD64RegisterVoidKeepsDeclaredInputsAndFullFlow(t *testing.T) {
 
 	t.Run("pointer-is-not-numerical", func(t *testing.T) {
 		fn, sig, _ := amd64RegisterVoidSource(t, "func view(input *uint64)\n", "MOVQ AX,BX\nMOVQ BX,CX")
-		seen := 0
+		seen, shapes := 0, 0
 		err := checkAMD64RegisterResultInitialization(fn, sig,
 			func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+				if state.shapeOnly {
+					shapes++
+					return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
+				}
 				register := AX
 				if seen != 0 {
 					register = BX
@@ -84,16 +92,20 @@ func TestAMD64RegisterVoidKeepsDeclaredInputsAndFullFlow(t *testing.T) {
 				seen++
 				return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
 			})
-		if err != nil || seen != 2 {
-			t.Fatal("Void pointer copies require the complete original flow", seen, err)
+		if err != nil || seen != 2 || shapes != 2 {
+			t.Fatal("Void pointer copies require the complete original source shape and flow", seen, shapes, err)
 		}
 	})
 
 	t.Run("no-AX-result", func(t *testing.T) {
 		fn, sig, _ := amd64RegisterVoidSource(t, "func view()\n", "MOVQ $7,BX")
-		seen := 0
+		seen, shapes := 0, 0
 		err := checkAMD64RegisterResultInitialization(fn, sig,
 			func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+				if state.shapeOnly {
+					shapes++
+					return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
+				}
 				position, _, _ := x86ResultGP(AX, 8, arch)
 				if state.gp[position] != 0 {
 					t.Fatal("the Void entry fabricated AX initialization")
@@ -101,8 +113,8 @@ func TestAMD64RegisterVoidKeepsDeclaredInputsAndFullFlow(t *testing.T) {
 				seen++
 				return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
 			})
-		if err != nil || seen != 1 {
-			t.Fatal("Void has no AX return obligation but retains the source effect", seen, err)
+		if err != nil || seen != 1 || shapes != 1 {
+			t.Fatal("Void has no AX result but retains both source shape and reaching effects", seen, shapes, err)
 		}
 	})
 }
