@@ -63,6 +63,16 @@ restore 3-to-3 against `652b6bae0`; no whole-Translate speedup is established.
 The functional execution retains its original head through an explicit source
 dependency bridge, rather than being relabeled as a fresh `db1c0114d` run.
 
+The official-corpus gate intentionally changes one isolated form:
+`PMOVMSKB mmx,gpr64` now requires context instead of using an invented zero
+MMX input. An added owner passes 169 nodes per SDK across all 168 ordinary
+bank/destination/mode pairs: missing inputs or EMMS fail, and fully initialized
+sequences with EMMS pass. Eight SDK source versions, five architectures and
+both old/new scanners produce 80 reports. All 32 non-amd64 pairs are identical;
+each amd64 pair changes only this form and its derived summaries. Only the
+three corresponding baseline fields change per version. Original validators
+pass all eight corrected profiles; earlier failed gates remain failed evidence.
+
 Accepted `652b6bae0` retains all eight XADD/XCHG spellings and eighteen new
 source rows. Bare XADD has no LOCK prefix; explicit LOCK and memory XCHG keep
 their distinct ordering. The shared guard rejects AH/REX conflicts.
