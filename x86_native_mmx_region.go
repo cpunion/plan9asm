@@ -39,15 +39,18 @@ func x86NativeMMXInstruction(ins Instr, arch string) (x86NativeMMXSite, bool, er
 		return site, true, nil
 	}
 	if form, known, err := x86MMXWordProperties(ins, arch); known {
-		site.word = &form
+		native := form
+		site.word = &native
 		return site, true, err
 	}
 	if form, known, err := x86LegacyMMXReadProperties(ins, arch); known && form.mmx {
-		site.integer = &form
+		native := form
+		site.integer = &native
 		return site, true, err
 	}
 	if spec, known, err := x86ImplicitMaskMoveProperties(ins.Op, ins, arch); known && spec.byteWidth == 8 {
-		site.maskStore = &spec
+		native := spec
+		site.maskStore = &native
 		return site, true, err
 	}
 	if form, known, err := x86MoveMaskProperties(ins.Op, ins, arch); known && form.byteWidth == 8 {
