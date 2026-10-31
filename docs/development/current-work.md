@@ -7,43 +7,53 @@ translation efficiency while preserving all five architecture gates. Read
 
 ## Published CI and local revisions
 
-[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. The
-last accepted `d905e3682` [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41082550177)
-completed naturally on attempt one: 325/325 successful jobs, no reruns or job
-skips. Fresh acceptance joins all 286 source artifacts, 240 partitions,
-Windows/race raw outcomes for 22 packages each and 22 profiles: 88.2% statements
-and 93.40% patch coverage. Test and hardware skips remain separate from passes.
-Both existing threads are resolved; no formal approval is recorded.
+[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. Its last
+completed [round](https://github.com/xgo-dev/plan9asm/actions/runs/41156356223),
+at `4d4cc5473`, recovered to 325/325 successful jobs. Preserve the initial
+323 successes and two failures: one CMOV original-input read failed its identity
+or extent check, and one dependent collector rejected that source. One requested
+source rerun retained 314 original executions and reran the source plus ten
+automatic collectors. The recovered CMOV root and all three LLVM pipelines
+actually passed without skips. The original read failure's cause is unresolved.
+Coverage is 88.2% statements and 95.21% patch against 87.83%; complete independent
+artifact/profile acceptance remains separate. Both review threads are resolved;
+no formal approval is recorded. A newer batch needs its own CI and review.
 
-The newer `2e85591e3` [round](https://github.com/xgo-dev/plan9asm/actions/runs/41110443099)
-encountered account cache-egress exhaustion and Go installation timeouts before
-tests ran. Preserve that round's failures. Shared Go setup disables remote
-Actions caches; writable job-local caches and exact compiler verification remain.
-The repair requires its own complete CI rather than inheriting earlier results.
-Published repair `9e48d6747` completed its first
+Earlier `1f6fda590` finished with 270 successful and 55 failed jobs: four
+stack-role roots failed in eleven source jobs each, followed by eleven collector
+failures. The `4d4cc5473` repair preserves bare AUTO names and separates actual
+pseudo-SP syntax from unresolved physical-register expressions. Failed rounds
+are not relabeled. Accepted `9e48d6747` completed its first
 [round](https://github.com/xgo-dev/plan9asm/actions/runs/41124480505) naturally
-with 325/325 successful jobs and no reruns. Complete raw/profile/Codecov
-acceptance remains separate from the job conclusion.
+with 325/325 successful jobs, full artifact/raw/profile acceptance, 88.2%
+statements and 94.85% patch coverage. Remote Actions caches stay disabled;
+job-local caches, installation verification and deadlines remain required.
 
-The historical
-`d6cb9245cd` [CI round](https://github.com/xgo-dev/plan9asm/actions/runs/41055685183)
-first ended with 315 successful and ten failed jobs. Seven Go 1.21 source jobs
-lost their runners; one CLI collector lost an artifact download, producing two
-dependent collector failures. Recovery completed with 325/325 successful jobs:
-307 original successful jobs remain valid and 18 jobs actually reran. Independent
-acceptance joins all 286 source artifacts, 240 partitions, Windows/race raw
-outcomes and 22 coverage profiles: 88.1% statements and 93.44% patch coverage.
-The initial failures remain part of the evidence.
+## Current family batch
 
-Historical `70ced1b565` completed its own
-[round](https://github.com/xgo-dev/plan9asm/actions/runs/41032133785) with 325/325
-successful jobs, 88.1% total and 92.52% patch coverage. At D6, both review
-threads were resolved and no formal approval was recorded. Historical results
-do not certify another head.
+The integrated code snapshot is `76e7cb2c4`; later documentation alone does not
+change its Go sources. Exchange covers all eight XADD/XCHG spellings and eighteen
+new source rows. Bare XADD retains no LOCK prefix; explicit LOCK and memory
+XCHG retain their distinct ordering. The shared guard rejects AH/REX conflicts.
 
-Functional `aff58904d` adds x87 MOVE, literal SIMD and scalar source joins,
-published at `d905e3682`.
-Each later publication requires its own cloud CI, coverage and review.
+Scalar signed conversions join all twelve rows of `yxcvfl/yxcvfq/yxcvlf/yxcvqf`
+through the existing legacy media encoder. Both SDKs pass 231 focused/object
+nodes, including all three APIs, five x86 targets and thirty O0/O2 objects;
+7,755 existing controls; and 17,175/17,198 complete rule nodes. All prior 46
+snapshots remain byte-exact; two new snapshots establish the inventory below.
+These source joins add no numerical, memory, runtime or hardware authority.
+
+Ordinary ABIInternal Void entries retain complete argument, source-shape and
+reaching-state checks. Only the AX result obligation at RET becomes optional;
+Void with declared result fields is rejected. Both SDKs pass all 67 focused
+nodes and 1,167 prior register/argument controls. Legacy public logical FP/SP
+admissions remain a separate entry-contract gap. Local Linux execution of the
+additional fifteenth scalar-move kernel is unexecuted because Docker startup
+failed; it is not a pass. Existing required Linux CI, including minimum Go,
+must run `TestCrossLinuxRuntimeMatrixX86ScalarMoveNativeResultsAndFaults` and
+all six pipeline outputs: fifteen kernels, 1,920 numerical outcomes, 180 fault
+outcomes and two tripwires each. Keep failed startup evidence and unknown owned
+container cleanup separate from test results.
 
 ## Qualified local batches
 
@@ -160,13 +170,13 @@ An earlier 12-sample incomplete overlay attempt remains excluded, not erased.
 
 ## Inventory and semantic boundaries
 
-At `2ec2e7fa0`, the independently joined source inventory has 57 overlapping
-family views and 44 identity snapshots:
+At `76e7cb2c4`, the independently joined source inventory has 59 overlapping
+family views and 48 identity snapshots:
 
 | SDK | AVX | optab | ymovtab | Total joined | Legacy joined / denominator | Unjoined legacy |
 |---|---:|---:|---:|---:|---:|---:|
-| Current | 3,568 | 915 | 18 | 4,501 | 933 / 1,418 | 485 |
-| Minimum | 3,568 | 916 | 18 | 4,502 | 934 / 1,417 | 483 |
+| Current | 3,568 | 945 | 18 | 4,531 | 963 / 1,418 | 455 |
+| Minimum | 3,568 | 946 | 18 | 4,532 | 964 / 1,417 | 453 |
 
 The denominator excludes exactly 13 Go Zpseudo rows and four Zbyte data rows;
 their identities remain retained separately. The ymovtab sentinel also remains
