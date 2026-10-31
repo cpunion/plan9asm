@@ -69,6 +69,25 @@ func TestX86ScalarMoveAliasesOriginalGoTablesAndBytes(t *testing.T) {
 }
 
 func TestX86ScalarMoveAliasesByteEffectsAndPreservedRoles(t *testing.T) {
+	for _, operation := range []string{"MOVQL R8,BX", "MOVQL AX,(R8)", "MOVLQZX R8,BX", "MOVLQZX (R8),BX"} {
+		instruction := x86ScalarLaneInstruction(t, operation)
+		if _, known, err := x86TypedInstructionByteEffect(instruction.Op, instruction, "386"); known && err == nil {
+			t.Error("386 scalar alias acquired an amd64 register/address bank", operation)
+		}
+		if after := x86ResultCallerAddressesAfter(instruction, [16]bool{true}, nil, "386"); after != [16]bool{} {
+			t.Error("invalid mode32 alias retained a caller-address fact", operation, after)
+		}
+		goAssemblerOracleOutput(t, "386", "TEXT mode(SB),4,$0-0\n"+operation+"\nRET\n", "", false)
+	}
+	for _, offset := range []string{"2147483648", "4294967295"} {
+		for _, operation := range []string{"MOVQL AX," + offset + "(SI)", "MOVLQZX " + offset + "(SI),BX"} {
+			instruction := x86ScalarLaneInstruction(t, operation)
+			if _, known, err := x86TypedInstructionByteEffect(instruction.Op, instruction, "386"); !known || err != nil {
+				t.Error("SCALAR_MOVE_ALIAS_UNSIGNED_OFFSET_GAP", operation, known, err)
+			}
+			goAssemblerOracleOutput(t, "386", "TEXT offset(SB),4,$0-0\n"+operation+"\nRET\n", "", true)
+		}
+	}
 	for _, arch := range []string{"amd64", "386"} {
 		for _, operation := range []string{"MOVQL AX,BX", "MOVQL AX,0(SI)", "MOVLQZX AX,BX", "MOVLQZX 0(SI),BX"} {
 			instruction := x86ScalarLaneInstruction(t, operation)
