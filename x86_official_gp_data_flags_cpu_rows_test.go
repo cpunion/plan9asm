@@ -76,18 +76,19 @@ func gpDataFlagsCPU100OriginalCases(t *testing.T, catalog goasmrules.X86LegacyCa
 			}
 			var operands [][2]string
 			switch row.ZCase {
-			case "Zib_":
+			case "Zib_", "Zil_":
 				operands = append(operands, [2]string{"$128", accumulator})
-			case "Zibo_m":
+			case "Zibo_m", "Zilo_m":
 				immediate := "$128"
 				if row.Classes[0] == "Yi8" {
 					immediate = "$1"
 				}
 				operands = append(operands, [2]string{immediate, destination}, [2]string{immediate, "0(SI)"})
 			case "Zr_m":
-				if !strings.HasPrefix(entry.Opcode, "MOVNTI") {
-					operands = append(operands, [2]string{source, destination})
-				}
+				// The Go table also admits a MOVNTI register destination.
+				// Like pair CAS below, that CPU-invalid encoding is retained
+				// only as a source observation, never a numerical positive.
+				operands = append(operands, [2]string{source, destination})
 				operands = append(operands, [2]string{source, "0(SI)"})
 			case "Zm_r":
 				// Register/register matches the earlier direction for the
@@ -118,8 +119,8 @@ func gpDataFlagsCPU100OriginalCases(t *testing.T, catalog goasmrules.X86LegacyCa
 				}
 				encoding = append(encoding, atoms[cursor])
 				switch row.ZCase {
-				case "Zib_":
-				case "Zibo_m", "Zo_m":
+				case "Zib_", "Zil_":
+				case "Zibo_m", "Zilo_m", "Zo_m":
 					if cursor+1 >= len(atoms) || atoms[cursor+1] > 7 {
 						t.Fatal("independent opcode extension changed", entry, row)
 					}
@@ -177,7 +178,7 @@ func gpDataFlagsCPU100OriginalCases(t *testing.T, catalog goasmrules.X86LegacyCa
 			}
 		}
 	}
-	if rows != 99 && rows != 100 || len(cases) != rows+64 {
+	if rows != 99 && rows != 100 || len(cases) != rows+66 {
 		t.Fatal("independent complete GP source formats changed", rows, len(cases))
 	}
 	return cases
@@ -238,7 +239,7 @@ func TestX86GPDataFlagsCPUOriginalGoCompleteBytesAndModes(t *testing.T) {
 			}
 		})
 	}
-	if observations != 2*len(originals) || refused != 37 || accepted != observations-37 {
+	if observations != 2*len(originals) || refused != 38 || accepted != observations-38 {
 		t.Fatal("complete GP source mode observation matrix changed", observations, accepted, refused)
 	}
 	t.Logf("GP_DATA_FLAGS_CPU_ACTUAL_GO observations=%d accepted=%d exact_mode_refusals=%d", observations, accepted, refused)

@@ -2,6 +2,7 @@ package goasmrules
 
 import (
 	"fmt"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -36,7 +37,7 @@ func gpDataFlagsCPUOriginalEntries(t *testing.T) []X86LegacyOpcode {
 	}
 	schemas := map[string][]string{
 		"yxorb":   {"Zib_/1/Yi32,Yal", "Zibo_m/2/Yi32,Ymb", "Zr_m/1/Yrb,Ymb", "Zm_r/1/Ymb,Yrb"},
-		"ytestl":  {"Zib_/1/Yi32,Yax", "Zibo_m/2/Yi32,Yml", "Zr_m/1/Yrl,Yml", "Zm_r/1/Yml,Yrl"},
+		"ytestl":  {"Zil_/1/Yi32,Yax", "Zilo_m/2/Yi32,Yml", "Zr_m/1/Yrl,Yml", "Zm_r/1/Yml,Yrl"},
 		"ybtl":    {"Zibo_m/2/Yi8,Yml", "Zr_m/1/Yrl,Yml"},
 		"ybswap":  {"Z_rp/2/Yrl"},
 		"ym_rl":   {"Zm_r/1/Ym,Yrl"},
@@ -100,7 +101,7 @@ func TestX86GPDataFlagsCPUExistingTransportCompleteFamily(t *testing.T) {
 					witnesses, err := x86ScalarRMWRowWitnesses(entry, row, arch)
 					want := 2
 					if entry.Ytab == "yrdrand" || entry.Ytab == "ym_rl" || entry.Ytab == "ybswap" ||
-						strings.HasPrefix(entry.Opcode, "MOVNTI") || row.ZCase == "Zib_" || row.ZCase == "Zm_r" {
+						row.ZCase == "Zib_" || row.ZCase == "Zil_" || row.ZCase == "Zm_r" {
 						want = 1
 					}
 					if err != nil || len(witnesses) != want {
@@ -114,6 +115,16 @@ func TestX86GPDataFlagsCPUExistingTransportCompleteFamily(t *testing.T) {
 					}
 					if before != fmt.Sprintf("%#v", entry) {
 						t.Fatal("cold formatter modified original source")
+					}
+					if entry.Ytab == "ycrc32b" || entry.Ytab == "ycrc32l" {
+						implicit := entry
+						// Removing this explicit zero does not change the full
+						// [31]byte Go array: its remaining cells are already zero.
+						implicit.OpBytes = append([]string(nil), entry.OpBytes[:len(entry.OpBytes)-1]...)
+						got, err := x86ScalarRMWRowWitnesses(implicit, row, arch)
+						if err != nil || !reflect.DeepEqual(got, witnesses) {
+							t.Fatal("GP_DATA_FLAGS_CPU_IMPLICIT_ZERO_EQUIVALENCE_GAP", entry.Opcode, row.RowIndex, arch, err)
+						}
 					}
 				})
 			}
@@ -188,7 +199,13 @@ func TestX86GPDataFlagsCPUCompleteOriginalMetadataBoundaries(t *testing.T) {
 					case "empty-payload":
 						changed.OpBytes = nil
 					case "truncated-payload":
-						changed.OpBytes = changed.OpBytes[:len(changed.OpBytes)-1]
+						end := len(changed.OpBytes) - 1
+						if entry.Ytab == "ycrc32b" || entry.Ytab == "ycrc32l" {
+							// The final zero alone is implicit-padding equivalent;
+							// remove an actual mandatory opcode byte as well.
+							end--
+						}
+						changed.OpBytes = changed.OpBytes[:end]
 					}
 					func() {
 						defer func() {
