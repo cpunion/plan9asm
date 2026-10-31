@@ -145,10 +145,11 @@ func x86LegacyExplicitSIMDEncoding(entry X86LegacyOpcode, row X86LegacyOperand) 
 		if len(atoms) != 2 {
 			return fail()
 		}
-		if entry.Prefix == "Px" {
+		mandatory := map[string]byte{"PD": 0x66, "SD": 0xf2, "SS": 0xf3}[strings.TrimPrefix(entry.Opcode, "CMP")]
+		if entry.Prefix == "Px" && mandatory != 0 && atoms[0] == mandatory {
 			prefix = []byte{atoms[0], 0x0f}
 			selected = atoms[1:]
-		} else if entry.Prefix == "Pm" && atoms[1] == 0 {
+		} else if entry.Prefix == "Pm" && entry.Opcode == "CMPPS" && atoms[1] == 0 {
 			prefix = []byte{0x0f}
 			selected = atoms[:1]
 		} else {
