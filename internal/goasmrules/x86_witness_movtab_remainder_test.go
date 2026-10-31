@@ -117,6 +117,43 @@ func TestX86MovtabRemainderPublicSourceBoundaries(t *testing.T) {
 	}
 }
 
+func TestX86MovtabRemainderCompleteTableSentinel(t *testing.T) {
+	catalog, err := LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mutation := range []string{
+		"final-payload", "final-from", "final-code", "final-opcode",
+		"shift-sentinel", "TLS-sentinel", "shift-reserved", "TLS-reserved",
+	} {
+		t.Run(mutation, func(t *testing.T) {
+			changed := catalog
+			changed.Movtab = append([]X86MoveRule(nil), catalog.Movtab...)
+			switch mutation {
+			case "final-payload":
+				changed.Movtab[112].OpBytes = []string{"0x90"}
+			case "final-from":
+				changed.Movtab[112].From = "Yrl"
+			case "final-code":
+				changed.Movtab[112].Code = "movUnknown"
+			case "final-opcode":
+				changed.Movtab[112].Opcode, changed.Movtab[112].OpcodeExpression = "MOVL", "AMOVL"
+			case "shift-sentinel":
+				changed.Movtab[92].Kind = "sentinel"
+			case "TLS-sentinel":
+				changed.Movtab[110].Kind = "sentinel"
+			case "shift-reserved":
+				changed.Movtab[92].Kind = "reserved"
+			case "TLS-reserved":
+				changed.Movtab[110].Kind = "reserved"
+			}
+			if got, err := X86MovtabRemainderRows(changed, "amd64"); err == nil || len(got) != 0 {
+				t.Fatal("MOVTAB_COMPLETE_TABLE_SENTINEL_ACCEPTED", mutation, len(got), err)
+			}
+		})
+	}
+}
+
 // Initially the old hook rejects these different source families wholesale.
 // These controls become new-formatter metadata tests when that independent
 // formatter is wired in; their initial PASS is not a metadata defect repair.
