@@ -45,6 +45,11 @@ func x86PackedIntegerCompareOriginalGoDriver(t *testing.T, declaration, assembly
 	command := exec.CommandContext(ctx, driver, arguments...)
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOARCH=amd64", "CGO_ENABLED=0", "GOMAXPROCS=2")
+	if buildOnly {
+		// These native Linux fixtures may contain Unix fault probes. Compile
+		// their actual target independently of the host; never execute them.
+		command.Env = append(command.Env, "GOOS=linux")
+	}
 	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("actual original Go packed compare driver (build-only=%t): %v\n%s", buildOnly, err, output)
 	}

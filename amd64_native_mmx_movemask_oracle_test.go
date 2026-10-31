@@ -138,6 +138,14 @@ func TestX86NativeMMXMoveMaskRuntimeOriginalGoBuildOnly(t *testing.T) {
 	}
 }
 
+func TestX86NativeMMXMoveMaskBuildOnlyUsesLinuxFaultProfile(t *testing.T) {
+	// Exercise the exact Unix fault oracle on a Windows build host profile.
+	// The parent test still runs normally; only its child target is changed.
+	t.Setenv("GOOS", "windows")
+	declarations, source, _, tests := x86MMXMoveMaskOracleSources()
+	x86PackedIntegerCompareOriginalGoDriver(t, declarations, source, tests, true)
+}
+
 func x86NativeMMXMoveMaskRuntime(t *testing.T) {
 	declarations, source, c, tests := x86MMXMoveMaskOracleSources()
 	t.Run("original-go", func(t *testing.T) { x86PackedIntegerCompareRunOriginalGo(t, declarations, source, tests) })
