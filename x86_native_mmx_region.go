@@ -51,7 +51,9 @@ func x86NativeMMXInstruction(ins Instr, arch string) (x86NativeMMXSite, bool, er
 		return site, true, err
 	}
 	if form, known, err := x86MoveMaskProperties(ins.Op, ins, arch); known && form.byteWidth == 8 {
-		site.moveMask = &form
+		// Only the matching MMX site needs an escaping form allocation.
+		native := form
+		site.moveMask = &native
 		return site, true, err
 	}
 	return site, false, nil
