@@ -756,7 +756,12 @@ func goAMD64FrameReadBound(name string, maximum int64) (_ []byte, readErr error)
 	}
 	after, err := os.Lstat(name)
 	if err != nil || !os.SameFile(info, after) || !after.Mode().IsRegular() || int64(len(data)) != info.Size() {
-		return nil, goAMD64FrameContext("input role/extent changed while reading")
+		afterSize, sameFile, regular := int64(-1), false, false
+		if err == nil {
+			afterSize, sameFile, regular = after.Size(), os.SameFile(info, after), after.Mode().IsRegular()
+		}
+		return nil, goAMD64FrameContext("input role/extent changed while reading %q: opened=%d read=%d after=%d same_file=%t regular=%t after_stat=%v",
+			filepath.Base(name), info.Size(), len(data), afterSize, sameFile, regular, err)
 	}
 	return data, nil
 }
