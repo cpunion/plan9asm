@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"bytes"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -243,6 +244,66 @@ func TestX86GPDataFlagsCPUOriginalGoCompleteBytesAndModes(t *testing.T) {
 		t.Fatal("complete GP source mode observation matrix changed", observations, accepted, refused)
 	}
 	t.Logf("GP_DATA_FLAGS_CPU_ACTUAL_GO observations=%d accepted=%d exact_mode_refusals=%d", observations, accepted, refused)
+	// Every production witness is joined to the independently assembled
+	// original ID, instruction, byte encoding and destination. Retain mode
+	// refusals as rows without promoting them to source-encoding witnesses.
+	modes := map[string][]goasmrules.X86ScalarRMWRow{}
+	for _, arch := range []string{"amd64", "386"} {
+		rows, err := goasmrules.X86GPDataFlagsCPURows(catalog, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := map[string]x86OfficialPackedCase{}
+		for _, original := range originals {
+			name := strings.Fields(original.witness.Instruction)[0]
+			if arch == "386" && prefixes[name] == "Pw" {
+				continue
+			}
+			key := original.row + "/" + original.witness.Instruction
+			if _, duplicate := expected[key]; duplicate {
+				t.Fatal("duplicate independent original source witness", key)
+			}
+			expected[key] = original
+		}
+		seen, filtered := map[string]bool{}, 0
+		for _, row := range rows {
+			if seen[row.ID] {
+				t.Fatal("duplicate original source row", row.ID)
+			}
+			seen[row.ID] = true
+			if row.ModeFiltered != "" {
+				if arch != "386" || prefixes[row.Opcode] != "Pw" || len(row.Witnesses) != 0 {
+					t.Fatal("source mode refusal was widened", arch, row)
+				}
+				filtered++
+				continue
+			}
+			for _, witness := range row.Witnesses {
+				key := row.ID + "/" + witness.Instruction
+				original, found := expected[key]
+				if !found || witness.Destination != original.witness.Destination ||
+					!bytes.Equal(witness.Encoding, original.witness.Encoding) {
+					t.Fatal("production source view differs from actual-Go ID/bytes/direction", arch, key, witness, original)
+				}
+				delete(expected, key)
+			}
+		}
+		wantFiltered := 0
+		if arch == "386" {
+			wantFiltered = 22
+		}
+		if len(rows) != 99 && len(rows) != 100 || filtered != wantFiltered || len(expected) != 0 {
+			t.Fatal("incomplete whole GP source join", arch, len(rows), filtered, len(expected))
+		}
+		modes[arch] = rows
+	}
+	if _, err := goasmrules.X86GPDataFlagsCPURows(catalog, "arm64"); err == nil {
+		t.Fatal("foreign source mode accepted")
+	}
+	x86Legacy127SaveIdentity(t, "PLAN9ASM_GP_DATA_FLAGS_CPU_IDENTITY_OUTPUT", struct {
+		Source goasmrules.X86LegacyCatalog
+		Modes  map[string][]goasmrules.X86ScalarRMWRow
+	}{catalog, modes})
 }
 
 func TestX86GPDataFlagsCPUOriginalGoImmediateClassBoundaries(t *testing.T) {
