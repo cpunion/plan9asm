@@ -185,7 +185,11 @@ func TestX86NativeMMXMoveMaskRoleBoundaries(t *testing.T) {
 			"PMOVMSKB M0,AX\nEMMS",                              // No physical source definition.
 			"MOVQ a+0(FP),M0\nPMOVMSKB M0,AX",                   // No real tag cleanup.
 			"MOVQ a+0(FP),M0\nPMOVMSKB M0,AX\nMOVL $1,CX\nEMMS", // Interrupted physical region.
+			"MOVL $0,AX\nCMPL AX,AX\nMOVQ a+0(FP),M0\nPMOVMSKB M0,AX\nEMMS\nPUSHFQ\nPOPQ AX", // Undefined system FLAGS bits are not an integer.
 		} {
+			if arch == "386" {
+				body = strings.ReplaceAll(strings.ReplaceAll(body, "PUSHFQ", "PUSHFL"), "POPQ AX", "POPL AX")
+			}
 			_, _, _, source := x86ResultInitializationFixture(t, arch, "func Value(a uint64) uint32", body+"\nMOVL AX,ret+8(FP)\nRET")
 			if _, err := x86ScalarLiteralGoListing(t, arch, source); err != nil {
 				t.Fatal("negative is not real original Go", err)

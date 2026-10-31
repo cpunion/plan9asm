@@ -18,7 +18,7 @@ func x86MMXMoveMaskOracleSources() (string, string, string, string) {
 			name := fmt.Sprintf("MMXMask%d", len(names))
 			names = append(names, name)
 			fmt.Fprintf(&declarations, "func %s(p *[8]byte,out *[24]byte)\n", name)
-			fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-16\nMOVQ p+0(FP),SI\nMOVQ out+8(FP),DI\nMOVQ $-1,%s\nMOVL $0,AX\nCMPL AX,AX\nMOVQ (SI),M%d\nPMOVMSKB M%d,%s\nEMMS\nMOVQ %s,0(DI)\nPUSHFQ\nPOPQ AX\nMOVQ AX,8(DI)\nRET\n", name, destination, bank, bank, destination, destination)
+			fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-16\nMOVQ p+0(FP),SI\nMOVQ out+8(FP),DI\nMOVQ $-1,%s\nMOVL $0,AX\nCMPL AX,AX\nMOVQ (SI),M%d\nPMOVMSKB M%d,%s\nEMMS\nMOVQ %s,0(DI)\nSETCS AL\nMOVB AL,8(DI)\nSETPS AL\nMOVB AL,9(DI)\nSETEQ AL\nMOVB AL,10(DI)\nSETMI AL\nMOVB AL,11(DI)\nSETOS AL\nMOVB AL,12(DI)\nLAHF\nMOVB AH,13(DI)\nRET\n", name, destination, bank, bank, destination, destination)
 			fmt.Fprintf(&c, "extern void %s(const uint8_t*,uint8_t*);\n", name)
 		}
 	}
@@ -32,10 +32,10 @@ static unsigned reference(const uint8_t *p) {
 static int check(unsigned k,const uint8_t *p,uint8_t *out) {
     unsigned want=reference(p);
     kernels[k](p,out);
-    uint64_t mask,flags;
-    memcpy(&mask,out,8); memcpy(&flags,out+8,8);
-    if(mask!=want || (flags&0x8d5)!=0x44) {
-        fprintf(stderr,"mask k=%u got=%llx want=%x flags=%llx\n",k,(unsigned long long)mask,want,(unsigned long long)flags);
+    uint64_t mask;const uint8_t flags[]={0,1,1,0,0,0x46};
+    memcpy(&mask,out,8);
+    if(mask!=want || memcmp(out+8,flags,sizeof(flags))) {
+        fprintf(stderr,"mask/FLAGS k=%u got=%llx want=%x\n",k,(unsigned long long)mask,want);
         return 1;
     }
     _Alignas(16) uint8_t state[512];
@@ -52,10 +52,10 @@ int main(void) {
             for(unsigned j=0;j<8;j++) input[j]=((pattern>>j)&1)*128+(low?127:0);
             memcpy(before,input,8); memset(out,0xa5,sizeof(out));
             if(check(k,input,out) || memcmp(input,before,8)) return 1;
-            for(unsigned j=16;j<24;j++) if(out[j]!=0xa5) return 1;
+            for(unsigned j=14;j<24;j++) if(out[j]!=0xa5) return 1;
             uint8_t alias[32];memset(alias,0xa5,sizeof(alias));memcpy(alias+1,input,8);
             if(check(k,alias+1,alias+1) || alias[0]!=0xa5) return 1;
-            for(unsigned j=17;j<32;j++) if(alias[j]!=0xa5) return 1;
+            for(unsigned j=15;j<32;j++) if(alias[j]!=0xa5) return 1;
         }
         long page=sysconf(_SC_PAGESIZE);
         uint8_t *mapping=mmap(0,2*page,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
@@ -82,7 +82,7 @@ func check(t *testing.T,k int,p *[8]byte,out *[24]byte) {
     for i,b:=range p { want|=uint64(b>>7)<<uint(i) }
     kernels[k](p,out)
     if got:=binary.LittleEndian.Uint64(out[:8]);got!=want {t.Fatalf("k=%d got=%x want=%x",k,got,want)}
-    if flags:=binary.LittleEndian.Uint64(out[8:16])&0x8d5;flags!=0x44 {t.Fatalf("k=%d flags=%x",k,flags)}
+    flags:=[6]byte{0,1,1,0,0,0x46};for i,want:=range flags {if out[8+i]!=want {t.Fatalf("k=%d flag=%d got=%x want=%x",k,i,out[8+i],want)}}
 }
 func TestOriginalMMXMoveMasks(t *testing.T) {
     for k,run:=range kernels {
@@ -92,11 +92,11 @@ func TestOriginalMMXMoveMasks(t *testing.T) {
             before:=input;for j:=range out {out[j]=0xa5}
             check(t,k,&input,&out)
             if input!=before {t.Fatal("input changed",k)}
-            for _,b:=range out[16:] {if b!=0xa5{t.Fatal("output extent",k)}}
+            for _,b:=range out[14:] {if b!=0xa5{t.Fatal("output extent",k)}}
             var alias [32]byte;for j:=range alias{alias[j]=0xa5};copy(alias[1:9],input[:])
             check(t,k,(*[8]byte)(unsafe.Pointer(&alias[1])),(*[24]byte)(unsafe.Pointer(&alias[1])))
             if alias[0]!=0xa5 {t.Fatal("alias prefix",k)}
-            for _,b:=range alias[17:] {if b!=0xa5{t.Fatal("alias suffix",k)}}
+            for _,b:=range alias[15:] {if b!=0xa5{t.Fatal("alias suffix",k)}}
         }}
         page:=os.Getpagesize()
         mapping,err:=syscall.Mmap(-1,0,2*page,syscall.PROT_READ|syscall.PROT_WRITE,syscall.MAP_PRIVATE|syscall.MAP_ANON)

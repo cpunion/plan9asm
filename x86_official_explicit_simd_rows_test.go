@@ -218,3 +218,69 @@ func TestX86LegacyExplicitSIMDOriginalGoBytesAndModes(t *testing.T) {
 		})
 	}
 }
+
+func TestX86LegacyExplicitSIMDOriginalImmediateBoundaries(t *testing.T) {
+	catalog, err := goasmrules.LoadX86LegacyRules(runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	originals := explicitSIMD27OriginalCases(t, catalog)
+	for _, arch := range []string{"amd64", "386"} {
+		t.Run(arch, func(t *testing.T) {
+			seen := map[string]bool{}
+			var positives []x86OfficialPackedCase
+			for _, fixture := range originals {
+				instruction := fixture.witness.Instruction
+				name := strings.Fields(instruction)[0]
+				if seen[fixture.row] || !strings.Contains(instruction, "$") || arch == "386" && (name == "PEXTRQ" || name == "PINSRQ") {
+					continue
+				}
+				seen[fixture.row] = true
+				values := []int{0, 255, -1, 256}
+				if name == "EXTRACTPS" || name == "SHA1RNDS4" {
+					values = []int{0, 3, -1, 4}
+				} else if strings.HasPrefix(name, "CMP") {
+					values = []int{-128, 127, -129, 128}
+				}
+				start := strings.IndexByte(instruction, '$')
+				end := start
+				for end < len(instruction) && instruction[end] != ',' {
+					end++
+				}
+				for index, value := range values {
+					changed := instruction[:start] + fmt.Sprintf("$%d", value) + instruction[end:]
+					if index >= 2 {
+						t.Run(fmt.Sprintf("%s/%d", fixture.row, value), func(t *testing.T) {
+							listing, err := x86ScalarLiteralExpectedGoListing(t, arch, "TEXT ·ImmediateBound(SB),4,$0-0\n"+changed+"\nRET\n", false)
+							t.Logf("EXPLICIT_SIMD_IMMEDIATE_REFUSAL arch=%s source=%q exit=%v diagnostic=%q", arch, changed, err, listing)
+						})
+						continue
+					}
+					positive := fixture
+					positive.witness.Instruction = changed
+					positive.witness.Encoding = append([]byte(nil), fixture.witness.Encoding...)
+					positive.witness.Encoding[len(positive.witness.Encoding)-1] = byte(value)
+					positives = append(positives, positive)
+				}
+			}
+			if len(positives) > 32 {
+				t.Fatal("immediate batch bound", len(positives))
+			}
+			var source strings.Builder
+			for i := range positives {
+				positives[i].symbol = fmt.Sprintf("ImmediateBound%d", i)
+				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-0\n", positives[i].symbol)
+				positives[i].line = strings.Count(source.String(), "\n") + 1
+				fmt.Fprintln(&source, positives[i].witness.Instruction)
+				source.WriteString("RET\n")
+			}
+			listing, err := x86ScalarLiteralGoListing(t, arch, source.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := x86OfficialPackedVerifyListing(listing, positives); err != nil {
+				t.Fatal("original immediate boundaries", err)
+			}
+		})
+	}
+}
