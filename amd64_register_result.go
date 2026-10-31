@@ -43,12 +43,18 @@ func checkAMD64RegisterResultInitialization(fn Func, sig FuncSig, transfer x86Re
 	if sig.Ret == I1 {
 		resultWidth = 1
 	}
-	if resultWidth == 0 || len(sig.Frame.Results) != 1 {
-		return fail("requires one complete integer register result")
-	}
-	result := sig.Frame.Results[0]
-	if result.Type != sig.Ret || result.Index != 0 || result.Field != -1 || len(result.Fields) != 0 {
-		return fail("result transport differs from the scalar signature")
+	if sig.Ret == Void {
+		if len(sig.Frame.Results) != 0 {
+			return fail("Void entry cannot declare a result transport")
+		}
+	} else {
+		if resultWidth == 0 || len(sig.Frame.Results) != 1 {
+			return fail("requires one complete integer register result")
+		}
+		result := sig.Frame.Results[0]
+		if result.Type != sig.Ret || result.Index != 0 || result.Field != -1 || len(result.Fields) != 0 {
+			return fail("result transport differs from the scalar signature")
+		}
 	}
 	initial := x86ResultState{}
 	if entry := sig.amd64GoArguments; entry != nil {
@@ -102,6 +108,10 @@ func checkAMD64RegisterResultInitialization(fn Func, sig FuncSig, transfer x86Re
 	}
 	return checkX86ResultSourceFlow(fn, initial, nil, 0, "amd64", transfer,
 		func(state x86ResultState, pc int) error {
+			// The complete source flow still runs; only the result at RET is optional.
+			if sig.Ret == Void {
+				return nil
+			}
 			reg, mask, _ := x86ResultGP(AX, resultWidth, "amd64")
 			if state.gp[reg]&mask != mask {
 				return fail(fmt.Sprintf("AX result bytes are not initialized on every path to RET %d", pc))
