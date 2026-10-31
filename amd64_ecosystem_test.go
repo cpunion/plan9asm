@@ -3366,12 +3366,124 @@ TEXT packedmovemaskforms(SB),NOSPLIT,$0-0
 	VPMOVMSKB Y15, R15
 	RET
 `
-	ll := translateAMD64EcosystemCase(t, src, "packedmovemaskforms")
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
+	// Keep the original uninitialized, unterminated MMX source as a public
+	// context boundary. Legal Go operand forms do not supply physical inputs.
+	goAssemblerOracleOutput(t, "amd64", "#include \"textflag.h\"\n"+src, "", true)
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run("original-context/"+api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, src, "func packedmovemaskforms()", "amd64", "x86_64-unknown-linux-gnu", api)
+			if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("original source acquired initialized vectors or MMX tag cleanup", err)
+			}
+		})
 	}
-	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "packed-move-mask-forms.ll", "packed-move-mask-forms.o", ll)
+	file, err := Parse(ArchAMD64, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var initialized, declarations strings.Builder
+	widths := map[string]int{}
+	widthCounts := map[int]int{}
+	for _, instruction := range file.Funcs[0].Instrs {
+		form, known, err := x86MoveMaskProperties(instruction.Op, instruction, "amd64")
+		if !known {
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		name := fmt.Sprintf("PackedMoveMaskForm%d", len(widths))
+		widths[name] = form.byteWidth
+		widthCounts[form.byteWidth]++
+		original := strings.TrimSpace(instruction.Raw)
+		load, cleanup := "MOVOU", ""
+		if form.byteWidth == 8 {
+			load, cleanup = "MOVQ", "EMMS\n"
+		} else if form.byteWidth == 32 {
+			load = "VMOVDQU"
+		}
+		body := fmt.Sprintf("MOVQ p+0(FP),SI\n%s (SI),%s\n%s\n%sMOVQ %s,ret+8(FP)\nRET\n",
+			load, instruction.Args[0].Reg, original, cleanup, instruction.Args[1].Reg)
+		fmt.Fprintf(&initialized, "TEXT ·%s(SB),4,$0-16\n%s", name, body)
+		fmt.Fprintf(&declarations, "func %s(p *[32]byte) uint64\n", name)
+
+		// Observe each original operation's result, rather than allowing an
+		// unused Void destination to hide an undefined source register.
+		undefined := fmt.Sprintf("TEXT ·%s(SB),4,$0-8\n%s\n%sMOVQ %s,ret+0(FP)\nRET\n",
+			name, original, cleanup, instruction.Args[1].Reg)
+		goAssemblerOracleOutput(t, "amd64", undefined, "", true)
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run("undefined-input/"+name+"/"+api, func(t *testing.T) {
+				ir, err := x86ScalarFPBitViewAPI(t, undefined, "func "+name+"() uint64", "amd64", "x86_64-unknown-linux-gnu", api)
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("mask result acquired an undefined physical source", original, err)
+				}
+			})
+			if form.byteWidth == 8 {
+				t.Run("missing-EMMS/"+name+"/"+api, func(t *testing.T) {
+					unterminated := "TEXT ·" + name + "(SB),4,$0-16\n" + strings.ReplaceAll(body, cleanup, "")
+					ir, err := x86ScalarFPBitViewAPI(t, unterminated, "func "+name+"(p *[32]byte) uint64", "amd64", "x86_64-unknown-linux-gnu", api)
+					if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("initialized MMX source dispensed with real tag cleanup", original, err)
+					}
+				})
+			}
+		}
+	}
+	if len(widths) != 8 || widthCounts[8] != 2 || widthCounts[16] != 4 || widthCounts[32] != 2 {
+		t.Fatal("original eight move-mask forms changed", widths, widthCounts)
+	}
+	goAssemblerOracleOutput(t, "amd64", initialized.String(), "", true)
+	llc, objdump := findLLVM22Tool("llc"), findLLVM22Tool("llvm-objdump")
+	if llc == "" || objdump == "" {
+		t.Fatal("LLVM 22 llc and llvm-objdump required")
+	}
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run("initialized/"+api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, initialized.String(), declarations.String(), "amd64", "x86_64-unknown-linux-gnu", api)
+			if err != nil || ir == "" {
+				t.Fatal("complete initialized move-mask forms rejected", err)
+			}
+			for _, level := range []string{"-O0", "-O2"} {
+				t.Run(level, func(t *testing.T) {
+					listing := x86ExchangeObjectDisassembly(t, llc, objdump, "x86_64-unknown-linux-gnu", ir, level)
+					assertEcosystemPackedMoveMaskObjectResults(t, listing, widths)
+				})
+			}
+		})
+	}
+}
+
+func assertEcosystemPackedMoveMaskObjectResults(t *testing.T, listing string, widths map[string]int) {
+	t.Helper()
+	owner := ""
+	masks, cleanups := map[string]int{}, map[string]int{}
+	for _, line := range strings.Split(listing, "\n") {
+		if _, name, found := strings.Cut(line, " <"); found && strings.HasSuffix(name, ">:") {
+			owner = strings.TrimSuffix(name, ">:")
+			continue
+		}
+		if _, known := widths[owner]; !known {
+			continue
+		}
+		for _, atom := range strings.Fields(line) {
+			if atom == "pmovmskb" || atom == "vpmovmskb" {
+				masks[owner]++
+			} else if atom == "emms" {
+				cleanups[owner]++
+			}
+		}
+	}
+	for name, width := range widths {
+		// A Y source may lower to one AVX2 mask or two SSE2 halves. Every
+		// independently returned mask must survive both optimization levels.
+		if masks[name] != 1 && (width != 32 || masks[name] != 2) {
+			t.Fatal("observable move-mask output missing from its target function", name, masks[name])
+		}
+		if width == 8 && cleanups[name] != 1 {
+			t.Fatal("MMX target region lost its tag cleanup", name, cleanups[name])
+		}
+	}
 }
 
 func TestTranslateAMD64PackedMoveMaskRejectsFormsOutsideGoAssemblerTable(t *testing.T) {
