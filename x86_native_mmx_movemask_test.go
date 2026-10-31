@@ -15,9 +15,14 @@ import (
 
 func TestX86NativeMMXMoveMaskByteEffects(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
-		registers := []Reg{AX, BX}
+		// SP and amd64 BP have separate physical frame roles. The original
+		// encoding matrix retains those spellings without granting this leaf
+		// a logical GP destination; mode386 BP remains an ordinary GP.
+		registers := []Reg{AX, CX, DX, BX, SI, DI}
 		if arch == "amd64" {
-			registers = append(registers, "R8")
+			registers = append(registers, "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15")
+		} else {
+			registers = append(registers, BP)
 		}
 		for bank := 0; bank < 8; bank++ {
 			for _, destination := range registers {
@@ -199,6 +204,18 @@ func TestX86NativeMMXMoveMaskRoleBoundaries(t *testing.T) {
 				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 					t.Fatal("MMX state/input boundary widened", arch, api, body, err)
 				}
+			}
+		}
+		// Void still consumes every physical source byte. An unused result
+		// does not create a numerical MMX bank or dispense with real EMMS.
+		source := "TEXT ·Value(SB),4,$0-8\nPMOVMSKB M0,AX\nEMMS\nRET\n"
+		if _, err := x86ScalarLiteralGoListing(t, arch, source); err != nil {
+			t.Fatal(err)
+		}
+		for _, api := range []string{"text", "module", "Go"} {
+			ir, err := x86ScalarFPBitViewAPI(t, source, "func Value(a uint64)", arch, x86Legacy127Targets(arch)[0], api)
+			if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+				t.Fatal("Void supplied an undefined physical MMX source", arch, api, err)
 			}
 		}
 	}
