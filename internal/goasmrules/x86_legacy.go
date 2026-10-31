@@ -137,12 +137,29 @@ func X86LegacyRules(file *ast.File) (X86LegacyCatalog, error) {
 		if err != nil {
 			return result, fmt.Errorf("ymovtab entry %d: %w", index, err)
 		}
-		if (entry.Kind == "sentinel") != (index == len(movtab.Elts)-1) {
-			return result, fmt.Errorf("ymovtab entry %d has misplaced/missing sentinel", index)
+		if err := x86MoveTableRowStructure(entry, index, len(movtab.Elts)); err != nil {
+			return result, err
 		}
 		result.Movtab = append(result.Movtab, entry)
 	}
 	return result, nil
+}
+
+// Captured catalogs and original AST reads share the same complete-table
+// structure. An excluded semantic group still cannot hide a forged sentinel.
+func x86MoveTableRowStructure(row X86MoveRule, index, count int) error {
+	if index < 0 || index >= count || row.TableIndex != index {
+		return fmt.Errorf("ymovtab entry %d lost its original table position", index)
+	}
+	if index == count-1 {
+		if row.Kind != "sentinel" || row.Opcode != "" || row.OpcodeExpression != "0" ||
+			row.From != "0" || row.From3 != "0" || row.To != "0" || row.Code != "0" || len(row.OpBytes) != 0 {
+			return fmt.Errorf("ymovtab entry %d lost its complete zero sentinel", index)
+		}
+	} else if row.Kind != "encoding" || row.Opcode == "" {
+		return fmt.Errorf("ymovtab entry %d is not an original encoding row", index)
+	}
+	return nil
 }
 
 func readX86LegacyOpcode(values []ast.Expr, index, capacity int, variables map[string]*ast.CompositeLit, constants map[string]ast.Expr) (X86LegacyOpcode, error) {

@@ -17,8 +17,8 @@ func X86MovtabRemainderRows(catalog X86LegacyCatalog, arch string) ([]X86ScalarR
 	var result []X86ScalarRMWRow
 	seen := map[string]bool{}
 	for index, original := range catalog.Movtab {
-		if original.TableIndex != index {
-			return nil, fmt.Errorf("movtab source order changed")
+		if err := x86MoveTableRowStructure(original, index, len(catalog.Movtab)); err != nil {
+			return nil, err
 		}
 		if original.Kind == "sentinel" || original.Code == "movDoubleShift" || original.Code == "movTLSReg" {
 			continue
