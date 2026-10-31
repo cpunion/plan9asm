@@ -89,6 +89,23 @@ func TestX86GPDataFlagsCPUCompleteOriginalSourceInventory(t *testing.T) {
 	gpDataFlagsCPUOriginalEntries(t)
 }
 
+func TestX86GPDataFlagsCPURegisterOpcodeCannotBePadding(t *testing.T) {
+	for _, entry := range gpDataFlagsCPUOriginalEntries(t) {
+		if entry.Ytab != "ybswap" {
+			continue
+		}
+		t.Run(entry.Opcode, func(t *testing.T) {
+			// Keep the full original schema, escape and source identity.
+			// Only the register-in-opcode base is replaced by padding.
+			changed := entry
+			changed.OpBytes = []string{"0x0f", "0"}
+			if got, err := x86ScalarRMWRowWitnesses(changed, entry.Rows[0], "amd64"); err == nil {
+				t.Fatal("GP_DATA_FLAGS_CPU_REGISTER_OPCODE_PADDING_ACCEPTED", got)
+			}
+		})
+	}
+}
+
 func TestX86GPDataFlagsCPUExistingTransportCompleteFamily(t *testing.T) {
 	for _, entry := range gpDataFlagsCPUOriginalEntries(t) {
 		for _, row := range entry.Rows {
