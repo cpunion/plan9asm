@@ -254,6 +254,13 @@ func x86SourceOpcode(value ast.Expr) (string, error) {
 	} else if _, ok := value.(*ast.Ident); !ok {
 		return "", fmt.Errorf("unrecognized opcode %s", name)
 	}
+	return x86SourceOpcodeName(name)
+}
+
+// Keep captured enum spelling and its canonical opcode on one conversion
+// path. Source projections may validate this redundant identity without
+// reparsing expressions or introducing another opcode-name registry.
+func x86SourceOpcodeName(name string) (string, error) {
 	if !strings.HasPrefix(name, "A") || len(name) == 1 {
 		return "", fmt.Errorf("unrecognized opcode %s", name)
 	}

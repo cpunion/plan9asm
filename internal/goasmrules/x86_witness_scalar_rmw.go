@@ -411,6 +411,12 @@ func x86ScalarCompleteOperandSchema(entry X86LegacyOpcode, row X86LegacyOperand,
 		entry.EscapeAdjustment < 0 || entry.EscapeAdjustment > 1 {
 		return fmt.Errorf("unmodeled complete scalar operand schema/escape")
 	}
+	if entry.OpcodeExpression != "" {
+		name, err := x86SourceOpcodeName(strings.TrimPrefix(entry.OpcodeExpression, "obj."))
+		if err != nil || name != entry.Opcode {
+			return fmt.Errorf("scalar opcode disagrees with its captured source enum")
+		}
+	}
 	offset := 0
 	for index, original := range entry.Rows {
 		fields := strings.Split(schema[index], "/")
@@ -634,7 +640,7 @@ func x86ScalarRMWRowWitnesses(entry X86LegacyOpcode, row X86LegacyOperand, arch 
 	if entry.Ytab == "ybswap" {
 		// Z_rp consumes escape+opcode, not the unmatched-row stride.
 		payloadEnd = 2
-		if len(payload) != 2 || payload[0] != 0x0f || payload[1]&7 != 0 {
+		if len(payload) != 2 || payload[0] != 0x0f || payload[1] == 0 || payload[1]&7 != 0 {
 			return nil, fmt.Errorf("unmodeled register-in-opcode source span")
 		}
 	}

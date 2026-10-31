@@ -252,6 +252,9 @@ func TestX86GPDataFlagsCPUCompleteOriginalMetadataBoundaries(t *testing.T) {
 						changed := entry
 						changed.Opcode = entry.Opcode[:len(entry.Opcode)-1] + axis[0]
 						changed.Prefix = axis[1]
+						// Keep enum/name consistent so the independent byte-width
+						// grammar guard, not source identity, rejects this clone.
+						changed.OpcodeExpression = "A" + changed.Opcode
 						if _, err := x86ScalarRMWRowWitnesses(changed, original, "amd64"); err == nil {
 							t.Errorf("GP_DATA_FLAGS_CPU_BYTE_SCHEMA_WIDENED op=%s row=%d changed=%s prefix=%s", entry.Opcode, original.RowIndex, changed.Opcode, axis[1])
 						}
