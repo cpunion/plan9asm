@@ -160,3 +160,33 @@ func TestX86LegacyExplicitSIMDWholeSourceMetadataBoundaries(t *testing.T) {
 		}
 	}
 }
+
+func TestX86LegacyExplicitSIMDAllAtomsAndPrefixRoles(t *testing.T) {
+	for _, entry := range explicitSIMD27Entries(t) {
+		for _, row := range entry.Rows {
+			for index := range entry.OpBytes {
+				t.Run(fmt.Sprintf("%s/%d/atom%d", entry.Opcode, row.RowIndex, index), func(t *testing.T) {
+					changed := entry
+					changed.OpBytes = append([]string(nil), entry.OpBytes...)
+					changed.OpBytes[index] = "0x100"
+					if _, err := x86LegacyExplicitSIMDRowWitnesses(changed, row); err == nil {
+						t.Fatal("unselected/prefix atom was not validated", index)
+					}
+				})
+			}
+			if entry.Ytab == "yxcmpi" && entry.Prefix == "Px" {
+				t.Run(entry.Opcode+"/coherent-foreign-mandatory", func(t *testing.T) {
+					changed := entry
+					changed.OpBytes = append([]string(nil), entry.OpBytes...)
+					changed.OpBytes[0] = "Pf3"
+					if entry.OpBytes[0] == "Pf3" {
+						changed.OpBytes[0] = "Pf2"
+					}
+					if _, err := x86LegacyExplicitSIMDRowWitnesses(changed, row); err == nil {
+						t.Fatal("EXPLICIT_SIMD_MANDATORY_ROLE_CHANGED")
+					}
+				})
+			}
+		}
+	}
+}

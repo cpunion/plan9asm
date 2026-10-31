@@ -24,4 +24,7 @@ func TestCrossLinuxRuntimeMatrixX86MMXStreamingOriginalAndLLVM(t *testing.T) {
 			})
 		}
 	}
+	// Preserve every streaming kernel above, then execute the distinct typed
+	// MMX-to-GP consumer through its original Go and independent C oracles.
+	t.Run("move-mask", x86NativeMMXMoveMaskRuntime)
 }

@@ -1,9 +1,12 @@
 package plan9asm
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -34,6 +37,9 @@ func TestX86NativeMMXMoveMaskByteEffects(t *testing.T) {
 					index, _, valid := x86ResultGP(destination, 4, arch)
 					if !valid {
 						t.Fatal("independent GP fixture invalid")
+					}
+					if plan.gpRead[index] || !plan.gpWritten[index] {
+						t.Fatal("write-only mask result acquired an old-GP dependency")
 					}
 					state := x86ResultState{flags: x86ByteFlagCF | x86ByteFlagZF, direction: x86ResultDirectionBackward}
 					state.nativeMMX[bank] = 0xff
@@ -75,6 +81,101 @@ func TestX86NativeMMXMoveMaskByteEffects(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func mmxMoveMaskObjectByteError(disassembly, arch string) error {
+	header := regexp.MustCompile(`^[0-9a-f]+ <([^>]+)>:$`)
+	owner := ""
+	seen := map[string]int{}
+	for _, line := range strings.Split(disassembly, "\n") {
+		if match := header.FindStringSubmatch(strings.TrimSpace(line)); match != nil {
+			owner = strings.TrimPrefix(match[1], "_")
+			continue
+		}
+		_, rest, found := strings.Cut(strings.TrimSpace(line), ":")
+		if !found {
+			continue
+		}
+		fields := strings.Fields(rest)
+		var code []byte
+		for len(fields) > 0 && len(fields[0]) == 2 {
+			value, err := strconv.ParseUint(fields[0], 16, 8)
+			if err != nil {
+				break
+			}
+			code, fields = append(code, byte(value)), fields[1:]
+		}
+		if len(fields) == 0 || fields[0] != "pmovmskb" {
+			continue
+		}
+		bank, err := strconv.Atoi(strings.TrimPrefix(owner, "MMXMaskByte"))
+		if !strings.HasPrefix(owner, "MMXMaskByte") || err != nil || bank < 0 || bank > 7 {
+			return fmt.Errorf("unowned target mask: %s", line)
+		}
+		want := []byte{0x44, 0x0f, 0xd7, 0xd0 | byte(bank)}
+		if arch == "386" {
+			want = []byte{0x0f, 0xd7, 0xc0 | byte(bank)}
+		}
+		if !bytes.Equal(want, code) {
+			return fmt.Errorf("%s physical mask bytes=%x want=%x", owner, code, want)
+		}
+		seen[owner]++
+	}
+	for bank := 0; bank < 8; bank++ {
+		name := fmt.Sprintf("MMXMaskByte%d", bank)
+		if seen[name] != 1 {
+			return fmt.Errorf("%s mask count=%d want=1", name, seen[name])
+		}
+	}
+	return nil
+}
+
+func TestX86NativeMMXMoveMaskTargetBytes(t *testing.T) {
+	llc, objdump := findLLVM22Tool("llc"), findLLVM22Tool("llvm-objdump")
+	if llc == "" || objdump == "" {
+		t.Fatal("LLVM22 llc/objdump required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			var source, declarations strings.Builder
+			var originals []x86OfficialPackedCase
+			for bank := 0; bank < 8; bank++ {
+				name := fmt.Sprintf("MMXMaskByte%d", bank)
+				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-12\nMOVQ a+0(FP),M%d\n", name, bank)
+				instruction := fmt.Sprintf("PMOVMSKB M%d,BX", bank)
+				originals = append(originals, x86OfficialPackedCase{symbol: name, line: strings.Count(source.String(), "\n") + 1, witness: goasmrules.X86PackedBinaryWitness{Instruction: instruction, Encoding: []byte{0x0f, 0xd7, 0xd8 | byte(bank)}}})
+				fmt.Fprintln(&source, instruction)
+				source.WriteString("EMMS\nMOVL BX,ret+8(FP)\nRET\n")
+				fmt.Fprintf(&declarations, "func %s(a uint64) uint32\n", name)
+			}
+			listing, err := x86ScalarLiteralGoListing(t, target.arch, source.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := x86OfficialPackedVerifyListing(listing, originals); err != nil {
+				t.Fatal("original mask physical bytes", err)
+			}
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, level := range []string{"-O0", "-O2"} {
+						disassembly := x86ExchangeObjectDisassembly(t, llc, objdump, target.triple, ir, level)
+						if err := mmxMoveMaskObjectByteError(disassembly, target.arch); err != nil {
+							t.Fatal(err)
+						}
+						// A bank swap between functions must not pass an aggregate count.
+						changed := strings.NewReplacer("MMXMaskByte0", "MMXMaskByte1", "MMXMaskByte1", "MMXMaskByte0").Replace(disassembly)
+						if mmxMoveMaskObjectByteError(changed, target.arch) == nil {
+							t.Fatal("physical-bank/function swap escaped the byte oracle")
+						}
+					}
+				})
+			}
+		})
 	}
 }
 
