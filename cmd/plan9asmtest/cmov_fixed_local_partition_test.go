@@ -70,3 +70,48 @@ func TestCMOVFixedLocalRuntimeHasIndependentBatchOwners(t *testing.T) {
 		t.Fatal("missing complete CMOV runtime owners", want)
 	}
 }
+
+func TestCMOVFixedLocalRuntimePreparesOwnedToolCacheBeforeCapture(t *testing.T) {
+	syntax, err := parser.ParseFile(token.NewFileSet(),
+		filepath.Join("..", "..", "amd64_cmov_fixed_local_runtime_test.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prepared, captured []token.Pos
+	for _, declaration := range syntax.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Name.Name != "x86CMOVFixedLocalRuntimeBatch" {
+			continue
+		}
+		for _, statement := range function.Body.List {
+			ast.Inspect(statement, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				helper, ok := call.Fun.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				switch helper.Name {
+				case "goAMD64FramePrepareOwnedToolCache":
+					direct, directOK := statement.(*ast.ExprStmt)
+					if !directOK || direct.X != call || len(call.Args) != 1 {
+						t.Fatal("CMOV tool cache must be prepared by the common runtime owner")
+					}
+					argument, valid := call.Args[0].(*ast.Ident)
+					if !valid || argument.Name != "t" {
+						t.Fatal("CMOV tool cache lost its actual test lifetime")
+					}
+					prepared = append(prepared, call.Pos())
+				case "x86CMOVFixedLocalFixture":
+					captured = append(captured, call.Pos())
+				}
+				return true
+			})
+		}
+	}
+	if len(prepared) != 1 || len(captured) != 1 || prepared[0] >= captured[0] {
+		t.Fatal("CMOV runtime must prepare its process-owned lazy tool cache before independent source capture", prepared, captured)
+	}
+}
