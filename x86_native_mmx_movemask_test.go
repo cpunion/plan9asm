@@ -26,7 +26,11 @@ func TestX86NativeMMXMoveMaskByteEffects(t *testing.T) {
 					if err != nil || plan == nil {
 						t.Fatal("MMX_MOVE_MASK_TYPED_REGION_GAP", err)
 					}
-					ins := file.Funcs[0].Instrs[1]
+					ordinal := plan.begin + 1 // Parse retains the original TEXT instruction.
+					ins := file.Funcs[0].Instrs[ordinal]
+					if ins.Op != "PMOVMSKB" {
+						t.Fatal("independent transfer fixture lost its original mask operation")
+					}
 					index, _, valid := x86ResultGP(destination, 4, arch)
 					if !valid {
 						t.Fatal("independent GP fixture invalid")
@@ -39,7 +43,7 @@ func TestX86NativeMMXMoveMaskByteEffects(t *testing.T) {
 					state.boolFrameGP = new([16]x86ResultSlotAddress)
 					state.boolFrameGP[index] = state.resultAddressGP[index]
 					before := state.clone()
-					if accepted, known := plan.transfer(1, ins, &state, nil, 8, arch); !accepted || !known {
+					if accepted, known := plan.transfer(ordinal, ins, &state, nil, 8, arch); !accepted || !known {
 						t.Fatal("defined physical MMX source not transferred")
 					}
 					expected := before.clone()
@@ -54,7 +58,7 @@ func TestX86NativeMMXMoveMaskByteEffects(t *testing.T) {
 						state = before.clone()
 						state.nativeMMX[bank] &^= 1 << uint(missing)
 						unchanged := state.clone()
-						if accepted, known := plan.transfer(1, ins, &state, nil, 8, arch); accepted || !known || !reflect.DeepEqual(state, unchanged) {
+						if accepted, known := plan.transfer(ordinal, ins, &state, nil, 8, arch); accepted || !known || !reflect.DeepEqual(state, unchanged) {
 							t.Fatal("missing physical source byte supplied a value or mutated state", missing)
 						}
 					}
@@ -65,7 +69,7 @@ func TestX86NativeMMXMoveMaskByteEffects(t *testing.T) {
 					changed := ins
 					changed.Raw += " // changed"
 					state = before.clone()
-					if accepted, known := plan.transfer(1, changed, &state, nil, 8, arch); accepted || !known {
+					if accepted, known := plan.transfer(ordinal, changed, &state, nil, 8, arch); accepted || !known {
 						t.Fatal("private source identity changed")
 					}
 				})
