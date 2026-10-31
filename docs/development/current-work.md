@@ -7,17 +7,23 @@ translation efficiency while preserving all five architecture gates. Read
 
 ## Published CI and local revisions
 
-[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. Its last
-completed [round](https://github.com/xgo-dev/plan9asm/actions/runs/41156356223),
-at `4d4cc5473`, recovered to 325/325 successful jobs. Preserve the initial
+[PR40](https://github.com/xgo-dev/plan9asm/pull/40) remains draft. Accepted
+`652b6bae0` completed its own
+[round](https://github.com/xgo-dev/plan9asm/actions/runs/41173073767) naturally:
+325/325 successful jobs, without reruns. Independent acceptance joins all 286
+source artifacts, 240 partitions and 23 groups, all 22 Windows/race packages
+and 22 profiles: 88.2% statements and 95.37% patch against 87.83%.
+Both historical review threads are resolved; no formal approval is recorded.
+A newer batch needs its own CI and review.
+
+Earlier `4d4cc5473` recovered to 325/325 successful jobs. Preserve the initial
 323 successes and two failures: one CMOV original-input read failed its identity
 or extent check, and one dependent collector rejected that source. One requested
 source rerun retained 314 original executions and reran the source plus ten
 automatic collectors. The recovered CMOV root and all three LLVM pipelines
 actually passed without skips. The original read failure's cause is unresolved.
-Coverage is 88.2% statements and 95.21% patch against 87.83%; complete independent
-artifact/profile acceptance remains separate. Both review threads are resolved;
-no formal approval is recorded. A newer batch needs its own CI and review.
+Its coverage is 88.2% statements and 95.21% patch against 87.83%; complete
+independent artifact/profile acceptance remains separate from that recovery.
 
 Earlier `1f6fda590` finished with 270 successful and 55 failed jobs: four
 stack-role roots failed in eleven source jobs each, followed by eleven collector
@@ -31,10 +37,35 @@ job-local caches, installation verification and deadlines remain required.
 
 ## Current family batch
 
-The integrated code snapshot is `76e7cb2c4`; later documentation alone does not
-change its Go sources. Exchange covers all eight XADD/XCHG spellings and eighteen
-new source rows. Bare XADD retains no LOCK prefix; explicit LOCK and memory
-XCHG retain their distinct ordering. The shared guard rejects AH/REX conflicts.
+The new code snapshot is `db1c0114d`; later documentation alone does not change
+its Go sources. Explicit SIMD transport joins 28 original rows through shared
+literal/media encoders, with one existing INSERTPS overlap and 27 new identities.
+Insert/extract, compare, implicit-X0, sign-mask and lane-move roles remain
+distinct. PEXTRW first-match order, mode386 Q refusals, all prefix atoms and
+SHA256RNDS2's original zero stride retain independent Go observations.
+
+Initialized objects exposed a missing native MMX move-mask consumer. It now
+uses the existing typed form and source-bound MMX region, requires all eight
+input bytes and EMMS, writes a zero-extended dword and revokes stale aliases.
+The ordinary logical move-mask observer still rejects physical MMX. Both SDKs
+pass 972 focused nodes without failures/skips and 96 LLVM object calls each.
+The full rule package passes 17,835/17,858 nodes; 1,136 existing controls and
+44 raw-role controls pass per SDK.
+
+At functional snapshot `23c1d95fb`, Linux emulation executes twelve LLVM/C
+programs and two original Go programs across both SDKs. Each LLVM program
+checks sixteen kernels, 8,192 values, 8,192 aliases, 128 faults and sixteen
+exact-width boundaries. This is instruction execution, not physical hardware
+or a C-to-Go ABI bridge. The sole later production change copies the validated
+mask form inside its matching branch. Actual Go 1.27.3 allocation probes over
+28 ordinary instruction/mode pairs first reproduce 3-to-4 allocations, then
+restore 3-to-3 against `652b6bae0`; no whole-Translate speedup is established.
+The functional execution retains its original head through an explicit source
+dependency bridge, rather than being relabeled as a fresh `db1c0114d` run.
+
+Accepted `652b6bae0` retains all eight XADD/XCHG spellings and eighteen new
+source rows. Bare XADD has no LOCK prefix; explicit LOCK and memory XCHG keep
+their distinct ordering. The shared guard rejects AH/REX conflicts.
 
 Scalar signed conversions join all twelve rows of `yxcvfl/yxcvfq/yxcvlf/yxcvqf`
 through the existing legacy media encoder. Both SDKs pass 231 focused/object
@@ -47,13 +78,11 @@ Ordinary ABIInternal Void entries retain complete argument, source-shape and
 reaching-state checks. Only the AX result obligation at RET becomes optional;
 Void with declared result fields is rejected. Both SDKs pass all 67 focused
 nodes and 1,167 prior register/argument controls. Legacy public logical FP/SP
-admissions remain a separate entry-contract gap. Local Linux execution of the
-additional fifteenth scalar-move kernel is unexecuted because Docker startup
-failed; it is not a pass. Existing required Linux CI, including minimum Go,
-must run `TestCrossLinuxRuntimeMatrixX86ScalarMoveNativeResultsAndFaults` and
-all six pipeline outputs: fifteen kernels, 1,920 numerical outcomes, 180 fault
-outcomes and two tripwires each. Keep failed startup evidence and unknown owned
-container cleanup separate from test results.
+admissions remain a separate entry-contract gap. At `652b6bae0`, actual current
+and minimum Go Linux CI each pass ten nodes without skips, including all six
+pipeline outputs: fifteen kernels, 1,920 numerical outcomes, 180 fault outcomes
+and two tripwires each. Failed local Docker startup and unknown owned-container
+cleanup remain separate observations, without a shared daemon restart.
 
 ## Qualified local batches
 
@@ -170,13 +199,14 @@ An earlier 12-sample incomplete overlay attempt remains excluded, not erased.
 
 ## Inventory and semantic boundaries
 
-At `76e7cb2c4`, the independently joined source inventory has 59 overlapping
-family views and 48 identity snapshots:
+At `23c1d95fb`, unchanged through `db1c0114d`, the independently joined source
+inventory has 60 overlapping family views and 50 identity snapshots. All 48
+previous snapshots were freshly captured and remain byte-exact:
 
 | SDK | AVX | optab | ymovtab | Total joined | Legacy joined / denominator | Unjoined legacy |
 |---|---:|---:|---:|---:|---:|---:|
-| Current | 3,568 | 945 | 18 | 4,531 | 963 / 1,418 | 455 |
-| Minimum | 3,568 | 946 | 18 | 4,532 | 964 / 1,417 | 453 |
+| Current | 3,568 | 972 | 18 | 4,558 | 990 / 1,418 | 428 |
+| Minimum | 3,568 | 973 | 18 | 4,559 | 991 / 1,417 | 426 |
 
 The denominator excludes exactly 13 Go Zpseudo rows and four Zbyte data rows;
 their identities remain retained separately. The ymovtab sentinel also remains
