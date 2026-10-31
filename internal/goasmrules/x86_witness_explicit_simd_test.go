@@ -33,6 +33,13 @@ func explicitSIMD27Entries(t *testing.T) []X86LegacyOpcode {
 	rows := 0
 	for _, entry := range catalog.Optab {
 		schema, selected := schemas[entry.Ytab]
+		// These shared tables already have independently owned arithmetic,
+		// extension and state rows. This closure retains their complete
+		// remaining lane-move and explicit-test families, not table authority.
+		if entry.Ytab == "yxr" && entry.Opcode != "MOVHLPS" && entry.Opcode != "MOVLHPS" ||
+			entry.Ytab == "yxm_q4" && entry.Opcode != "PHMINPOSUW" && entry.Opcode != "PTEST" {
+			continue
+		}
 		if entry.Opcode == "INSERTPS" {
 			schema, selected = []string{"Zibm_r/2/Yu8,Yxm,Yxr"}, true
 		}
