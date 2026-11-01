@@ -123,7 +123,19 @@ f32/f64 binary entries are removed, for a net reduction of 87 production lines.
 Both SDK endpoints retain all 74 local roots and 2,183 case IDs. Paired ABBA
 complete-translation measurements retain allocation counts; median time differs
 by -0.13% on current Go and +1.03% on minimum Go. This is code convergence,
-not an observed speedup; native execution and full-head CI remain separate gates.
+not an observed speedup. The separate native Linux/amd64 qualification retains
+36 roots / 774 PASS nodes per SDK, with no failures/skips. Full-head CI remains
+a separate gate; native386 and AVX512/ER acceptance are not implied.
+
+The physical mode32 boundary subsequently converges too: ADD/SUB now uses the
+same high-register check as MUL/DIV and MIN/MAX, removing another twelve
+production lines. Independent original-Go spelling and AMD64 positive controls
+cover all 108 operation/width/register-role cases; source acceptance does not
+grant physical IA32 high registers. The original complete-source fixture keeps
+every source row and explicitly partitions 44 contextual high-bank rows on 386.
+The local union passes 93 roots / 2,526 nodes per SDK. Final paired ABBA timing
+changes by -0.23%/-0.73%, with essentially unchanged allocation counts. This
+does not certify native386 execution or establish a measured speedup.
 
 For each batch record the exact revision, SDK, LLVM version, source fixture,
 successful/failed counts, production/test line delta and retained case IDs.
