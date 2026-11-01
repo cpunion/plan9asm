@@ -1,0 +1,75 @@
+name: Native MINMAX conformance
+
+on:
+  push:
+    branches: [codex/minmax-native-diagnostic-20261101]
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Native AMD64 / Go ${{ matrix.go }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.27.3', '1.20.14']
+    env:
+      GOTOOLCHAIN: local
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOMAXPROCS: '2'
+      LLVM_CONFIG: llvm-config-22
+      CC: clang-22
+      CXX: clang++-22
+      CGO_ENABLED: '1'
+      CGO_CXXFLAGS: -std=c++17
+      LD_LIBRARY_PATH: /usr/lib/llvm-22/lib
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Record exact source and tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > source-head.txt
+          sha256sum \
+            x86_floating_minmax_native_runtime_unix_test.go \
+            x86_floating_minmax_native_c_test.go \
+            testdata/x86_floating_minmax_native.c > source-inputs.sha256
+          go version > tools.txt
+          llvm-config-22 --version >> tools.txt
+          clang-22 --version >> tools.txt
+          test "$(go env GOOS)/$(go env GOARCH)" = linux/amd64
+          lscpu >> tools.txt
+          echo "CGO_CPPFLAGS=$(llvm-config-22 --cppflags)" >> "$GITHUB_ENV"
+          echo "CGO_LDFLAGS=$(llvm-config-22 --ldflags) $(llvm-config-22 --libs all)" >> "$GITHUB_ENV"
+      - name: Execute complete SSE and VEX owners and alias objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p=1 -tags=byollvm . \
+            -list '^(TestCrossLinuxRuntimeMatrixX86FloatingMinMax(Legacy|VEX)|TestX86FloatingMinMax)' > native-inventory.txt
+          go test -p=1 -tags=byollvm . \
+            -run '^(TestCrossLinuxRuntimeMatrixX86FloatingMinMax(Legacy|VEX)|TestX86FloatingMinMax)' \
+            -count=1 -timeout=20m -json | tee native-minmax.jsonl
+      - name: Preserve original outcomes
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-minmax-go${{ matrix.go }}
+          path: |
+            native-minmax.jsonl
+            native-inventory.txt
+            source-head.txt
+            source-inputs.sha256
+            tools.txt
+          if-no-files-found: error
+
