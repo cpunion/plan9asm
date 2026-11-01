@@ -51,14 +51,14 @@ jobs:
           lscpu >> tools.txt
           echo "CGO_CPPFLAGS=$(llvm-config-22 --cppflags)" >> "$GITHUB_ENV"
           echo "CGO_LDFLAGS=$(llvm-config-22 --ldflags) $(llvm-config-22 --libs all)" >> "$GITHUB_ENV"
-      - name: Execute complete SSE and VEX owners and alias objects
+      - name: Execute named and raw SSE and VEX owners and alias objects
         shell: bash
         run: |
           set -euo pipefail
           go test -p=1 -tags=byollvm . \
-            -list '^(TestCrossLinuxRuntimeMatrixX86FloatingMinMax(Legacy|VEX)|TestX86FloatingMinMax)' > native-inventory.txt
+            -list '^(TestCrossLinuxRuntimeMatrixX86FloatingMinMax(Raw)?(Legacy|VEX)|TestX86FloatingMinMax)' > native-inventory.txt
           go test -p=1 -tags=byollvm . \
-            -run '^(TestCrossLinuxRuntimeMatrixX86FloatingMinMax(Legacy|VEX)|TestX86FloatingMinMax)' \
+            -run '^(TestCrossLinuxRuntimeMatrixX86FloatingMinMax(Raw)?(Legacy|VEX)|TestX86FloatingMinMax)' \
             -count=1 -timeout=20m -json | tee native-minmax.jsonl
       - name: Preserve original outcomes
         if: always()
