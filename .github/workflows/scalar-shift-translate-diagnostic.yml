@@ -1,0 +1,61 @@
+name: Scalar shift translation comparison
+
+on:
+  push:
+    branches: [codex/scalar-shift-translate-diagnostic-20261102]
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: Translation comparison / Go ${{ matrix.go }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.27.3', '1.20.14']
+    env:
+      GOTOOLCHAIN: local
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOFLAGS: ''
+      GOMAXPROCS: '1'
+      LLVM_CONFIG: llvm-config-22
+      CC: clang-22
+      CXX: clang++-22
+      CGO_ENABLED: '1'
+      CGO_CXXFLAGS: -std=c++17
+      LD_LIBRARY_PATH: /usr/lib/llvm-22/lib
+      PRODUCT_REF: 6a11972174536f405f17f703ddb30e1c821d67a0
+      BASELINE_REF: 5118280f177bd870e6fa22c3d6305a425f30c83f
+      EXPECTED_GO: ${{ matrix.go }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Bind LLVM build flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "CGO_CPPFLAGS=$(llvm-config-22 --cppflags)" >> "$GITHUB_ENV"
+          echo "CGO_LDFLAGS=$(llvm-config-22 --ldflags) $(llvm-config-22 --libs all)" >> "$GITHUB_ENV"
+      - name: Compare complete translation with fixed inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '::group::Paired scalar translation samples'
+          python3 .github/diagnostics/scalar-shift-compare.py
+          echo '::endgroup::'
+      - name: Preserve all original samples and source identities
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: scalar-shift-compare-go${{ matrix.go }}
+          path: _out/scalar-shift-cloud
+          if-no-files-found: error
