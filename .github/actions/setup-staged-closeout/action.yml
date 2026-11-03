@@ -1,0 +1,59 @@
+name: Setup fixed-product staged closeout diagnostic
+description: Retain diagnostic controls separately, then use only the fixed product and its original setup actions
+
+inputs:
+  go-version:
+    required: true
+    description: Exact SDK endpoint
+  execution-runtimes:
+    default: 'false'
+    description: Install the existing mandatory execution runtimes for coverage
+
+runs:
+  using: composite
+  steps:
+    - name: Retain diagnostic inputs and require a final product SHA
+      id: inputs
+      shell: bash
+      env:
+        EXPECTED_GO: ${{ inputs.go-version }}
+      run: |
+        set -euo pipefail
+        mkdir "$RUNNER_TEMP/staged-closeout-diagnostic"
+        cp .github/diagnostics/staged-closeout.{py,json} "$RUNNER_TEMP/staged-closeout-diagnostic/"
+        git rev-parse HEAD > "$RUNNER_TEMP/staged-closeout-diagnostic/workflow-head.txt"
+        sha256sum "$RUNNER_TEMP/staged-closeout-diagnostic/"* > "$RUNNER_TEMP/staged-closeout-diagnostic/inputs.sha256"
+        python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" prepare "$EXPECTED_GO" >> "$GITHUB_OUTPUT"
+    - name: Checkout the fixed product independently
+      uses: actions/checkout@v7
+      with:
+        ref: ${{ steps.inputs.outputs.product_head }}
+        persist-credentials: false
+    - name: Require the exact unchanged product
+      shell: bash
+      run: python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" guard
+    - name: Install original LLVM 22 and cross compilers
+      shell: bash
+      run: bash scripts/install-ci-llvm22-ubuntu.sh gcc-i686-linux-gnu libc6-dev-i386-cross gcc-aarch64-linux-gnu
+    - name: Setup the exact Go endpoint
+      uses: ./.github/actions/setup-go
+      with:
+        go-version: ${{ inputs.go-version }}
+    - name: Install mandatory execution runtimes
+      if: inputs.execution-runtimes == 'true'
+      shell: bash
+      run: bash scripts/install-ci-qemu.sh
+    - name: Setup the original verified Node runtime
+      uses: ./.github/actions/setup-node22
+    - name: Record actual tools and original LLVM build flags
+      shell: bash
+      env:
+        EXPECTED_GO: ${{ inputs.go-version }}
+      run: |
+        set -euo pipefail
+        test "$(go version)" = "go version go$EXPECTED_GO linux/amd64"
+        test "$(llvm-config-22 --version | cut -d. -f1)" = 22
+        go version
+        llvm-config-22 --version
+        echo "CGO_CPPFLAGS=$(llvm-config-22 --cppflags)" >> "$GITHUB_ENV"
+        echo "CGO_LDFLAGS=$(llvm-config-22 --ldflags) $(llvm-config-22 --libs all)" >> "$GITHUB_ENV"

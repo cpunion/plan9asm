@@ -1,0 +1,11 @@
+{
+  "product_head": "bbe0b75d3608d8a05eb8d5ad0d6214701e283b4f",
+  "scope": "Linux ordinary coverage and current/minimum compiler/source-form gates only",
+  "current_go": "1.27.3",
+  "minimum_go": "1.20.14",
+  "main_root_parts": 16,
+  "cli_modules": ["plan9asm", "plan9asmll"],
+  "cli_root_parts": 4,
+  "full_325_CI_acceptance": false,
+  "native65_execution": "PENDING_NOT_EXECUTED"
+}
