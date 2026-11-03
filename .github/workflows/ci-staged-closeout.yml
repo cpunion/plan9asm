@@ -220,6 +220,7 @@ jobs:
           go tool cover -func="$profile" | tail -n 1
           mkdir -p ../../_out/staged-final-profiles
           test ! -e "../../_out/staged-final-profiles/$profile"
+          test ! -L "../../_out/staged-final-profiles/$profile"
           mv -- "$profile" "../../_out/staged-final-profiles/$profile"
         working-directory: cmd/${{ matrix.module }}
       - name: Retain the actual complete CLI coverage profile
@@ -283,6 +284,7 @@ jobs:
           go tool cover -func=coverage-root.out | tail -n 1
           mkdir -p _out/staged-final-profiles
           test ! -e _out/staged-final-profiles/coverage-root.out
+          test ! -L _out/staged-final-profiles/coverage-root.out
           mv -- coverage-root.out _out/staged-final-profiles/coverage-root.out
       - name: Require successful original producers and unchanged product
         if: ${{ !cancelled() }}
