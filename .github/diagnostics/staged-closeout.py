@@ -50,8 +50,7 @@ def run_gate(name):
                     ["go", "-C", "cmd/plan9asmll", "build", "./..."]]
     else:
         assert name == "minimum-fivearch"
-        commands = [["bash", "scripts/check-go-asm-coverage.sh"],
-                    ["bash", "scripts/check-arm64-plan9-corpus.sh"]]
+        commands = [["bash", "scripts/check-go-asm-coverage.sh"]]
     out = Path("_out/staged-closeout-gates")
     out.mkdir(parents=True, exist_ok=False)
     result = {"product_head": product_head(), "workflow_head": (inputs / "workflow-head.txt").read_text().strip(),

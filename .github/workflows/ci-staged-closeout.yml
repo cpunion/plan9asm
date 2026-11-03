@@ -41,8 +41,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+          clean: true
           persist-credentials: false
-      - uses: ./.github/actions/setup-staged-closeout
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
         with:
           go-version: ${{ matrix.go }}
       - name: Run original required gate commands
@@ -88,8 +93,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+          clean: true
           persist-credentials: false
-      - uses: ./.github/actions/setup-staged-closeout
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
         with:
           go-version: '1.27.3'
           execution-runtimes: 'true'
@@ -120,8 +130,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+          clean: true
           persist-credentials: false
-      - uses: ./.github/actions/setup-staged-closeout
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
         with:
           go-version: '1.27.3'
           execution-runtimes: 'true'
@@ -172,8 +187,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+          clean: true
           persist-credentials: false
-      - uses: ./.github/actions/setup-staged-closeout
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
         with:
           go-version: '1.27.3'
           execution-runtimes: 'true'
@@ -212,8 +232,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
+          clean: true
           persist-credentials: false
-      - uses: ./.github/actions/setup-staged-closeout
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
         with:
           go-version: '1.27.3'
           execution-runtimes: 'true'

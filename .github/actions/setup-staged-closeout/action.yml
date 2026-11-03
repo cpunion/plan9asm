@@ -28,6 +28,7 @@ runs:
       uses: actions/checkout@v7
       with:
         ref: ${{ steps.inputs.outputs.product_head }}
+        clean: false
         persist-credentials: false
     - name: Require the exact unchanged product
       shell: bash
