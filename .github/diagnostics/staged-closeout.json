@@ -1,5 +1,5 @@
 {
-  "product_head": "229da7d5b8f5700c7f697ef7e95c79201490333f",
+  "product_head": "7abb59775d4375b7a94bfea946f8d22eade2bc80",
   "scope": "Linux ordinary coverage and current/minimum compiler/source-form gates only",
   "current_go": "1.27.3",
   "minimum_go": "1.20.14",

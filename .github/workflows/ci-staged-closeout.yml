@@ -2,7 +2,7 @@ name: Staged Linux closeout (fork diagnostic)
 
 on:
   push:
-    branches: [codex/ci-source-contracts-20261103]
+    branches: [codex/ci-source-contracts-retry-20261104]
 
 permissions:
   contents: read
@@ -62,7 +62,7 @@ jobs:
             ${{ runner.temp }}/staged-closeout-diagnostic/
           if-no-files-found: error
 
-  main-coverage:
+  main-priority:
     needs: gates
     name: Staged main coverage / ${{ matrix.role }}
     runs-on: ubuntu-24.04
@@ -71,12 +71,50 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {role: root-0, owner: 0, part: 0}
           - {role: root-1, owner: 0, part: 1}
-          - {role: root-2, owner: 0, part: 2}
           - {role: root-3, owner: 0, part: 3}
           - {role: root-4, owner: 0, part: 4}
           - {role: root-5, owner: 0, part: 5}
+          - {role: root-13, owner: 0, part: 13}
+          - {role: profile, owner: 1, part: -1}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          persist-credentials: false
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
+        with:
+          go-version: '1.27.3'
+          execution-runtimes: 'true'
+      - name: Execute the original complete owner assignment
+        run: bash scripts/test-module-ci.sh coverage execute '${{ matrix.owner }}' '${{ matrix.part }}'
+      - name: Retain original owner evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-main-coverage-${{ matrix.role }}
+          path: _out/module-coverage/
+          if-no-files-found: error
+      - name: Check product identity after execution
+        if: ${{ !cancelled() }}
+        run: python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" guard
+
+  main-coverage:
+    needs: [gates, main-priority]
+    name: Staged main coverage / ${{ matrix.role }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {role: root-0, owner: 0, part: 0}
+          - {role: root-2, owner: 0, part: 2}
           - {role: root-6, owner: 0, part: 6}
           - {role: root-7, owner: 0, part: 7}
           - {role: root-8, owner: 0, part: 8}
@@ -84,10 +122,8 @@ jobs:
           - {role: root-10, owner: 0, part: 10}
           - {role: root-11, owner: 0, part: 11}
           - {role: root-12, owner: 0, part: 12}
-          - {role: root-13, owner: 0, part: 13}
           - {role: root-14, owner: 0, part: 14}
           - {role: root-15, owner: 0, part: 15}
-          - {role: profile, owner: 1, part: -1}
           - {role: other, owner: 2, part: -1}
     steps:
       - uses: actions/checkout@v7
@@ -118,7 +154,7 @@ jobs:
 
   cli-coverage:
     # Prioritize the repaired translator owners before unrelated CLI workloads.
-    needs: [gates, main-coverage]
+    needs: [gates, main-priority, main-coverage]
     name: Staged CLI coverage / ${{ matrix.module }} / part ${{ matrix.part }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -176,7 +212,7 @@ jobs:
 
   cli-complete:
     needs: [gates, cli-coverage]
-    if: ${{ !cancelled() && needs.gates.result == 'success' }}
+    if: ${{ !cancelled() && needs.gates.result == 'success' && needs.cli-coverage.result == 'success' }}
     name: Staged CLI coverage complete / ${{ matrix.module }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -238,8 +274,8 @@ jobs:
           python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" guard
 
   main-complete:
-    needs: [gates, main-coverage, cli-complete]
-    if: ${{ !cancelled() && needs.gates.result == 'success' }}
+    needs: [gates, main-priority, main-coverage, cli-complete]
+    if: ${{ !cancelled() && needs.gates.result == 'success' && needs.main-priority.result == 'success' && needs.main-coverage.result == 'success' && needs.cli-complete.result == 'success' }}
     name: Staged ordinary module coverage complete
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -291,6 +327,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
+          test '${{ needs.main-priority.result }}' = success
           test '${{ needs.main-coverage.result }}' = success
           test '${{ needs.cli-complete.result }}' = success
           python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" guard
