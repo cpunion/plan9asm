@@ -1,0 +1,36 @@
+name: Frozen SDK priority (fork diagnostic)
+
+on:
+  push:
+    branches: [codex/ci-sdk-pin-priority-20261103]
+
+permissions:
+  contents: read
+
+jobs:
+  installer-policy:
+    if: github.repository == 'cpunion/plan9asm'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install the frozen compatibility SDK
+        uses: ./.github/actions/setup-go
+        timeout-minutes: 10
+        with:
+          go-version: '1.26.x'
+      - name: Setup verified policy runtime
+        uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
+      - name: Verify all installer regressions
+        run: node --test .github/scripts/priority-go-installation.test.cjs
+
+  complete-cli-module:
+    needs: installer-policy
+    if: github.repository == 'cpunion/plan9asm'
+    uses: ./.github/workflows/linux-cli-module.yml
+    with:
+      module: plan9asm
+      go-version: '1.26.x'
+      flavor: test
