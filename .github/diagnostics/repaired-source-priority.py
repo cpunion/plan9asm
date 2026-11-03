@@ -40,9 +40,11 @@ def main():
         assert roots == sorted(set(roots)) and roots
         assert all(re.fullmatch(r"Test[^/\s]+", root) for root in roots)
         directory = args.out / scope["id"]
+        package_arg = "." if scope["directory"] == "." else "./" + scope["directory"]
         command = [
             "go", "run", "./cmd/plan9asmtest",
-            "-dir", scope["directory"], "-package", ".", "-out", str(directory),
+            "-dir", ".", "-package", package_arg,
+            "-out", str(directory),
             "-ci-selector", "^(" + "|".join(roots) + ")$",
             "-ci-isolate-root", scope["isolated_root"],
             "-ci-owner", str(args.owner), "-shards", "4", "-timeout", "45m",
