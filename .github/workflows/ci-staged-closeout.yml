@@ -212,9 +212,22 @@ jobs:
           name: staged-cli-completion-${{ matrix.module }}
           path: _out/linux-cli-${{ matrix.module }}-coverage-verified/
           if-no-files-found: error
-      - name: Show actual complete CLI coverage
-        run: go tool cover -func=coverage-${{ matrix.module }}.out | tail -n 1
+      - name: Show and retain the actual complete CLI coverage profile
+        run: |
+          set -euo pipefail
+          profile='coverage-${{ matrix.module }}.out'
+          test -f "$profile" && test ! -L "$profile"
+          go tool cover -func="$profile" | tail -n 1
+          mkdir -p ../../_out/staged-final-profiles
+          test ! -e "../../_out/staged-final-profiles/$profile"
+          mv -- "$profile" "../../_out/staged-final-profiles/$profile"
         working-directory: cmd/${{ matrix.module }}
+      - name: Retain the actual complete CLI coverage profile
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-cli-profile-complete-${{ matrix.module }}
+          path: _out/staged-final-profiles/coverage-${{ matrix.module }}.out
+          if-no-files-found: error
       - name: Require successful original producers and unchanged product
         if: ${{ !cancelled() }}
         run: |
@@ -263,8 +276,14 @@ jobs:
           name: staged-main-profile-complete
           path: coverage-root.out
           if-no-files-found: error
-      - name: Show actual module coverage
-        run: go tool cover -func=coverage-root.out | tail -n 1
+      - name: Show and retain the actual complete main coverage profile
+        run: |
+          set -euo pipefail
+          test -f coverage-root.out && test ! -L coverage-root.out
+          go tool cover -func=coverage-root.out | tail -n 1
+          mkdir -p _out/staged-final-profiles
+          test ! -e _out/staged-final-profiles/coverage-root.out
+          mv -- coverage-root.out _out/staged-final-profiles/coverage-root.out
       - name: Require successful original producers and unchanged product
         if: ${{ !cancelled() }}
         run: |
