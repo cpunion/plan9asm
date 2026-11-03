@@ -1,6 +1,6 @@
 {
-  "product_head": "7abb59775d4375b7a94bfea946f8d22eade2bc80",
-  "scope": "Linux ordinary coverage and current/minimum compiler/source-form gates only",
+  "product_head": "014765e8eb5dfa03d9cd199d4020276227c36222",
+  "scope": "Linux ordinary coverage and current/minimum compiler/source-form gates, then original complete five-prefix forced cross-runtime owners and fresh strict completion only",
   "current_go": "1.27.3",
   "minimum_go": "1.20.14",
   "main_root_parts": 16,
