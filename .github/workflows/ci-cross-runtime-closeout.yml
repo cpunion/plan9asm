@@ -1,0 +1,187 @@
+name: Forced runtime supplement for accepted ordinary source closeout (fork diagnostic)
+
+on:
+  push:
+    branches: [codex/ci-cross-runtime-5823-20261105]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cross-runtime:
+    if: ${{ github.repository == 'cpunion/plan9asm' }}
+    name: cross compile, link, and run (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      # Every selected root is owned exactly once; owner zero isolates the
+      # giant matrix root. A failure must not cancel other owners.
+      fail-fast: false
+      matrix:
+        owner: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+    env:
+      CROSS_RUNTIME_PRODUCT_SHA: 5823a6936cd0f6ccea8dbb7cdc1f5df504d25387
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      PLAN9ASM_CROSS_EXEC: '1'
+
+    steps:
+      - name: Require a final product SHA before checkout
+        run: |
+          set -euo pipefail
+          [[ "$CROSS_RUNTIME_PRODUCT_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Checkout the fixed product independently
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.CROSS_RUNTIME_PRODUCT_SHA }}
+          clean: true
+          persist-credentials: false
+
+      - name: Install LLVM and cross compilers
+        timeout-minutes: 14
+        run: >-
+          bash scripts/install-ci-llvm22-ubuntu.sh
+          gcc-i686-linux-gnu gcc-arm-linux-gnueabihf
+          gcc-aarch64-linux-gnu
+
+      - name: Install pinned QEMU user-mode emulators
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
+
+      - name: Setup Go
+        timeout-minutes: 10
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.3'
+
+      - name: Setup required wasm execution runtime
+        timeout-minutes: 10
+        uses: ./.github/actions/setup-node22
+
+      - name: Require the exact clean product before execution
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CROSS_RUNTIME_PRODUCT_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Cross transpile, compile, link, and run
+        run: |
+          mkdir -p _out
+          go run ./cmd/plan9asmtest -out _out/cross-runtime-owner \
+            -ci-selector '^(TestCrossLinuxRuntimeMatrix|TestARM64Conformance|TestARM64RawSQSHLURuntimeSemantics|TestARMIntegerMemoryRuntimeCross|TestARMRawSaturationRuntimeCross)' \
+            -ci-isolate-root TestCrossLinuxRuntimeMatrix \
+            -ci-owner ${{ matrix.owner }} -shards 16 -timeout 20m
+
+      - name: Execute rich CLI ARM64 fallback oracle
+        if: ${{ !cancelled() && matrix.owner == 15 }}
+        run: bash scripts/test-arm64-fallback-ci.sh execute
+
+      - name: Require the exact clean product after execution
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CROSS_RUNTIME_PRODUCT_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Retain every owner receipt, including failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: cross-runtime-owner-${{ matrix.owner }}
+          path: _out/cross-runtime-owner
+          if-no-files-found: error
+
+  cross-runtime-verify:
+    name: cross-runtime exhaustive completion
+    needs: cross-runtime
+    if: ${{ github.repository == 'cpunion/plan9asm' && !cancelled() && needs.cross-runtime.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CROSS_RUNTIME_PRODUCT_SHA: 5823a6936cd0f6ccea8dbb7cdc1f5df504d25387
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      PLAN9ASM_CROSS_EXEC: '1'
+    steps:
+      - name: Require a final product SHA before checkout
+        run: |
+          set -euo pipefail
+          [[ "$CROSS_RUNTIME_PRODUCT_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Checkout the fixed product independently
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.CROSS_RUNTIME_PRODUCT_SHA }}
+          clean: true
+          persist-credentials: false
+
+      - name: Install LLVM and cross compilers
+        timeout-minutes: 14
+        run: >-
+          bash scripts/install-ci-llvm22-ubuntu.sh
+          gcc-i686-linux-gnu gcc-arm-linux-gnueabihf
+          gcc-aarch64-linux-gnu
+
+      - name: Install pinned QEMU user-mode emulators
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
+
+      - name: Setup Go
+        timeout-minutes: 10
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.3'
+
+      - name: Setup required wasm execution runtime
+        timeout-minutes: 10
+        uses: ./.github/actions/setup-node22
+
+      - name: Download all owner evidence
+        uses: actions/download-artifact@v8
+        with:
+          pattern: cross-runtime-owner-*
+          path: _out/cross-runtime-partitions
+
+      - name: Require the exact clean product before verification
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CROSS_RUNTIME_PRODUCT_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Verify the fresh complete five-prefix inventory
+        run: |
+          go run ./cmd/plan9asmtest -out _out/cross-runtime-aggregate \
+            -verify-ci-partitions _out/cross-runtime-partitions \
+            -ci-selector '^(TestCrossLinuxRuntimeMatrix|TestARM64Conformance|TestARM64RawSQSHLURuntimeSemantics|TestARMIntegerMemoryRuntimeCross|TestARMRawSaturationRuntimeCross)' \
+            -ci-isolate-root TestCrossLinuxRuntimeMatrix -shards 16 -timeout 20m
+
+      - name: Verify rich CLI ARM64 fallback execution
+        if: ${{ !cancelled() }}
+        run: bash scripts/test-arm64-fallback-ci.sh complete
+
+      - name: Require the exact clean product after verification
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CROSS_RUNTIME_PRODUCT_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Retain completion evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: cross-runtime-completion
+          path: _out/cross-runtime-aggregate
+          if-no-files-found: error
