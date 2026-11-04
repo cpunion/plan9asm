@@ -1,0 +1,14 @@
+{
+  "product_head": "5823a6936cd0f6ccea8dbb7cdc1f5df504d25387",
+  "scope": "AMD64 register-tuple and Linux raw-syscall native complete owners first, then complete ordinary Linux source/coverage and CLI with fresh strict collectors; current/minimum five-architecture gates. Successor forced cross17 is not executed; old940 cross evidence is historical only.",
+  "current_go": "1.27.3",
+  "minimum_go": "1.20.14",
+  "main_root_parts": 16,
+  "cli_modules": [
+    "plan9asm",
+    "plan9asmll"
+  ],
+  "cli_root_parts": 4,
+  "full_325_CI_acceptance": false,
+  "native65_execution": "PENDING_NOT_EXECUTED"
+}

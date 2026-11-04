@@ -1,0 +1,392 @@
+name: Final register tuple and Linux syscall ordinary closeout (fork diagnostic)
+
+on:
+  push:
+    branches: [codex/ci-bool-tail-final-20261105]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  gates:
+    env:
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      GOMAXPROCS: '2'
+      CGO_ENABLED: '1'
+      LLVM_CONFIG: llvm-config-22
+      CC: clang-22
+      CXX: clang++-22
+      CGO_CXXFLAGS: -std=c++17
+      LD_LIBRARY_PATH: /usr/lib/llvm-22/lib
+    if: github.repository == 'cpunion/plan9asm'
+    name: Staged gate / ${{ matrix.gate }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {gate: policy, go: '1.27.3', timeout: 20}
+          - {gate: module-compile, go: '1.27.3', timeout: 30}
+          - {gate: minimum-fivearch, go: '1.20.14', timeout: 30}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          persist-credentials: false
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Run original required gate commands
+        run: python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" gate '${{ matrix.gate }}'
+      - name: Retain actual gate evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-gate-${{ matrix.gate }}
+          path: |
+            _out/staged-closeout-gates/
+            ${{ runner.temp }}/staged-closeout-diagnostic/
+          if-no-files-found: error
+
+  main-priority:
+    env:
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      GOMAXPROCS: '2'
+      CGO_ENABLED: '1'
+      LLVM_CONFIG: llvm-config-22
+      CC: clang-22
+      CXX: clang++-22
+      CGO_CXXFLAGS: -std=c++17
+      LD_LIBRARY_PATH: /usr/lib/llvm-22/lib
+    needs: gates
+    name: Staged main coverage / ${{ matrix.role }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {role: root-2, owner: 0, part: 2}
+          - {role: root-3, owner: 0, part: 3}
+          - {role: root-9, owner: 0, part: 9}
+          - {role: root-13, owner: 0, part: 13}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          persist-credentials: false
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
+        with:
+          go-version: '1.27.3'
+          execution-runtimes: 'true'
+      - name: Execute the original complete owner assignment
+        run: bash scripts/test-module-ci.sh coverage execute '${{ matrix.owner }}' '${{ matrix.part }}'
+      - name: Retain original owner evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-main-coverage-${{ matrix.role }}
+          path: _out/module-coverage/
+          if-no-files-found: error
+      - name: Check product identity after execution
+        if: ${{ !cancelled() }}
+        run: python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" guard
+
+  main-coverage:
+    env:
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      GOMAXPROCS: '2'
+      CGO_ENABLED: '1'
+      LLVM_CONFIG: llvm-config-22
+      CC: clang-22
+      CXX: clang++-22
+      CGO_CXXFLAGS: -std=c++17
+      LD_LIBRARY_PATH: /usr/lib/llvm-22/lib
+    needs: [gates, main-priority]
+    name: Staged main coverage / ${{ matrix.role }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {role: root-0, owner: 0, part: 0}
+          - {role: root-1, owner: 0, part: 1}
+          - {role: root-4, owner: 0, part: 4}
+          - {role: root-5, owner: 0, part: 5}
+          - {role: root-6, owner: 0, part: 6}
+          - {role: root-7, owner: 0, part: 7}
+          - {role: root-8, owner: 0, part: 8}
+          - {role: root-10, owner: 0, part: 10}
+          - {role: root-11, owner: 0, part: 11}
+          - {role: root-12, owner: 0, part: 12}
+          - {role: root-14, owner: 0, part: 14}
+          - {role: root-15, owner: 0, part: 15}
+          - {role: profile, owner: 1, part: -1}
+          - {role: other, owner: 2, part: -1}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          persist-credentials: false
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
+        with:
+          go-version: '1.27.3'
+          execution-runtimes: 'true'
+      - name: Execute the original complete owner assignment
+        run: bash scripts/test-module-ci.sh coverage execute '${{ matrix.owner }}' '${{ matrix.part }}'
+      - name: Retain original owner evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-main-coverage-${{ matrix.role }}
+          path: _out/module-coverage/
+          if-no-files-found: error
+      - name: Check product identity after execution
+        if: ${{ !cancelled() }}
+        run: python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" guard
+
+  cli-coverage:
+    env:
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      GOMAXPROCS: '2'
+      CGO_ENABLED: '1'
+      LLVM_CONFIG: llvm-config-22
+      CC: clang-22
+      CXX: clang++-22
+      CGO_CXXFLAGS: -std=c++17
+      LD_LIBRARY_PATH: /usr/lib/llvm-22/lib
+    # Complete the affected native/source owners and remaining translator owners before CLI.
+    needs: [gates, main-priority, main-coverage]
+    name: Staged CLI coverage / ${{ matrix.module }} / part ${{ matrix.part }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [plan9asm, plan9asmll]
+        part: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          persist-credentials: false
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
+        with:
+          go-version: '1.27.3'
+          execution-runtimes: 'true'
+      - name: Execute original disjoint CLI root assignment
+        run: bash scripts/test-linux-cli-module-ci.sh '${{ matrix.module }}' coverage execute 0 '${{ matrix.part }}'
+      - name: Retain actual CLI root evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-cli-${{ matrix.module }}-coverage-root-${{ matrix.part }}
+          path: _out/linux-cli-${{ matrix.module }}-coverage-root-${{ matrix.part }}/
+          if-no-files-found: error
+      - name: Execute original complete profile owner
+        if: ${{ !cancelled() && matrix.part == 0 }}
+        run: bash scripts/test-linux-cli-module-ci.sh '${{ matrix.module }}' coverage execute 1 -1
+      - name: Retain actual profile evidence
+        if: ${{ always() && matrix.part == 0 }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-cli-${{ matrix.module }}-coverage-owner-1
+          path: _out/linux-cli-${{ matrix.module }}-coverage-owner-1/
+          if-no-files-found: error
+      - name: Execute original complete remaining-package owner
+        if: ${{ !cancelled() && matrix.part == 0 }}
+        run: bash scripts/test-linux-cli-module-ci.sh '${{ matrix.module }}' coverage execute 2 -1
+      - name: Retain actual remaining-package evidence
+        if: ${{ always() && matrix.part == 0 }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-cli-${{ matrix.module }}-coverage-owner-2
+          path: _out/linux-cli-${{ matrix.module }}-coverage-owner-2/
+          if-no-files-found: error
+      - name: Check product identity after execution
+        if: ${{ !cancelled() }}
+        run: python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" guard
+
+  cli-complete:
+    env:
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      GOMAXPROCS: '2'
+      CGO_ENABLED: '1'
+      LLVM_CONFIG: llvm-config-22
+      CC: clang-22
+      CXX: clang++-22
+      CGO_CXXFLAGS: -std=c++17
+      LD_LIBRARY_PATH: /usr/lib/llvm-22/lib
+    needs: [gates, cli-coverage]
+    if: ${{ !cancelled() && needs.gates.result == 'success' && needs.cli-coverage.result == 'success' }}
+    name: Staged CLI coverage complete / ${{ matrix.module }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [plan9asm, plan9asmll]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          persist-credentials: false
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
+        with:
+          go-version: '1.27.3'
+          execution-runtimes: 'true'
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: staged-cli-${{ matrix.module }}-coverage-*
+          path: _out/staged-downloads-cli-${{ matrix.module }}
+      - name: Arrange original owner paths without changing their bytes
+        run: python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" assemble '${{ matrix.module }}'
+      - name: Run the original strict CLI completion verifier
+        run: bash scripts/test-linux-cli-module-ci.sh '${{ matrix.module }}' coverage complete
+      - name: Retain original completion evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-cli-completion-${{ matrix.module }}
+          path: _out/linux-cli-${{ matrix.module }}-coverage-verified/
+          if-no-files-found: error
+      - name: Show and retain the actual complete CLI coverage profile
+        run: |
+          set -euo pipefail
+          profile='coverage-${{ matrix.module }}.out'
+          test -f "$profile" && test ! -L "$profile"
+          go tool cover -func="$profile" | tail -n 1
+          mkdir -p ../../_out/staged-final-profiles
+          test ! -e "../../_out/staged-final-profiles/$profile"
+          test ! -L "../../_out/staged-final-profiles/$profile"
+          mv -- "$profile" "../../_out/staged-final-profiles/$profile"
+        working-directory: cmd/${{ matrix.module }}
+      - name: Retain the actual complete CLI coverage profile
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-cli-profile-complete-${{ matrix.module }}
+          path: _out/staged-final-profiles/coverage-${{ matrix.module }}.out
+          if-no-files-found: error
+      - name: Require successful original producers and unchanged product
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          test '${{ needs.cli-coverage.result }}' = success
+          python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" guard
+
+  main-complete:
+    env:
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      GOMAXPROCS: '2'
+      CGO_ENABLED: '1'
+      LLVM_CONFIG: llvm-config-22
+      CC: clang-22
+      CXX: clang++-22
+      CGO_CXXFLAGS: -std=c++17
+      LD_LIBRARY_PATH: /usr/lib/llvm-22/lib
+    needs: [gates, main-priority, main-coverage, cli-complete]
+    if: ${{ !cancelled() && needs.gates.result == 'success' && needs.main-priority.result == 'success' && needs.main-coverage.result == 'success' && needs.cli-complete.result == 'success' }}
+    name: Staged ordinary module coverage complete
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          persist-credentials: false
+      - name: Retain diagnostic action across product checkout
+        run: |
+          mkdir -p _out/staged-control-action
+          cp .github/actions/setup-staged-closeout/action.yml _out/staged-control-action/action.yml
+      - uses: ./_out/staged-control-action
+        with:
+          go-version: '1.27.3'
+          execution-runtimes: 'true'
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: staged-main-coverage-*
+          path: _out/staged-downloads-main
+      - name: Arrange original owner paths without changing their bytes
+        run: python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" assemble main
+      - name: Run the original strict module completion verifier
+        run: bash scripts/test-module-ci.sh coverage complete
+      - name: Retain original aggregate and coverage evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-main-completion
+          path: _out/module-coverage-verified/
+          if-no-files-found: error
+      - name: Retain the actual complete main coverage profile
+        uses: actions/upload-artifact@v6
+        with:
+          name: staged-main-profile-complete
+          path: coverage-root.out
+          if-no-files-found: error
+      - name: Show and retain the actual complete main coverage profile
+        run: |
+          set -euo pipefail
+          test -f coverage-root.out && test ! -L coverage-root.out
+          go tool cover -func=coverage-root.out | tail -n 1
+          mkdir -p _out/staged-final-profiles
+          test ! -e _out/staged-final-profiles/coverage-root.out
+          test ! -L _out/staged-final-profiles/coverage-root.out
+          mv -- coverage-root.out _out/staged-final-profiles/coverage-root.out
+      - name: Require successful original producers and unchanged product
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          test '${{ needs.main-priority.result }}' = success
+          test '${{ needs.main-coverage.result }}' = success
+          test '${{ needs.cli-complete.result }}' = success
+          python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" guard
