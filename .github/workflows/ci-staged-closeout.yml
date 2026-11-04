@@ -390,4 +390,3 @@ jobs:
           test '${{ needs.main-coverage.result }}' = success
           test '${{ needs.cli-complete.result }}' = success
           python3 "$RUNNER_TEMP/staged-closeout-diagnostic/staged-closeout.py" guard
-
