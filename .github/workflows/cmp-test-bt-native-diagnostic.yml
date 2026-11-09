@@ -1,0 +1,148 @@
+name: CMP TEST and BT native row-join validation (fork only)
+
+on:
+  push:
+    branches: [codex/cmp-test-bt-native-f0d32-20261109]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    if: ${{ github.repository == 'cpunion/plan9asm' }}
+    name: Native AMD64 / Go ${{ matrix.go }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.27.3', '1.20.14']
+    env:
+      PRODUCT_SHA: f0d322e5193a557b8a1b4ac29a4ea06242f49cb3
+      CONTROL_SHA: ${{ github.sha }}
+      CONTROL_WORKFLOW_REF: ${{ github.workflow_ref }}
+      SDK_VERSION: ${{ matrix.go }}
+      EVIDENCE: _out/cmp-test-bt-native
+      NATIVE_OWNERS: >-
+        TestCrossLinuxRuntimeMatrixX86ScalarCompareFlags
+        TestCrossLinuxRuntimeMatrixX86ScalarCompareDeadReadFaults
+        TestCrossLinuxRuntimeMatrixX86TESTIndependentCarryFlags
+        TestCrossLinuxRuntimeMatrixX86BitTestNumericalAndAliases
+        TestCrossLinuxRuntimeMatrixX86BitTestDeadMemoryFaults
+        TestCrossLinuxRuntimeMatrixX86BitTestFPPartialWriteback
+      GOTOOLCHAIN: local
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOMAXPROCS: '2'
+      LLVM_CONFIG: llvm-config-22
+      CC: clang-22
+      CXX: clang++-22
+      CGO_ENABLED: '1'
+      CGO_CXXFLAGS: -std=c++17
+      LD_LIBRARY_PATH: /usr/lib/llvm-22/lib
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          clean: true
+          persist-credentials: false
+      - name: Install LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+      - uses: ./.github/actions/setup-go
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Setup verified auditor runtime
+        uses: ./.github/actions/setup-node22
+        timeout-minutes: 10
+      - name: Record exact product, control and native tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          printf '%s\n' "$CONTROL_SHA" "$CONTROL_WORKFLOW_REF" > "$EVIDENCE/control-source.txt"
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test -z "$(git status --porcelain)"
+          git rev-parse HEAD > "$EVIDENCE/source-head.txt"
+          git rev-parse 'HEAD^{tree}' > "$EVIDENCE/source-tree.txt"
+          git ls-files -z | xargs -0 sha256sum > "$EVIDENCE/source-inputs.sha256"
+          test "$(uname -s)" = Linux
+          test "$(uname -m)" = x86_64
+          test "$(go env GOOS)/$(go env GOARCH)" = linux/amd64
+          test "$(go env GOVERSION)" = "go$SDK_VERSION"
+          go version > "$EVIDENCE/tools.txt"
+          uname -a >> "$EVIDENCE/tools.txt"
+          lscpu >> "$EVIDENCE/tools.txt"
+          llvm-config-22 --version | tee -a "$EVIDENCE/tools.txt" | grep -E '^22\.'
+          for tool in clang-22 clang++-22 llc-22 opt-22; do
+            "$tool" --version >> "$EVIDENCE/tools.txt"
+            "$tool" --version | grep -E '(clang|LLVM) version 22\.'
+          done
+          llvm-config-22 --host-target >> "$EVIDENCE/tools.txt"
+          clang-22 -dumpmachine >> "$EVIDENCE/tools.txt"
+          for tool in go llvm-config-22 clang-22 clang++-22 llc-22 opt-22; do
+            sha256sum "$(command -v "$tool")" >> "$EVIDENCE/tool-inputs.sha256"
+          done
+          for tool in asm compile link; do
+            sha256sum "$(go env GOTOOLDIR)/$tool" >> "$EVIDENCE/tool-inputs.sha256"
+          done
+          sha256sum "$(go env GOROOT)/src/cmd/internal/obj/x86/asm6.go" \
+            "$(go env GOROOT)/src/cmd/internal/obj/x86/avx_optabs.go" >> "$EVIDENCE/tool-inputs.sha256"
+          echo "CGO_CPPFLAGS=$(llvm-config-22 --cppflags)" >> "$GITHUB_ENV"
+          echo "CGO_LDFLAGS=$(llvm-config-22 --ldflags) $(llvm-config-22 --libs all)" >> "$GITHUB_ENV"
+      - name: Execute all six unchanged native owners
+        shell: bash
+        run: |
+          set -euo pipefail
+          selector="^($(printf '%s' "$NATIVE_OWNERS" | tr ' ' '|'))$"
+          printf '%s\n' "$selector" > "$EVIDENCE/selector.txt"
+          go test -p=1 -tags=byollvm . -list "$selector" > "$EVIDENCE/native-inventory.txt"
+          go test -p=1 -tags=byollvm . -run "$selector" -count=1 -timeout=30m -json \
+            2> "$EVIDENCE/native.stderr" | tee "$EVIDENCE/native.jsonl"
+      - name: Require every original owner and pipeline without skips
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test -z "$(git status --porcelain)"
+          sha256sum -c "$EVIDENCE/source-inputs.sha256" > "$EVIDENCE/source-final.txt"
+          sha256sum -c "$EVIDENCE/tool-inputs.sha256" > "$EVIDENCE/tools-final.txt"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const {auditNativeOwners} = require('./.github/scripts/audit-native-owners.cjs');
+          const roots = process.env.NATIVE_OWNERS.trim().split(/\s+/);
+          const children = [];
+          for (const root of roots.slice(0, 5)) {
+            for (const api of ['text', 'module', 'Go']) {
+              children.push(root + '/' + api, root + '/' + api + '/backend_O0',
+                root + '/' + api + '/IR_O2/backend_O2');
+            }
+          }
+          children.push(...['text', 'module', 'Go'].map(api => roots[5] + '/' + api));
+          const sqrt = roots[1] + '/scalar-sqrt';
+          children.push(sqrt);
+          for (const api of ['text', 'module', 'Go']) {
+            children.push(sqrt + '/' + api);
+            for (const optimized of ['false', 'true']) {
+              const parent = sqrt + '/' + api + '/IR-O2=' + optimized;
+              children.push(parent, parent + '/-O0', parent + '/-O2');
+            }
+          }
+          const directory = process.env.EVIDENCE;
+          const inventory = fs.readFileSync(directory + '/native-inventory.txt', 'utf8');
+          const raw = fs.readFileSync(directory + '/native.jsonl', 'utf8');
+          const result = auditNativeOwners(inventory, raw, roots, children);
+          fs.writeFileSync(directory + '/native-audit.json', JSON.stringify(result) + '\n');
+          NODE
+      - name: Preserve original outcomes including failures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cmp-test-bt-native-go${{ matrix.go }}
+          path: _out/cmp-test-bt-native
+          if-no-files-found: error
