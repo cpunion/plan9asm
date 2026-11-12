@@ -70,27 +70,33 @@ func heavyObjectSourceFamilies(t *testing.T) map[string]string {
 			t.Fatal("complete heavy source family changed", family.file, found, expected)
 		}
 	}
-	for _, owner := range []struct{ file, name string }{
-		{"go_x86_numerical_read_revocation_final_go127_test.go", "TestGoX86NumericalReadRevokeDuringFinalSDKCallback"},
-		{"arm64_gp_immediate_runtime_test.go", "TestARM64GPImmediateScratchCompleteObjects"},
+	for _, owner := range []struct {
+		file, prefix string
+		roles        []string
+	}{
+		{"go_x86_numerical_read_revocation_final_go127_test.go", "TestGoX86NumericalReadRevokeDuringFinalSDKCallback", []string{""}},
+		{"arm64_gp_immediate_runtime_test.go", "TestARM64GPImmediateScratchCompleteObjects", []string{"", "LinuxMusl", "Darwin", "WindowsMSVC", "WindowsGNU"}},
 	} {
 		syntax, err := parser.ParseFile(token.NewFileSet(), filepath.Join("..", "..", owner.file), nil, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		found := 0
-		for _, declaration := range syntax.Decls {
-			function, ok := declaration.(*ast.FuncDecl)
-			if ok && function.Name.Name == owner.name && function.Body != nil {
-				found++
+		for _, role := range owner.roles {
+			name := owner.prefix + role
+			found := 0
+			for _, declaration := range syntax.Decls {
+				function, ok := declaration.(*ast.FuncDecl)
+				if ok && function.Name.Name == name && function.Body != nil {
+					found++
+				}
 			}
+			if found != 1 {
+				t.Fatal("missing complete callback or scratch source owner", owner.file, name, found)
+			}
+			want[name] = owner.prefix
 		}
-		if found != 1 {
-			t.Fatal("missing complete callback or scratch source owner", owner.file, owner.name, found)
-		}
-		want[owner.name] = owner.name
 	}
-	if len(want) != 81 {
+	if len(want) != 85 {
 		t.Fatal("complete independent heavy object denominator changed", len(want))
 	}
 	return want

@@ -284,6 +284,27 @@ func TestCrossLinuxRuntimeMatrixARM64GPImmediateScratch(t *testing.T) {
 }
 
 func TestARM64GPImmediateScratchCompleteObjects(t *testing.T) {
+	testARM64GPImmediateScratchCompleteObjects(t, "aarch64-unknown-linux-gnu")
+}
+
+func TestARM64GPImmediateScratchCompleteObjectsLinuxMusl(t *testing.T) {
+	testARM64GPImmediateScratchCompleteObjects(t, "aarch64-unknown-linux-musl")
+}
+
+func TestARM64GPImmediateScratchCompleteObjectsDarwin(t *testing.T) {
+	testARM64GPImmediateScratchCompleteObjects(t, "aarch64-apple-darwin")
+}
+
+func TestARM64GPImmediateScratchCompleteObjectsWindowsMSVC(t *testing.T) {
+	testARM64GPImmediateScratchCompleteObjects(t, "aarch64-pc-windows-msvc")
+}
+
+func TestARM64GPImmediateScratchCompleteObjectsWindowsGNU(t *testing.T) {
+	testARM64GPImmediateScratchCompleteObjects(t, "aarch64-w64-windows-gnu")
+}
+
+func testARM64GPImmediateScratchCompleteObjects(t *testing.T, triple string) {
+	t.Helper()
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM22 llc missing")
@@ -291,10 +312,8 @@ func TestARM64GPImmediateScratchCompleteObjects(t *testing.T) {
 	cases := arm64ImmediateOracleCases()
 	source := arm64ImmediateOracleSource(cases)
 	requireARM64GoAssemblerResult(t, source, true)
-	for _, triple := range []string{"aarch64-unknown-linux-gnu", "aarch64-unknown-linux-musl", "aarch64-apple-darwin", "aarch64-pc-windows-msvc", "aarch64-w64-windows-gnu"} {
-		for api, ir := range arm64DivRemRuntimeIRs(t, source, triple, len(cases)*3) {
-			compileLLVMToObject(t, llc, triple, fmt.Sprintf("gp-immediate-%d.ll", api), fmt.Sprintf("gp-immediate-%d.o", api), ir)
-		}
+	for api, ir := range arm64DivRemRuntimeIRs(t, source, triple, len(cases)*3) {
+		compileLLVMToObject(t, llc, triple, fmt.Sprintf("gp-immediate-%d.ll", api), fmt.Sprintf("gp-immediate-%d.o", api), ir)
 	}
 }
 
