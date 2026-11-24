@@ -7,15 +7,17 @@ import (
 )
 
 type armCtx struct {
-	b        *strings.Builder
-	sig      FuncSig
-	resolve  func(string) string
-	sigs     map[string]FuncSig
-	annotate bool
+	b           *strings.Builder
+	sig         FuncSig
+	resolve     func(string) string
+	sigs        map[string]FuncSig
+	annotate    bool
+	sdkABI0Tail bool
 
 	tmp int
 
-	blocks []armBlock
+	blocks       []armBlock
+	localControl *armLocalControl
 
 	usedRegs  map[Reg]bool
 	regSlot   map[Reg]string
@@ -27,6 +29,13 @@ type armCtx struct {
 	flagsCSlot   string
 	flagsVSlot   string
 	flagsWritten bool
+	// Emission traversal only, never a source/CFG authority. Raw compare does
+	// not write virtual APSR; its closed VMRS continuation performs that copy.
+	vfpCompareWritten bool
+
+	// Only a validated physical entry shim supplies this private body input.
+	// It never changes the source entry's caller-visible arguments.
+	machineState string
 
 	exclusiveValidSlot string
 	exclusivePtrSlot   string
@@ -49,6 +58,7 @@ func newARMCtx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 		resolve:        resolve,
 		sigs:           sigs,
 		annotate:       annotate,
+		sdkABI0Tail:    fn.armSDKABI0Tail,
 		blocks:         armSplitBlocks(fn),
 		usedRegs:       map[Reg]bool{},
 		regSlot:        map[Reg]string{},
@@ -81,7 +91,7 @@ func (c *armCtx) newTmp() string {
 }
 
 func (c *armCtx) slotName(r Reg) string {
-	return "%" + armLLVMBlockName("reg_"+string(r))
+	return "%reg_" + amd64LLVMSafeName(string(r))
 }
 
 func (c *armCtx) scanUsedRegs() {
@@ -106,6 +116,10 @@ func (c *armCtx) scanUsedRegs() {
 		case OpMem:
 			markReg(op.Mem.Base)
 			markReg(op.Mem.Index)
+			if shift, ok := armMemoryShift(op.Mem); ok {
+				markReg(shift.Reg)
+				markReg(shift.ShiftReg)
+			}
 		case OpRegList:
 			for _, r := range op.RegList {
 				markReg(r)
@@ -114,6 +128,258 @@ func (c *armCtx) scanUsedRegs() {
 	}
 	for _, blk := range c.blocks {
 		for _, ins := range blk.instrs {
+			op, _, _, _ := armDecodeOp(string(ins.Op))
+			if op == "BX" {
+				for _, reg := range armBranchExchangeRegisters {
+					markReg(reg)
+				}
+			}
+			if form, handled, err := parseARMWordFloatConversion(op, ins); handled && err == nil && form.usesScratch() {
+				markReg("F15")
+			}
+			if ins.Op == OpWORD && len(ins.Args) == 1 && ins.Args[0].Kind == OpImm {
+				if structure, ok := decodeARMRawNEONStructureFourMultiple(uint32(ins.Args[0].Imm)); ok {
+					markReg(Reg(fmt.Sprintf("R%d", structure.base)))
+					if structure.offset != 13 && structure.offset != 15 {
+						markReg(Reg(fmt.Sprintf("R%d", structure.offset)))
+					}
+					for index := 0; index < 4; index++ {
+						markReg(armRawVFPBackingReg(structure.first+index*structure.stride, 64))
+					}
+				}
+				if immediate, ok := decodeARMRawNEONModifiedImmediate(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(immediate.destination, 64))
+					if immediate.quad {
+						markReg(armRawVFPBackingReg(immediate.destination+1, 64))
+					}
+				}
+				if move, ok := decodeARMRawNEONCoreLaneMove(uint32(ins.Args[0].Imm)); ok {
+					markReg(Reg(fmt.Sprintf("R%d", move.core)))
+					markReg(armRawVFPBackingReg(move.vector, 64))
+				}
+				if structure, ok := decodeARMRawNEONStructureOneLane(uint32(ins.Args[0].Imm)); ok {
+					markReg(Reg(fmt.Sprintf("R%d", structure.base)))
+					if structure.offset != 13 && structure.offset != 15 {
+						markReg(Reg(fmt.Sprintf("R%d", structure.offset)))
+					}
+					markReg(armRawVFPBackingReg(structure.first, 64))
+				}
+				if structure, ok := decodeARMRawNEONStructureFourLane(uint32(ins.Args[0].Imm)); ok {
+					markReg(Reg(fmt.Sprintf("R%d", structure.base)))
+					if structure.offset != 13 && structure.offset != 15 {
+						markReg(Reg(fmt.Sprintf("R%d", structure.offset)))
+					}
+					for index := 0; index < 4; index++ {
+						markReg(armRawVFPBackingReg(structure.first+index*structure.stride, 64))
+					}
+				}
+				if transpose, ok := decodeARMRawNEONTranspose(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(transpose.first, 64))
+					markReg(armRawVFPBackingReg(transpose.second, 64))
+					if transpose.quad {
+						markReg(armRawVFPBackingReg(transpose.first+1, 64))
+						markReg(armRawVFPBackingReg(transpose.second+1, 64))
+					}
+				}
+				if narrow, ok := decodeARMRawNEONShiftRightNarrow(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(narrow.source, 64))
+					markReg(armRawVFPBackingReg(narrow.source+1, 64))
+					markReg(armRawVFPBackingReg(narrow.destination, 64))
+				}
+				if clear, ok := decodeARMRawNEONBitClearImmediate(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(clear.destination, 64))
+					if clear.quad {
+						markReg(armRawVFPBackingReg(clear.destination+1, 64))
+					}
+				}
+				if extract, ok := decodeARMRawNEONExtract(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(extract.lhs, 64))
+					markReg(armRawVFPBackingReg(extract.rhs, 64))
+					markReg(armRawVFPBackingReg(extract.destination, 64))
+					if extract.quad {
+						markReg(armRawVFPBackingReg(extract.lhs+1, 64))
+						markReg(armRawVFPBackingReg(extract.rhs+1, 64))
+						markReg(armRawVFPBackingReg(extract.destination+1, 64))
+					}
+				}
+				if narrow, ok := decodeARMRawNEONMoveNarrow(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(narrow.source, 64))
+					markReg(armRawVFPBackingReg(narrow.source+1, 64))
+					markReg(armRawVFPBackingReg(narrow.destination, 64))
+				}
+				if insert, ok := decodeARMRawNEONShiftInsert(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(insert.source, 64))
+					markReg(armRawVFPBackingReg(insert.destination, 64))
+					if insert.quad {
+						markReg(armRawVFPBackingReg(insert.source+1, 64))
+						markReg(armRawVFPBackingReg(insert.destination+1, 64))
+					}
+				}
+				if shift, ok := decodeARMRawNEONShiftRightImmediate(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(shift.source, 64))
+					markReg(armRawVFPBackingReg(shift.destination, 64))
+					if shift.quad {
+						markReg(armRawVFPBackingReg(shift.source+1, 64))
+						markReg(armRawVFPBackingReg(shift.destination+1, 64))
+					}
+				}
+				if reverse, ok := decodeARMRawNEONReverse(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(reverse.source, 64))
+					markReg(armRawVFPBackingReg(reverse.destination, 64))
+					if reverse.quad {
+						markReg(armRawVFPBackingReg(reverse.source+1, 64))
+						markReg(armRawVFPBackingReg(reverse.destination+1, 64))
+					}
+				}
+				if multiply, ok := decodeARMRawNEONMultiplyLongLane(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(multiply.lhs, 64))
+					markReg(armRawVFPBackingReg(multiply.scalar, 64))
+					markReg(armRawVFPBackingReg(multiply.destination, 64))
+					markReg(armRawVFPBackingReg(multiply.destination+1, 64))
+				}
+				if multiply, ok := decodeARMRawNEONMultiplyLongVector(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(multiply.lhs, 64))
+					markReg(armRawVFPBackingReg(multiply.rhs, 64))
+					markReg(armRawVFPBackingReg(multiply.destination, 64))
+					markReg(armRawVFPBackingReg(multiply.destination+1, 64))
+				}
+				if arithmetic, ok := decodeARMRawNEONAddSub(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(arithmetic.lhs, 64))
+					markReg(armRawVFPBackingReg(arithmetic.rhs, 64))
+					markReg(armRawVFPBackingReg(arithmetic.destination, 64))
+					if arithmetic.quad {
+						markReg(armRawVFPBackingReg(arithmetic.lhs+1, 64))
+						markReg(armRawVFPBackingReg(arithmetic.rhs+1, 64))
+						markReg(armRawVFPBackingReg(arithmetic.destination+1, 64))
+					}
+				}
+				if transfer, ok := decodeARMRawVFPLoadStore(uint32(ins.Args[0].Imm)); ok {
+					markReg(Reg(fmt.Sprintf("R%d", transfer.base)))
+					markReg(armRawVFPBackingReg(transfer.register, transfer.bits))
+				}
+				if shift, ok := decodeARMRawNEONShiftImmediate(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(shift.source, 64))
+					markReg(armRawVFPBackingReg(shift.destination, 64))
+					if shift.quad {
+						markReg(armRawVFPBackingReg(shift.source+1, 64))
+						markReg(armRawVFPBackingReg(shift.destination+1, 64))
+					}
+				}
+				if move, ok := decodeARMRawVFPMove(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(move.source, move.bits))
+					markReg(armRawVFPBackingReg(move.destination, move.bits))
+				}
+				if pairwise, ok := decodeARMRawNEONPairwiseMinMax(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(pairwise.lhs, 64))
+					markReg(armRawVFPBackingReg(pairwise.rhs, 64))
+					markReg(armRawVFPBackingReg(pairwise.destination, 64))
+				}
+				if minmax, ok := decodeARMRawNEONMinMax(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(minmax.lhs, 64))
+					markReg(armRawVFPBackingReg(minmax.rhs, 64))
+					markReg(armRawVFPBackingReg(minmax.destination, 64))
+					if minmax.quad {
+						markReg(armRawVFPBackingReg(minmax.lhs+1, 64))
+						markReg(armRawVFPBackingReg(minmax.rhs+1, 64))
+						markReg(armRawVFPBackingReg(minmax.destination+1, 64))
+					}
+				}
+				if status, ok := decodeARMRawVFPStatusTransfer(uint32(ins.Args[0].Imm)); ok && !status.toFlags {
+					markReg(Reg(fmt.Sprintf("R%d", status.core)))
+				}
+				if arithmetic, ok := decodeARMRawVFPScalarArithmetic(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(arithmetic.lhs, arithmetic.bits))
+					markReg(armRawVFPBackingReg(arithmetic.rhs, arithmetic.bits))
+					markReg(armRawVFPBackingReg(arithmetic.destination, arithmetic.bits))
+				}
+				if multiply, ok := decodeARMRawNEONMultiplyLane(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(multiply.scalar, 64))
+					markReg(armRawVFPBackingReg(multiply.lhs, 64))
+					markReg(armRawVFPBackingReg(multiply.destination, 64))
+					if multiply.quad {
+						markReg(armRawVFPBackingReg(multiply.lhs+1, 64))
+						markReg(armRawVFPBackingReg(multiply.destination+1, 64))
+					}
+				}
+				if conversion, ok := decodeARMRawNEONConvertFloat32(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(conversion.source, 64))
+					markReg(armRawVFPBackingReg(conversion.destination, 64))
+					if conversion.quad {
+						markReg(armRawVFPBackingReg(conversion.source+1, 64))
+						markReg(armRawVFPBackingReg(conversion.destination+1, 64))
+					}
+				}
+				if moveLong, ok := decodeARMRawNEONMoveLong(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(moveLong.source, 64))
+					markReg(armRawVFPBackingReg(moveLong.destination, 64))
+					markReg(armRawVFPBackingReg(moveLong.destination+1, 64))
+				}
+				if widening, ok := decodeARMRawNEONWideningAddSub(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(widening.lhs, 64))
+					markReg(armRawVFPBackingReg(widening.rhs, 64))
+					markReg(armRawVFPBackingReg(widening.destination, 64))
+					markReg(armRawVFPBackingReg(widening.destination+1, 64))
+				}
+				if duplicate, ok := decodeARMRawNEONDup(uint32(ins.Args[0].Imm)); ok {
+					markReg(Reg(fmt.Sprintf("R%d", duplicate.core)))
+					markReg(armRawVFPBackingReg(duplicate.destination, 64))
+					if duplicate.quad {
+						markReg(armRawVFPBackingReg(duplicate.destination+1, 64))
+					}
+				}
+				if immediate, ok := decodeARMRawVFPImmediate(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(immediate.destination, immediate.bits))
+				}
+				if decoded, err := decodeARMRawWordInstruction(ins); err == nil {
+					for _, op := range decoded.Args {
+						markOp(op)
+						if single, ok := armSingleOperandNumber(op); ok {
+							markReg(armRawVFPBackingReg(single, 32))
+						}
+					}
+				}
+				if compare, ok := decodeARMRawVFPCompare(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(compare.lhs, compare.bits))
+					if !compare.zeroRHS {
+						markReg(armRawVFPBackingReg(compare.rhs, compare.bits))
+					}
+				}
+				if pair, ok := decodeARMRawVMOVPair(uint32(ins.Args[0].Imm)); ok {
+					markReg(Reg(fmt.Sprintf("R%d", pair.firstCore)))
+					markReg(Reg(fmt.Sprintf("R%d", pair.secondCore)))
+					if pair.double {
+						markReg(armRawVFPBackingReg(pair.firstDouble, 64))
+					} else {
+						markReg(armRawVFPBackingReg(pair.firstSingle, 32))
+						markReg(armRawVFPBackingReg(pair.firstSingle+1, 32))
+					}
+				}
+				if multiple, ok := decodeARMRawVFPMultiple(uint32(ins.Args[0].Imm)); ok {
+					markReg(Reg(fmt.Sprintf("R%d", multiple.base)))
+					for register := multiple.first; register < multiple.first+multiple.count; register++ {
+						markReg(armRawVFPBackingReg(register, multiple.bits))
+					}
+				}
+				if structure, ok := decodeARMRawNEONStructureOne(uint32(ins.Args[0].Imm)); ok {
+					markReg(Reg(fmt.Sprintf("R%d", structure.base)))
+					if structure.offset != 13 && structure.offset != 15 {
+						markReg(Reg(fmt.Sprintf("R%d", structure.offset)))
+					}
+					for register := structure.first; register < structure.first+structure.count; register++ {
+						markReg(armRawVFPBackingReg(register, 64))
+					}
+				}
+				if logical, ok := decodeARMRawNEONBitwise(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(logical.lhs, 64))
+					markReg(armRawVFPBackingReg(logical.rhs, 64))
+					markReg(armRawVFPBackingReg(logical.destination, 64))
+					if logical.quad {
+						markReg(armRawVFPBackingReg(logical.lhs+1, 64))
+						markReg(armRawVFPBackingReg(logical.rhs+1, 64))
+						markReg(armRawVFPBackingReg(logical.destination+1, 64))
+					}
+				}
+			}
 			for _, op := range ins.Args {
 				markOp(op)
 			}
@@ -132,23 +398,32 @@ func (c *armCtx) scanUsedRegs() {
 		markReg(Reg(fmt.Sprintf("R%d", i)))
 	}
 	markReg(SP)
+	if c.machineState != "" && c.sig.ARMEntry.VFP {
+		for i := 0; i < 16; i++ {
+			markReg(Reg(fmt.Sprintf("F%d", i)))
+		}
+	}
 }
 
 func (c *armCtx) emitEntryAllocasAndArgInit() error {
 	c.scanUsedRegs()
+	entry := c.blocks[0].name
+	if c.localControl != nil {
+		entry = c.localControl.entry
+		c.usedRegs[armLinkRegister] = true
+	}
 	regs := make([]string, 0, len(c.usedRegs))
 	for r := range c.usedRegs {
 		regs = append(regs, string(r))
 	}
 	sort.Strings(regs)
 
-	c.b.WriteString(armLLVMBlockName("entry") + ":\n")
+	c.b.WriteString(armLLVMBlockName(entry) + ":\n")
 	for _, rs := range regs {
 		r := Reg(rs)
 		slot := c.slotName(r)
 		c.regSlot[r] = slot
-		fmt.Fprintf(c.b, "  %s = alloca i32\n", slot)
-		fmt.Fprintf(c.b, "  store i32 0, ptr %s\n", slot)
+		c.emitVirtualSlot(slot, I32, "0")
 	}
 	fregs := make([]string, 0, len(c.usedFRegs))
 	for r := range c.usedFRegs {
@@ -157,7 +432,7 @@ func (c *armCtx) emitEntryAllocasAndArgInit() error {
 	sort.Strings(fregs)
 	for _, rs := range fregs {
 		r := Reg(rs)
-		slot := "%" + armLLVMBlockName("freg_"+string(r))
+		slot := "%freg_" + amd64LLVMSafeName(string(r))
 		c.fRegSlot[r] = slot
 		fmt.Fprintf(c.b, "  %s = alloca i64\n", slot)
 		fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", slot)
@@ -167,14 +442,9 @@ func (c *armCtx) emitEntryAllocasAndArgInit() error {
 	c.flagsZSlot = "%flags_z"
 	c.flagsCSlot = "%flags_c"
 	c.flagsVSlot = "%flags_v"
-	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsNSlot)
-	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsNSlot)
-	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsZSlot)
-	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsZSlot)
-	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsCSlot)
-	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCSlot)
-	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsVSlot)
-	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsVSlot)
+	for _, slot := range []string{c.flagsNSlot, c.flagsZSlot, c.flagsCSlot, c.flagsVSlot} {
+		c.emitVirtualSlot(slot, I1, "false")
+	}
 
 	c.exclusiveValidSlot = "%exclusive_valid"
 	c.exclusivePtrSlot = "%exclusive_ptr"
@@ -194,9 +464,9 @@ func (c *armCtx) emitEntryAllocasAndArgInit() error {
 			return fmt.Errorf("arm: FP param slot +%d(FP) invalid arg index %d", p.Offset, p.Index)
 		}
 		value := fmt.Sprintf("%%arg%d", p.Index)
-		if p.Field >= 0 {
+		if fields := frameSlotFields(p); len(fields) != 0 {
 			extracted := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s, %d\n", extracted, c.sig.Args[p.Index], value, p.Field)
+			fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s%s\n", extracted, c.sig.Args[p.Index], value, frameSlotExtractSuffix(p))
 			value = "%" + extracted
 		}
 		name := fmt.Sprintf("%%fp_arg_%d", p.Offset)
@@ -209,8 +479,7 @@ func (c *armCtx) emitEntryAllocasAndArgInit() error {
 		name := fmt.Sprintf("%%fp_ret_%d", r.Index)
 		c.fpResAllocaIdx[r.Index] = name
 		c.fpResAllocaOff[r.Offset] = name
-		fmt.Fprintf(c.b, "  %s = alloca %s\n", name, r.Type)
-		fmt.Fprintf(c.b, "  store %s %s, ptr %s\n", r.Type, llvmZeroValue(r.Type), name)
+		c.emitVirtualSlot(name, r.Type, llvmZeroValue(r.Type))
 	}
 
 	if len(c.sig.ArgRegs) > 0 {
@@ -229,7 +498,17 @@ func (c *armCtx) emitEntryAllocasAndArgInit() error {
 			fmt.Fprintf(c.b, "  store i32 %s, ptr %s\n", v, slot)
 		}
 	}
+	if c.machineState != "" {
+		return c.initializeMachineState()
+	}
 	return nil
+}
+
+func (c *armCtx) emitVirtualSlot(name string, ty LLVMType, initial string) {
+	fmt.Fprintf(c.b, "  %s = alloca %s\n", name, ty)
+	if !c.sdkABI0Tail {
+		fmt.Fprintf(c.b, "  store %s %s, ptr %s\n", ty, initial, name)
+	}
 }
 
 func armValueAsI32(c *armCtx, ty LLVMType, v string) (out string, ok bool, err error) {
@@ -262,6 +541,14 @@ func armValueAsI32(c *armCtx, ty LLVMType, v string) (out string, ok bool, err e
 }
 
 func (c *armCtx) loadReg(r Reg) (string, error) {
+	if r == PC {
+		return "", fmt.Errorf("arm: pseudo-register PC is not a general-register operand")
+	}
+	if r == Reg("R15") {
+		// Architectural PC reads depend on the source instruction's actual
+		// address and encoding, not on an initialized LLVM register slot.
+		return "", fmt.Errorf("%w: arm hardware PC R15 requires source instruction layout context", ErrProbeNeedsContext)
+	}
 	slot, ok := c.regSlot[r]
 	if !ok {
 		return "", fmt.Errorf("arm: unknown reg %s", r)
@@ -272,6 +559,14 @@ func (c *armCtx) loadReg(r Reg) (string, error) {
 }
 
 func (c *armCtx) storeReg(r Reg, v string) error {
+	if r == PC {
+		return fmt.Errorf("arm: pseudo-register PC is not a general-register operand")
+	}
+	if r == Reg("R15") {
+		// PC destinations are control transfers or instruction-specific
+		// system-state effects. Storing a virtual value is not either contract.
+		return fmt.Errorf("%w: arm hardware PC R15 requires explicit control-flow/system-state context", ErrProbeNeedsContext)
+	}
 	slot, ok := c.regSlot[r]
 	if !ok {
 		return fmt.Errorf("arm: unknown reg %s", r)

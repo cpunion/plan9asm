@@ -35,6 +35,8 @@ func TestInstructionFamiliesAreArchitectureAware(t *testing.T) {
 		{ArchAMD64, "POPCNTQ", "bit-shift"},
 		{ArchAMD64, "PREFETCHT0", "cache-memory"},
 		{ArchAMD64, "VGF2P8AFFINEQB", "crypto-carryless"},
+		{ArchAMD64, "PCALIGN", "directive"},
+		{ArchAMD64, "PCALIGNMAX", "directive"},
 		{ArchARM64, "VLD1", "neon"},
 		{ArchARM64, "ZADD", "sve"},
 		{ArchARM64, "CASAL", "atomic-memory"},
@@ -141,6 +143,14 @@ func TestDescribeInstructionClassifiesOperands(t *testing.T) {
 		{"x87", ArchAMD64, "amd64", Operand{Kind: OpReg, Reg: "F1"}, "x87"},
 		{"byte", ArchAMD64, "amd64", Operand{Kind: OpReg, Reg: "AL"}, "gpr-byte"},
 		{"segment", ArchAMD64, "amd64", Operand{Kind: OpReg, Reg: FS}, "segment-register"},
+		{"control", ArchAMD64, "386", Operand{Kind: OpReg, Reg: "CR0"}, "control-register"},
+		{"debug", ArchAMD64, "386", Operand{Kind: OpReg, Reg: "DR7"}, "debug-register"},
+		{"test register", ArchAMD64, "amd64", Operand{Kind: OpReg, Reg: "TR6"}, "test-register"},
+		{"descriptor register", ArchAMD64, "amd64", Operand{Kind: OpReg, Reg: "GDTR"}, "descriptor-register"},
+		{"machine status word", ArchAMD64, "386", Operand{Kind: OpReg, Reg: "MSW"}, "descriptor-register"},
+		{"tls base", ArchAMD64, "386", Operand{Kind: OpMem, Mem: MemRef{Base: TLS}}, "memory.tls-register-base"},
+		{"tls index", ArchAMD64, "amd64", Operand{Kind: OpMem, Mem: MemRef{Base: AX, Index: TLS}}, "memory.gpr64-base.tls-register-index"},
+		{"x86 pc relative", ArchAMD64, "386", Operand{Kind: OpMem, Mem: MemRef{Base: PC, Off: -1}}, "memory.program-counter-base.offset"},
 		{"amd64 stack", ArchAMD64, "amd64", Operand{Kind: OpReg, Reg: SP}, "stack-pointer"},
 		{"386 gpr", ArchAMD64, "386", Operand{Kind: OpReg, Reg: AX}, "gpr32"},
 		{"vector lane", ArchARM64, "arm64", Operand{Kind: OpReg, Reg: "V1.B[0]"}, "vector-lane"},
@@ -164,14 +174,60 @@ func TestDescribeInstructionClassifiesOperands(t *testing.T) {
 	}
 }
 
+func TestDescribeX86SegmentRegisterForms(t *testing.T) {
+	const program = `TEXT f(SB),4,$0-0
+PUSHL CS
+PUSHL DS
+PUSHL ES
+PUSHL SS
+POPL FS
+POPL GS
+POPL SS
+POPL AX
+RET
+`
+	requireX86GoAssemblerResult(t, "386", program, true)
+	file, err := Parse(ArchAMD64, program)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instructions := file.Funcs[0].Instrs
+	for _, ins := range instructions[1 : len(instructions)-1] {
+		want := string(ins.Op) + " segment-register"
+		if ins.Args[0].Reg == AX {
+			want = "POPL gpr32"
+		}
+		if form := DescribeInstruction(ArchAMD64, "386", ins).Form; form != want {
+			t.Errorf("%s: got %q, want %q", ins.Raw, form, want)
+		}
+	}
+}
+
 func TestProbeInstructionChecksFormsThroughLowerer(t *testing.T) {
 	cases := []Instr{
-		{Op: "XORB", Raw: "XORB SI, (AX)", Args: []Operand{{Kind: OpReg, Reg: SI}, {Kind: OpMem, Mem: MemRef{Base: AX}}}},
 		{Op: "PUNPCKLQDQ", Raw: "PUNPCKLQDQ X0, X0", Args: []Operand{{Kind: OpReg, Reg: "X0"}, {Kind: OpReg, Reg: "X0"}}},
 	}
 	for _, ins := range cases {
 		if err := ProbeInstruction(ArchAMD64, "amd64", ins); err != nil {
 			t.Errorf("ProbeInstruction(%q) error = %v", ins.Raw, err)
+		}
+	}
+
+	// An isolated memory RMW has neither a reaching address nor source bytes.
+	// The same form must still lower when actual typed source supplies both.
+	rmw := Instr{Op: "XORB", Raw: "XORB SI, (AX)", Args: []Operand{
+		{Kind: OpReg, Reg: SI}, {Kind: OpMem, Mem: MemRef{Base: AX}},
+	}}
+	if err := ProbeInstruction(ArchAMD64, "amd64", rmw); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("unbound memory RMW probe error = %v, want ErrProbeNeedsContext", err)
+	}
+	const source = "TEXT ·probe(SB),4,$0-16\nMOVQ p+0(FP),AX\nMOVQ value+8(FP),SI\nXORB SI,(AX)\nRET\n"
+	goAssemblerOracleOutput(t, "amd64", source, "", true)
+	for _, api := range []string{"text", "module", "Go"} {
+		ir, err := x86ScalarFPBitViewAPI(t, source, "func probe(p *byte,value uint64)",
+			"amd64", "x86_64-unknown-linux-gnu", api)
+		if err != nil || ir == "" {
+			t.Errorf("%s: initialized memory RMW failed: %v", api, err)
 		}
 	}
 

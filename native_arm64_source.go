@@ -22,7 +22,9 @@ func nativeReg(o Operand, bits int, sp bool) (string, error) {
 	if o.Kind != OpReg {
 		return "", fmt.Errorf("expected native register")
 	}
-	if o.Reg == SP && sp && bits == 64 {
+	// The parser preserves the physical stack pointer as RSP. Plain SP is
+	// Go's pseudo stack pointer and must not reach this native backend.
+	if o.Reg == Reg("RSP") && sp && bits == 64 {
 		return "sp", nil
 	}
 	if o.Reg == ZR {
@@ -100,6 +102,34 @@ func (e *nativeARM64) instruction(out *strings.Builder, ins Instr) error {
 			return bad()
 		}
 		emit("ret")
+		return nil
+	case "WORD":
+		word, err := arm64RawWordValue(ins)
+		if err != nil {
+			return err
+		}
+		form, known := decodeARM64RawUnprivilegedTransfer(word)
+		if !known {
+			break
+		}
+		baseReg := form.baseRegister()
+		if baseReg == SP {
+			// Rn=31 addresses the physical stack in this encoding.
+			baseReg = Reg("RSP")
+		}
+		base, err := nativeReg(Operand{Kind: OpReg, Reg: baseReg}, 64, true)
+		if err != nil {
+			return err
+		}
+		bits := 32
+		if form.op.bank == 'x' {
+			bits = 64
+		}
+		value, err := nativeReg(Operand{Kind: OpReg, Reg: form.dataRegister()}, bits, false)
+		if err != nil {
+			return err
+		}
+		emit(form.op.mnemonic, value, fmt.Sprintf("[%s, #%d]", base, form.offset))
 		return nil
 	case "JMP", "B", "BL", "CALL":
 		if len(a) != 1 {

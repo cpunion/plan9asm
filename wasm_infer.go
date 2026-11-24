@@ -18,16 +18,19 @@ type wasmInferValue struct {
 // have no Go declaration, so their signature cannot come from go/types.
 func InferWASMAssemblyFuncSig(fn Func, name string) (FuncSig, error) {
 	type inferControl struct {
-		base   []wasmInferValue
-		result LLVMType
+		wasmControlLabel
+		base []wasmInferValue
 	}
 	var (
-		stack      []wasmInferValue
-		regTypes   = make(map[Reg]LLVMType)
-		inputs     = make(map[Reg]bool)
-		written    = make(map[Reg]bool)
-		returnType LLVMType
-		controls   []inferControl
+		stack       []wasmInferValue
+		regTypes    = make(map[Reg]LLVMType)
+		inputs      = make(map[Reg]bool)
+		written     = make(map[Reg]bool)
+		returnType  LLVMType
+		controls    = []inferControl{{wasmControlLabel: wasmControlLabel{kind: "function"}}}
+		dead        wasmDeadControls
+		terminated  bool
+		pendingName string
 	)
 	copyStack := func(values []wasmInferValue) []wasmInferValue {
 		return append([]wasmInferValue(nil), values...)
@@ -53,6 +56,18 @@ func InferWASMAssemblyFuncSig(fn Func, name string) (FuncSig, error) {
 		}
 		return nil
 	}
+	popTyped := func(op string, typ LLVMType) error {
+		if len(stack) == 0 {
+			return fmt.Errorf("%s: %s operand stack underflow", name, op)
+		}
+		value := pop(op)
+		for reg := range value.regs {
+			if !wasmRegisterCarries(reg, typ) {
+				return fmt.Errorf("%s: %s register %s does not carry %s", name, op, reg, typ)
+			}
+		}
+		return require(value, typ)
+	}
 	typedUnary := func(op string, in, out LLVMType) error {
 		v := pop(op)
 		if err := require(v, in); err != nil {
@@ -73,11 +88,184 @@ func InferWASMAssemblyFuncSig(fn Func, name string) (FuncSig, error) {
 		push(wasmInferValue{typ: out})
 		return nil
 	}
+	checkResult := func(kind string, result LLVMType, stackBase int) error {
+		if result == "" {
+			return nil
+		}
+		if len(stack) <= stackBase {
+			return fmt.Errorf("%s: %s block is missing its %s result", name, kind, result)
+		}
+		return require(stack[len(stack)-1], result)
+	}
 
 	for _, ins := range fn.Instrs {
 		op := normalizeInstructionOpcode(ins.Op)
+		if err := validateWASMRawReturn(ins, op); err != nil {
+			return FuncSig{}, err
+		}
+		if err := validateWASMStackControlOperands(ins, op); err != nil {
+			return FuncSig{}, err
+		}
+		controlResult, err := parseWASMControlResult(ins, op)
+		if err != nil {
+			return FuncSig{}, err
+		}
+		// Validate typed source formats even when the instruction is dead,
+		// matching translateFuncWASM's prepass. Retain these descriptors for
+		// live stack inference instead of parsing them again.
+		vector, vectorKnown, err := parseWASMV128Core(ins, op)
+		if err != nil {
+			return FuncSig{}, err
+		}
+		count, countKnown, err := parseWASMIntegerCount(ins)
+		if err != nil {
+			return FuncSig{}, err
+		}
+		floating, floatingKnown, err := parseWASMFloatBinary(ins)
+		if err != nil {
+			return FuncSig{}, err
+		}
+		floatConstant, floatConstantKnown, err := parseWASMFloatConstant(ins, op)
+		if err != nil {
+			return FuncSig{}, err
+		}
+		conversion, conversionKnown, err := parseWASMConversion(ins)
+		if err != nil {
+			return FuncSig{}, err
+		}
+		memory, memoryKnown, err := parseWASMMemory(ins, op)
+		if err != nil {
+			return FuncSig{}, err
+		}
+		memoryBuiltin, builtinKnown, err := parseWASMMemoryBuiltin(ins, op)
+		if err != nil {
+			return FuncSig{}, err
+		}
+		integerBinary, integerBinaryKnown, err := parseWASMIntegerBinary(ins, op)
+		if err != nil {
+			return FuncSig{}, err
+		}
+		comparison, comparisonKnown, err := parseWASMIntegerComparison(ins, op)
+		if err != nil {
+			return FuncSig{}, err
+		}
+		if terminated {
+			skip, err := dead.skip(op, controlResult)
+			if err != nil {
+				return FuncSig{}, err
+			}
+			if skip {
+				continue
+			}
+		}
+		if integerBinaryKnown {
+			for i := 0; i < 2; i++ {
+				if err := popTyped(op, integerBinary.typ); err != nil {
+					return FuncSig{}, err
+				}
+			}
+			push(wasmInferValue{typ: integerBinary.typ})
+			continue
+		}
+		if comparisonKnown {
+			for i := 0; i < comparison.arity; i++ {
+				if err := popTyped(op, comparison.typ); err != nil {
+					return FuncSig{}, err
+				}
+			}
+			push(wasmInferValue{typ: I32})
+			continue
+		}
+		if memoryKnown {
+			if memory.spec.consumesValue() {
+				if err := popTyped(op, memory.spec.stack); err != nil {
+					return FuncSig{}, err
+				}
+			}
+			switch {
+			case memory.frame:
+				// A bound FP slot takes its address from the frame contract.
+			case memory.base == "":
+				if err := popTyped(op, I32); err != nil {
+					return FuncSig{}, err
+				}
+			default:
+				reg := memory.base
+				if reg != SP && !written[reg] {
+					inputs[reg] = true
+				}
+			}
+			if !memory.spec.store {
+				push(wasmInferValue{typ: memory.spec.stack})
+			}
+			continue
+		}
+		if builtinKnown {
+			for range memoryBuiltin.operands {
+				if err := popTyped(op, I32); err != nil {
+					return FuncSig{}, err
+				}
+			}
+			if !memoryBuiltin.isBulk() {
+				push(wasmInferValue{typ: I32})
+			}
+			continue
+		}
+		if conversionKnown {
+			if err := popTyped(op, conversion.source); err != nil {
+				return FuncSig{}, err
+			}
+			push(wasmInferValue{typ: conversion.result})
+			continue
+		}
+		if vectorKnown {
+			for index := vector.Arity() - 1; index >= 0; index-- {
+				if err := popTyped(op, LLVMType(vector.InputType(index))); err != nil {
+					return FuncSig{}, err
+				}
+			}
+			push(wasmInferValue{typ: LLVMType(vector.ResultType())})
+			continue
+		}
+		if countKnown {
+			spec := count
+			if len(stack) == 0 {
+				return FuncSig{}, fmt.Errorf("%s: %s requires one stack operand", name, op)
+			}
+			for reg := range stack[len(stack)-1].regs {
+				typ := wasmDefaultRegisterType(reg)
+				if typ != I32 && typ != I64 {
+					return FuncSig{}, fmt.Errorf("%s: %s register %s is not an integer", name, op, reg)
+				}
+			}
+			if err := typedUnary(op, spec.typ, spec.typ); err != nil {
+				return FuncSig{}, err
+			}
+			continue
+		}
+		if floatingKnown {
+			spec := floating
+			if len(stack) < 2 {
+				return FuncSig{}, fmt.Errorf("%s: %s requires two stack operands", name, op)
+			}
+			for _, value := range stack[len(stack)-2:] {
+				for reg := range value.regs {
+					if wasmDefaultRegisterType(reg) != spec.typ {
+						return FuncSig{}, fmt.Errorf("%s: %s register %s does not carry %s", name, op, reg, spec.typ)
+					}
+				}
+			}
+			if err := typedBinary(op, spec.typ, spec.resultType()); err != nil {
+				return FuncSig{}, err
+			}
+			continue
+		}
+		if floatConstantKnown {
+			push(wasmInferValue{typ: floatConstant.typ})
+			continue
+		}
 		switch op {
-		case "TEXT", "NOP", "NO_LOCAL_POINTERS", "LABEL":
+		case "TEXT", "NOP", "NO_LOCAL_POINTERS":
 		case "GET":
 			if len(ins.Args) != 1 || ins.Args[0].Kind != OpReg || ins.Args[0].Reg == SP {
 				continue
@@ -106,75 +294,8 @@ func InferWASMAssemblyFuncSig(fn Func, name string) (FuncSig, error) {
 			push(wasmInferValue{typ: I32})
 		case "I64CONST":
 			push(wasmInferValue{typ: I64})
-		case "I32WRAPI64":
-			if err := typedUnary(op, I64, I32); err != nil {
-				return FuncSig{}, err
-			}
-		case "I64EXTENDI32S", "I64EXTENDI32U":
-			if err := typedUnary(op, I32, I64); err != nil {
-				return FuncSig{}, err
-			}
-		case "I32ADD", "I32SUB", "I32MUL", "I32AND", "I32OR", "I32XOR",
-			"I32DIVS", "I32DIVU", "I32REMS", "I32REMU", "I32SHL", "I32SHRS", "I32SHRU":
-			if err := typedBinary(op, I32, I32); err != nil {
-				return FuncSig{}, err
-			}
-		case "I64ADD", "I64SUB", "I64MUL", "I64AND", "I64OR", "I64XOR",
-			"I64DIVS", "I64DIVU", "I64REMS", "I64REMU", "I64SHL", "I64SHRS", "I64SHRU":
-			if err := typedBinary(op, I64, I64); err != nil {
-				return FuncSig{}, err
-			}
-		case "I32EQ", "I32NE", "I32LTS", "I32LTU", "I32GTS", "I32GTU", "I32LES", "I32LEU", "I32GES", "I32GEU":
-			if err := typedBinary(op, I32, I32); err != nil {
-				return FuncSig{}, err
-			}
-		case "I64EQ", "I64NE", "I64LTS", "I64LTU", "I64GTS", "I64GTU", "I64LES", "I64LEU", "I64GES", "I64GEU":
-			if err := typedBinary(op, I64, I32); err != nil {
-				return FuncSig{}, err
-			}
-		case "I32EQZ", "NOT":
-			if err := typedUnary(op, I32, I32); err != nil {
-				return FuncSig{}, err
-			}
-		case "I64EQZ":
-			if err := typedUnary(op, I64, I32); err != nil {
-				return FuncSig{}, err
-			}
-		case "I32LOAD", "I32LOAD8S", "I32LOAD8U", "I32LOAD16S", "I32LOAD16U":
-			if len(ins.Args) == 1 && ins.Args[0].Kind != OpFP {
-				if err := require(pop(op), I32); err != nil {
-					return FuncSig{}, err
-				}
-			}
-			push(wasmInferValue{typ: I32})
-		case "I64LOAD", "I64LOAD8S", "I64LOAD8U", "I64LOAD16S", "I64LOAD16U", "I64LOAD32S", "I64LOAD32U":
-			if len(ins.Args) == 1 && ins.Args[0].Kind != OpFP {
-				if err := require(pop(op), I32); err != nil {
-					return FuncSig{}, err
-				}
-			}
-			push(wasmInferValue{typ: I64})
-		case "I32STORE", "I32STORE8", "I32STORE16":
-			if err := require(pop(op), I32); err != nil {
-				return FuncSig{}, err
-			}
-			if len(ins.Args) == 1 && ins.Args[0].Kind != OpFP {
-				if err := require(pop(op), I32); err != nil {
-					return FuncSig{}, err
-				}
-			}
-		case "I64STORE", "I64STORE8", "I64STORE16", "I64STORE32":
-			if err := require(pop(op), I64); err != nil {
-				return FuncSig{}, err
-			}
-			if len(ins.Args) == 1 && ins.Args[0].Kind != OpFP {
-				if err := require(pop(op), I32); err != nil {
-					return FuncSig{}, err
-				}
-			}
 		case "SELECT":
-			condition := pop(op)
-			if err := require(condition, I32); err != nil {
+			if err := popTyped(op, I32); err != nil {
 				return FuncSig{}, err
 			}
 			ifFalse := pop(op)
@@ -195,61 +316,87 @@ func InferWASMAssemblyFuncSig(fn Func, name string) (FuncSig, error) {
 				}
 			}
 			push(wasmInferValue{typ: typ})
-		case "IF", "BRIF":
-			if err := require(pop(op), I32); err != nil {
+		case "LABEL":
+			if len(ins.Args) != 1 {
+				return FuncSig{}, fmt.Errorf("wasm label expects one name")
+			}
+			pendingName = strings.TrimSuffix(ins.Args[0].Sym, ":")
+		case "BLOCK", "LOOP", "IF":
+			if op == "IF" {
+				if err := popTyped(op, I32); err != nil {
+					return FuncSig{}, err
+				}
+			}
+			controls = append(controls, inferControl{
+				wasmControlLabel: wasmControlLabel{
+					kind:       strings.ToLower(op),
+					name:       pendingName,
+					resultType: controlResult,
+				},
+				base: copyStack(stack),
+			})
+			pendingName = ""
+		case "ELSE":
+			control := &controls[len(controls)-1]
+			if control.kind != "if" {
+				return FuncSig{}, fmt.Errorf("Else without matching If")
+			}
+			if !terminated {
+				if err := checkResult(control.kind, control.resultType, len(control.base)); err != nil {
+					return FuncSig{}, err
+				}
+			}
+			control.kind = "else"
+			stack = copyStack(control.base)
+			terminated = false
+		case "END":
+			if len(controls) <= 1 {
+				return FuncSig{}, fmt.Errorf("End without active control")
+			}
+			control := controls[len(controls)-1]
+			controls = controls[:len(controls)-1]
+			if control.kind == "if" && control.resultType != "" {
+				return FuncSig{}, fmt.Errorf("result-producing If requires Else")
+			}
+			if !terminated {
+				if err := checkResult(control.kind, control.resultType, len(control.base)); err != nil {
+					return FuncSig{}, err
+				}
+			}
+			stack = copyStack(control.base)
+			if control.resultType != "" {
+				push(wasmInferValue{typ: control.resultType})
+			}
+			terminated = false
+		case "BR", "BRIF":
+			index, err := wasmBranchTarget(ins, op, len(controls), func(i int) string {
+				return controls[i].name
+			})
+			if err != nil {
 				return FuncSig{}, err
 			}
-			if op == "IF" {
-				result := LLVMType("")
-				if len(ins.Args) == 1 && ins.Args[0].Kind == OpImm {
-					result = wasmBlockResultType(ins.Args[0].Imm)
+			stackBase := len(controls[len(controls)-1].base)
+			if op == "BRIF" {
+				if len(stack) <= stackBase {
+					return FuncSig{}, fmt.Errorf("%s: %s operand stack underflow", name, op)
 				}
-				controls = append(controls, inferControl{base: copyStack(stack), result: result})
-			}
-		case "BLOCK", "LOOP":
-			result := LLVMType("")
-			if len(ins.Args) == 1 && ins.Args[0].Kind == OpImm {
-				result = wasmBlockResultType(ins.Args[0].Imm)
-			}
-			controls = append(controls, inferControl{base: copyStack(stack), result: result})
-		case "ELSE":
-			if len(controls) != 0 {
-				control := controls[len(controls)-1]
-				if control.result != "" && len(stack) > len(control.base) {
-					if err := require(stack[len(stack)-1], control.result); err != nil {
-						return FuncSig{}, err
-					}
-				}
-				stack = copyStack(control.base)
-			}
-		case "END":
-			if len(controls) != 0 {
-				control := controls[len(controls)-1]
-				controls = controls[:len(controls)-1]
-				if control.result != "" {
-					if len(stack) > len(control.base) {
-						if err := require(stack[len(stack)-1], control.result); err != nil {
-							return FuncSig{}, err
-						}
-					}
-					stack = copyStack(control.base)
-					push(wasmInferValue{typ: control.result})
-				} else {
-					stack = copyStack(control.base)
+				if err := popTyped(op, I32); err != nil {
+					return FuncSig{}, err
 				}
 			}
-		case "BR":
-			if len(controls) != 0 {
-				control := controls[len(controls)-1]
-				if control.result != "" && len(stack) > len(control.base) {
-					if err := require(stack[len(stack)-1], control.result); err != nil {
-						return FuncSig{}, err
-					}
-				}
+			target := controls[index]
+			if err := checkResult(target.kind, target.branchResult(), stackBase); err != nil {
+				return FuncSig{}, err
 			}
-			stack = nil
+			if op == "BR" {
+				terminated = true
+				stack = nil
+			}
 		case "DROP":
 			_ = pop(op)
+		case "UNDEF", "UNREACHABLE", "JMP":
+			terminated = true
+			stack = nil
 		case "CALL", "CALLNORESUME", "WASMCALL":
 			// The callee signature is not encoded in the instruction. Values
 			// pushed for it have already constrained the input registers; reset
@@ -257,6 +404,7 @@ func InferWASMAssemblyFuncSig(fn Func, name string) (FuncSig, error) {
 			stack = nil
 			push(wasmInferValue{})
 		case "WASMRETURN", "RET", "RETUNWIND":
+			terminated = true
 			if len(stack) != 0 {
 				v := pop(op)
 				if v.typ != "" {
@@ -270,6 +418,9 @@ func InferWASMAssemblyFuncSig(fn Func, name string) (FuncSig, error) {
 		}
 	}
 
+	if open := len(controls) - 1 + len(dead); open != 0 {
+		return FuncSig{}, fmt.Errorf("%d unterminated wasm control blocks", open)
+	}
 	regs := make([]Reg, 0, len(inputs))
 	for reg := range inputs {
 		regs = append(regs, reg)
@@ -289,19 +440,9 @@ func InferWASMAssemblyFuncSig(fn Func, name string) (FuncSig, error) {
 	return FuncSig{Name: name, Args: args, Ret: returnType, ArgRegs: regs}, nil
 }
 
-func wasmBlockResultType(code int64) LLVMType {
-	switch code {
-	case 1:
-		return I32
-	case 2:
-		return I64
-	case 3:
-		return LLVMType("float")
-	case 4:
-		return LLVMType("double")
-	default:
-		return ""
-	}
+func wasmRegisterCarries(reg Reg, want LLVMType) bool {
+	typ := wasmDefaultRegisterType(reg)
+	return typ == want || typ == I64 && want == I32 || typ == I32 && want == I64
 }
 
 func wasmDefaultRegisterType(reg Reg) LLVMType {

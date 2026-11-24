@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+instructions_only=false
+if (( $# != 0 )); then
+  if (( $# != 1 )) || [[ "$1" != "--instructions-only" ]]; then
+    echo "usage: $0 [--instructions-only]" >&2
+    exit 2
+  fi
+  instructions_only=true
+fi
+
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo_root"
 
@@ -10,6 +19,7 @@ source "$repo_root/scripts/llvm22.sh"
 if ! llc_cmd=$(find_llvm22_llc); then
   exit 1
 fi
+llvm_nm_cmd=
 if [[ "${RUNNER_OS:-}" == "Windows" ]] && command -v python >/dev/null 2>&1; then
   python_cmd=python
 elif command -v python3 >/dev/null 2>&1; then
@@ -174,7 +184,7 @@ if unsupported:
     raise SystemExit(f"{target}: unsupported ops remain: {top}")
 if unsupported_forms:
     top = ", ".join(
-        f"{item['form']} ({item['examples'][0] if item.get('examples') else 'no example'})"
+        f"{item['form']} ({item['errors'][0] if item.get('errors') else item['examples'][0] if item.get('examples') else 'no diagnostic'})"
         for item in unsupported_forms[:12]
     )
     raise SystemExit(f"{target}: unsupported operand forms remain: {top}")
@@ -183,20 +193,136 @@ if parse_errs:
     raise SystemExit(f"{target}: parse errors remain: {top}")
 PY
 
+  # WASM needs complete typed-stack/control context even for instruction checks.
+  if [[ "$instructions_only" == true && "$goarch" != wasm ]]; then
+    rm "$json"
+    continue
+  fi
+  if [[ "$goarch" == wasm && -z "$llvm_nm_cmd" ]]; then
+    if ! llvm_nm_cmd=$(find_llvm22_tool llvm-nm); then
+      exit 1
+    fi
+  fi
+
   echo "==> transpile+compile $target_label"
   out_dir="$tmp_root/$target_name-ll"
   meta="$tmp_root/$target_name-meta.json"
-  env "${target_env[@]}" GOTOOLCHAIN=local "$plan9asm_cmd" transpile -goos="$goos" -goarch="$goarch" -dir "$out_dir" -meta "$meta" std >/dev/null
+  transpile_log="$tmp_root/$target_name-transpile.log"
+  if ! env "${target_env[@]}" GOTOOLCHAIN=local "$plan9asm_cmd" transpile \
+    -goos="$goos" -goarch="$goarch" -dir "$out_dir" -meta "$meta" std \
+    >"$transpile_log" 2>&1; then
+    cat "$transpile_log" >&2
+    exit 1
+  fi
+  rm "$transpile_log"
 
   ll_count=$(find "$out_dir" -name '*.ll' | wc -l | tr -d ' ')
   if [ "$ll_count" -eq 0 ]; then
     echo "$goos/$goarch: no .ll files generated" >&2
     exit 1
   fi
+  while IFS= read -r ll; do
+    object="$tmp_root/verify-object.o"
+    if [[ "$goarch" == wasm ]]; then
+      object="$ll.o"
+    fi
+    rm -f -- "$object"
+    "$llc_cmd" -mtriple="$triple" -filetype=obj "$ll" -o "$object"
+    if [[ ! -s "$object" ]]; then
+      echo "$target_label: LLVM 22 produced no object for: $ll" >&2
+      exit 1
+    fi
+    if [[ "$goarch" == wasm ]]; then
+      "$llvm_nm_cmd" -P --defined-only "$object" > "$object.symbols"
+    else
+      rm "$object"
+    fi
+  done < <(find "$out_dir" -name '*.ll' | sort)
   echo "compiled corpus $target_label: ll_files=$ll_count"
 
-  while IFS= read -r ll; do
-    obj="${ll%.ll}.o"
-    "$llc_cmd" -mtriple="$triple" -filetype=obj "$ll" -o "$obj"
-  done < <(find "$out_dir" -name '*.ll' | sort)
+  if [[ "$goarch" == wasm ]]; then
+    # Join every source context to its own compiled module.
+    "$python_cmd" - "$json" "$meta" "$out_dir" "$(go env GOROOT)" "$target_label" <<'PY'
+import json
+from pathlib import Path
+import re
+import sys
+
+def llvm_defined_names(module):
+    definition = rb'^define [^\r\n]*?@("(?:\\[0-9A-Fa-f]{2}|[^"\\])*"|[-A-Za-z$._0-9]+)\('
+    names = set()
+    for name in re.findall(definition, module.read_bytes(), re.MULTILINE):
+        if name.startswith(b'"'):
+            name = re.sub(rb'\\([0-9A-Fa-f]{2})', lambda m: bytes([int(m[1], 16)]), name[1:-1])
+        names.add(name)
+    return names
+
+def wasm_object_text_names(path, label):
+    with path.open("rb") as artifact:
+        if artifact.read(8) != b"\0asm\x01\0\0\0":
+            raise SystemExit(f"{label}: invalid WASM object header: {path}")
+    names = set()
+    for line in Path(str(path) + ".symbols").read_bytes().splitlines():
+        fields = line.rsplit(None, 3)
+        if len(fields) == 4 and fields[1] in (b"T", b"t"):
+            names.add(fields[0])
+    return names
+
+scan, manifest, output, goroot = map(Path, sys.argv[1:5])
+label = sys.argv[5]
+forms = json.loads(scan.read_text(encoding="utf-8"))["forms"]
+if not forms or any(not row.get("wasm_source_contexts") for row in forms):
+    raise SystemExit(f"{label}: missing WASM form source inventory")
+contexts = {
+    (item["file"], item.get("function", ""))
+    for row in forms for item in row["wasm_source_contexts"]
+}
+metadata = json.loads(manifest.read_text(encoding="utf-8"))
+if metadata.get("goos") != label.split("/")[0] or metadata.get("goarch") != "wasm":
+    raise SystemExit(f"{label}: WASM translation metadata target differs from the corpus target")
+compiled_modules = {module.resolve() for module in output.rglob("*.ll")}
+source_root = (goroot / "src").resolve()
+mapped_modules = set()
+compiled_sources = {}
+for package in metadata.get("packages", [metadata]):
+    for item in package["items"]:
+        module = Path(item["output"]).resolve()
+        if module not in compiled_modules:
+            continue
+        source = Path(item["file"]).resolve().relative_to(source_root).as_posix()
+        if module in mapped_modules:
+            raise SystemExit(f"{label}: WASM compiled IR is shared by multiple sources: {module}")
+        if source in compiled_sources:
+            raise SystemExit(f"{label}: duplicate WASM translation metadata for source: {source}")
+        object_names = wasm_object_text_names(Path(str(module) + ".o"), label)
+        symbols = {fn["symbol"]: fn["resolved"] for fn in item["functions"]}
+        if len(symbols) != len(item["functions"]):
+            raise SystemExit(f"{label}: duplicate WASM source function in translation metadata: {source}")
+        mapped_modules.add(module)
+        compiled_sources[source] = (symbols, llvm_defined_names(module), object_names)
+missing = {source for source, _ in contexts} - compiled_sources.keys()
+if missing:
+    raise SystemExit(f"{label}: WASM sources missing compiled IR: {', '.join(sorted(missing))}")
+if mapped_modules != compiled_modules:
+    raise SystemExit(f"{label}: WASM compiled modules without source metadata")
+for source, function in sorted(contexts):
+    if not function:
+        continue
+    symbols, definitions, object_names = compiled_sources[source]
+    resolved = symbols.get(function)
+    if not resolved:
+        raise SystemExit(f"{label}: WASM source function missing from translation metadata: {source}:{function}")
+    name = resolved.encode("utf-8")
+    if name not in definitions:
+        raise SystemExit(f"{label}: WASM source function missing its LLVM definition: {source}:{function}")
+    if name not in object_names:
+        raise SystemExit(f"{label}: WASM source function missing its defined object text symbol: {source}:{function} ({resolved})")
+functions = sum(bool(function) for _, function in contexts)
+print(f"{label}: {len(forms)} WASM forms joined to {functions} defined object text symbols across {len(compiled_sources)} compiled modules")
+PY
+  fi
+
+  # Release each target's build artifacts and scan output before the next target.
+  rm "$json" "$meta"
+  rm -r "$out_dir"
 done

@@ -40,8 +40,8 @@ TEXT unwind(SB), NOSPLIT, $0-0
 		"@SP = external addrspace(1) global i32",
 		"@CTXT = external addrspace(1) global i64",
 		"define i32 @caller(i32 %pc_b)",
-		"switch i32 %pc_b, label %wasm_entry_body [",
-		"i32 1, label %wasm_resume_1",
+		"switch i32 %pc_b, label %wasm_resume_2 [",
+		"i32 1, label %wasm_entry_body",
 		"sub i32",
 		"ptrtoint ptr @caller to i64",
 		"shl i64",
@@ -56,6 +56,39 @@ TEXT unwind(SB), NOSPLIT, $0-0
 		if !strings.Contains(ir, want) {
 			t.Fatalf("Go wasm ABI IR is missing %q:\n%s", want, ir)
 		}
+	}
+}
+
+func TestWasmGoABIPreservesContinuationAfterDeadCall(t *testing.T) {
+	file, err := Parse(ArchWASM, `TEXT caller(SB), NOSPLIT, $0-0
+	CALL first(SB)
+	RET tail(SB)
+	CALL unreachable(SB)
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sigs := map[string]FuncSig{
+		"caller":      {Name: "caller", Ret: Void},
+		"first":       {Name: "first", Ret: Void},
+		"tail":        {Name: "tail", Ret: Void},
+		"unreachable": {Name: "unreachable", Ret: Void},
+	}
+	ir, err := Translate(file, Options{
+		TargetTriple: "wasm32-unknown-unknown",
+		Sigs:         sigs,
+		Goarch:       "wasm",
+		WASMABI:      WASMABIGo,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ir, "i32 1, label %wasm_resume_1") ||
+		!strings.Contains(ir, "switch i32 %pc_b, label %wasm_resume_2 [") {
+		t.Fatalf("reachable CALL is absent from resume dispatch:\n%s", ir)
+	}
+	if strings.Contains(ir, "call i32 @unreachable") {
+		t.Fatalf("dead CALL was emitted instead of only its independently reachable continuation:\n%s", ir)
 	}
 }
 
